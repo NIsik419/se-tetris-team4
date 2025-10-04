@@ -8,6 +8,7 @@
 *.ctxt
 
 .vscode/monitoring.json
+.vscode/settings.json
 # Mobile Tools for Java (J2ME)
 .mtj.tmp/
 

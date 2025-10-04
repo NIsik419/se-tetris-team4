@@ -1,16 +1,37 @@
 package component;
 
-import java.awt.*;
-import java.awt.event.*;
-import java.util.LinkedList;
-import java.util.Queue;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Font;
+import java.awt.event.ActionEvent;
 import java.util.Random;
 
-import javax.swing.*;
+import javax.swing.AbstractAction;
+import javax.swing.ActionMap;
+import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.InputMap;
+import javax.swing.JComponent;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JTextPane;
+import javax.swing.KeyStroke;
 import javax.swing.border.CompoundBorder;
-import javax.swing.text.*;
+import javax.swing.text.SimpleAttributeSet;
+import javax.swing.text.StyleConstants;
+import javax.swing.text.StyledDocument;
 
-import blocks.*;
+import blocks.Block;
+import blocks.IBlock;
+import blocks.JBlock;
+import blocks.LBlock;
+import blocks.OBlock;
+import blocks.SBlock;
+import blocks.TBlock;
+import blocks.ZBlock;
 
 public class Board extends JFrame {
 
@@ -34,9 +55,7 @@ public class Board extends JFrame {
     private int clearedLines = 0;
     private int speedLevel = 1;
 
-    // 다음 블럭 큐
-    private Queue<Block> nextBlocks = new LinkedList<>();
-    private static final int NEXT_SIZE = 3;
+    private BlockBag bag = new BlockBag();
 
     private javax.swing.Timer timer;
     private boolean isPaused = false;
@@ -79,10 +98,7 @@ public class Board extends JFrame {
 
         // ===== 보드/블럭 초기화 =====
         board = new Color[HEIGHT][WIDTH];
-        for (int i = 0; i < NEXT_SIZE; i++) {
-            nextBlocks.add(getRandomBlock());
-        }
-        curr = nextBlocks.poll();
+        curr = bag.next();
 
         // ===== 게임 루프 타이머 =====
         timer = new javax.swing.Timer(initInterval, e -> {
@@ -178,8 +194,7 @@ public class Board extends JFrame {
             clearLines();
 
             // 새 블럭
-            curr = nextBlocks.poll();
-            nextBlocks.add(getRandomBlock());
+            curr = bag.next();
             x = 3;
             y = 0;
 
@@ -326,7 +341,7 @@ public class Board extends JFrame {
         // 게임 정보
         sb.append("\nSCORE: ").append(score);
         sb.append("\nLEVEL: ").append(speedLevel);
-        sb.append("\nNEXT: ").append(nextBlocks.peek().getClass().getSimpleName());
+        sb.append("\nNEXT: ").append(bag.peekNext(1).get(0).getClass().getSimpleName());
         if (isPaused)
             sb.append("\n[일시정지]");
 
