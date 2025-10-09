@@ -9,6 +9,8 @@
 plugins {
     // Apply the application plugin to add support for building a CLI application in Java.
     id 'application'
+    id 'java'
+    
 }
 
 repositories {
@@ -41,5 +43,9 @@ java {
 
 application {
     // Define the main class for the application.
-    mainClass = 'org.example.App'
+    mainClass = 'component.App'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
 }

@@ -11,6 +11,8 @@ import java.util.LinkedList;
 import java.util.Queue;
 import java.util.Random;
 
+import javax.swing.AbstractAction;
+import javax.swing.ActionMap;
 import javax.swing.BorderFactory;
 import javax.swing.InputMap;
 import javax.swing.JComponent;
@@ -18,7 +20,7 @@ import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JTextPane;
-import javax.swing.Timer;
+import javax.swing.KeyStroke;
 import javax.swing.border.CompoundBorder;
 
 import blocks.Block;	
@@ -93,8 +95,12 @@ public class Board extends JFrame {
 
         // --- Timers            
         timer = new javax.swing.Timer(initInterval, e -> {
-            if (!isPaused) moveDown();
+            if (!isPaused) {
+                moveDown();
+                gamePanel.repaint();
+            }
         });
+
 
         // Game clock (00:00)                                  
         clockTimer = new javax.swing.Timer(1000, e -> {
@@ -113,13 +119,9 @@ public class Board extends JFrame {
         board = new Color[HEIGHT][WIDTH];
 
         // 큐 초기화
-        for (int i = 0; i < NEXT_SIZE; i++) {
-            nextBlocks.add(getRandomBlock());
-        }
-        curr = nextBlocks.poll();
-        // NEW: HUD가 3개 미리보기를 그릴 수 있도록 큐를 항상 채워둔다
-        nextBlocks.add(getRandomBlock());
-        refreshNextHUD();  // NEW: 3개 미리보기 반영
+        refillNextQueueIfNeeded();
+        spawnNextPiece();
+
 
         // 키 바인딩 등록
         setupKeyBindings();
@@ -148,6 +150,21 @@ public class Board extends JFrame {
             case 6: return new OBlock();
         }
         return new LBlock();
+    }
+
+    // --- next queue & spawn
+    private void refillNextQueueIfNeeded() {
+        while (nextBlocks.size() < NEXT_SIZE) nextBlocks.add(getRandomBlock());
+    }
+
+    private void spawnNextPiece() {
+        if (nextBlocks.isEmpty()) refillNextQueueIfNeeded();
+        spawnNextPiece();
+        if (!canMove(curr, x, y)) {
+            gameOver();
+            return;
+        }
+
     }
 
     private boolean canMove(Block block, int newX, int newY) {
@@ -199,8 +216,12 @@ public class Board extends JFrame {
             for (int j = 0; j < curr.height(); j++) {
                 for (int i = 0; i < curr.width(); i++) {
                     if (curr.getShape(i, j) == 1) {
-                        board[y + j][x + i] = curr.getColor();
-                    }
+                        int bx = x + i, by = y + j;
+                        if (bx >= 0 && bx < WIDTH && by >= 0 && by < HEIGHT) {
+                            board[by][bx] = colorFor(curr); // use palette
+                        }
+                    }           
+
                 }
             }
             clearLines();
@@ -293,6 +314,7 @@ public class Board extends JFrame {
 
     // 키 바인딩 설정 (즉시 반응 & 반복 입력 지원)
     private void setupKeyBindings() {
+
         InputMap im = pane.getInputMap(JComponent.WHEN_FOCUSED);
         ActionMap am = pane.getActionMap();
 
@@ -345,7 +367,32 @@ public class Board extends JFrame {
                 exitGame();
             }
         });
+        attachBindingsTo(rootPanel);
+        attachBindingsTo(gamePanel);
+
     }
+    private void attachBindingsTo(JComponent comp) {
+        InputMap im = comp.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        ActionMap am = comp.getActionMap();
+        comp.setFocusTraversalKeysEnabled(false);
+
+        im.put(KeyStroke.getKeyStroke("RIGHT"), "moveRight");
+        im.put(KeyStroke.getKeyStroke("LEFT"),  "moveLeft");
+        im.put(KeyStroke.getKeyStroke("DOWN"),  "moveDown");
+        im.put(KeyStroke.getKeyStroke("UP"),    "rotate");
+        im.put(KeyStroke.getKeyStroke("SPACE"), "hardDrop");
+        im.put(KeyStroke.getKeyStroke("P"),     "pause");
+        im.put(KeyStroke.getKeyStroke("ESCAPE"),"exit");
+
+        am.put("moveRight", new AbstractAction() { public void actionPerformed(ActionEvent e) { moveRight(); drawBoard(); }});
+        am.put("moveLeft",  new AbstractAction() { public void actionPerformed(ActionEvent e) { moveLeft();  drawBoard(); }});
+        am.put("moveDown",  new AbstractAction() { public void actionPerformed(ActionEvent e) { moveDown(); }});
+        am.put("rotate",    new AbstractAction() { public void actionPerformed(ActionEvent e) { rotateBlock(); }});
+        am.put("hardDrop",  new AbstractAction() { public void actionPerformed(ActionEvent e) { hardDrop(); }});
+        am.put("pause",     new AbstractAction() { public void actionPerformed(ActionEvent e) { togglePause(); }});
+        am.put("exit",      new AbstractAction() { public void actionPerformed(ActionEvent e) { exitGame(); }});
+    }
+
 
     public void drawBoard() {
         // NEW: 텍스트가 아닌 그래픽으로 보드 그리기 (라운드 사각형 블럭)
@@ -458,4 +505,15 @@ public class Board extends JFrame {
             g2.dispose();
         }
     }
+    private Color colorFor(Block b) {
+        if (b instanceof IBlock) return new Color(0x00FFFF);
+        if (b instanceof JBlock) return new Color(0x3B82F6);
+        if (b instanceof LBlock) return new Color(0xF59E0B);
+        if (b instanceof OBlock) return new Color(0xFFD400);
+        if (b instanceof SBlock) return new Color(0x10B981);
+        if (b instanceof TBlock) return new Color(0xA855F7);
+        if (b instanceof ZBlock) return new Color(0xEF4444);
+        return new Color(0xCCCCCC);
+    }
+
 }
