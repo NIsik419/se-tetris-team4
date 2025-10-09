@@ -2,7 +2,6 @@ package component;
 
 import java.awt.Color;
 import java.awt.Dimension;
-import java.awt.GradientPaint;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
@@ -14,7 +13,7 @@ public class NextBlockPanel extends JPanel {
     private char[][] shape; // 4x4, 'O' filled
     private final int box;  // side length
 
-    public NextBlockPanel() { this(96); }
+    public NextBlockPanel() { this(140); }            
     public NextBlockPanel(int sizePx) {
         this.box = sizePx;
         setPreferredSize(new Dimension(box, box));
@@ -41,18 +40,13 @@ public class NextBlockPanel extends JPanel {
         g2.fillRoundRect(6,6,getWidth()-12,getHeight()-12,16,16);
 
         if (shape != null) {
-            for (int r=0; r<shape.length; r++) {
-                for (int c=0; c<shape[r].length; c++) {
+            g2.setColor(new Color(0xFFD764)); // block color
+            for (int r=0; r<shape.length; r++)
+                for (int c=0; c<shape[r].length; c++)
                     if (shape[r][c] != ' ') {
-                        int x = offX + c*cell + 2;
-                        int y = offY + r*cell + 2;
-                        int s = cell - 4;
-                        Color base = new Color(0xFFD764);
-                        g2.setPaint(new GradientPaint(x, y, base.brighter(), x, y+s, base.darker()));
-                        g2.fillRoundRect(x, y, s, s, 10, 10);
+                        int x = offX + c*cell, y = offY + r*cell;
+                        g2.fillRoundRect(x+2, y+2, cell-4, cell-4, 8, 8);
                     }
-                }
-            }
         }
         g2.dispose();
     }

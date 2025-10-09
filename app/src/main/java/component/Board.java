@@ -2,6 +2,7 @@ package component;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.GradientPaint;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
@@ -23,7 +24,7 @@ import javax.swing.JTextPane;
 import javax.swing.KeyStroke;
 import javax.swing.border.CompoundBorder;
 
-import blocks.Block;	
+import blocks.Block;
 import blocks.IBlock;
 import blocks.JBlock;
 import blocks.LBlock;
@@ -32,18 +33,17 @@ import blocks.SBlock;
 import blocks.TBlock;
 import blocks.ZBlock;
 
-
 public class Board extends JFrame {
 
     private static final long serialVersionUID = 1L;
 
     public static final int HEIGHT = 20;
-    public static final int WIDTH = 10;
+    public static final int WIDTH  = 10;
     public static final char BORDER_CHAR = 'X';
 
     // --- UI containers
     private final JPanel rootPanel = new JPanel(new BorderLayout());
-    private HUDSidebar hud = new HUDSidebar(); 
+    private HUDSidebar hud = new HUDSidebar();
     private JTextPane pane; // 유지: 기존 코드 호환용(미사용)
 
     // NEW: 실제 보드를 그리는 패널
@@ -51,9 +51,8 @@ public class Board extends JFrame {
 
     // --- Game state
     private Color[][] board;
-    private javax.swing.Timer timer; 
-
-    private javax.swing.Timer clockTimer;  
+    private javax.swing.Timer timer;
+    private javax.swing.Timer clockTimer;
     private long elapsedSeconds = 0;
 
     private Block curr;
@@ -61,7 +60,7 @@ public class Board extends JFrame {
     private int score = 0;
 
     // 다음 블럭 큐
-    private Queue<Block> nextBlocks = new LinkedList<>();
+    private final Queue<Block> nextBlocks = new LinkedList<>();
     private static final int NEXT_SIZE = 3;
 
     // 난이도 관련
@@ -75,25 +74,25 @@ public class Board extends JFrame {
 
     public Board() {
         super("SeoulTech SE Tetris");
-        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE); 
+        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
 
         // 보드 출력 패널
         pane = new JTextPane(); // 유지
         // NEW: 어두운 배경 + 이중 매트 보더로 테두리 개선
         gamePanel.setBackground(new Color(0x080B11)); // deeper black-blue
         CompoundBorder borderStyled = BorderFactory.createCompoundBorder(
-            BorderFactory.createMatteBorder(8,8,8,8, new Color(0x2B2F3A)),   // outer
-            BorderFactory.createMatteBorder(6,6,6,6, new Color(0x141824))    // inner
+                BorderFactory.createMatteBorder(8, 8, 8, 8, new Color(0x2B2F3A)),   // outer
+                BorderFactory.createMatteBorder(6, 6, 6, 6, new Color(0x141824))    // inner
         );
         gamePanel.setBorder(borderStyled);
 
         // mount center board + right HUD
-        rootPanel.setBackground(new Color(0x0B0F18)); // NEW: 배경 톤 맞춤
-        rootPanel.add(gamePanel, BorderLayout.CENTER);        
-        rootPanel.add(hud,  BorderLayout.EAST);           
-        setContentPane(rootPanel);                          
+        rootPanel.setBackground(new Color(0x0B0F18)); 
+        rootPanel.add(gamePanel, BorderLayout.CENTER);
+        rootPanel.add(hud, BorderLayout.EAST);
+        setContentPane(rootPanel);
 
-        // --- Timers            
+        // --- Timers
         timer = new javax.swing.Timer(initInterval, e -> {
             if (!isPaused) {
                 moveDown();
@@ -101,8 +100,7 @@ public class Board extends JFrame {
             }
         });
 
-
-        // Game clock (00:00)                                  
+        // Game clock (00:00)
         clockTimer = new javax.swing.Timer(1000, e -> {
             if (!isPaused) {
                 elapsedSeconds++;
@@ -110,7 +108,7 @@ public class Board extends JFrame {
             }
         });
 
-        // HUD init                                           
+        // HUD init
         hud.reset();
         hud.setScore(score);
         hud.setLevel(speedLevel);
@@ -118,29 +116,28 @@ public class Board extends JFrame {
         // 보드 초기화
         board = new Color[HEIGHT][WIDTH];
 
-        // 큐 초기화
+        // 큐 초기화 + 첫 소환
         refillNextQueueIfNeeded();
-        spawnNextPiece();
+        spawnNextPiece();            
+        refreshNextHUD();            
 
-
-        // 키 바인딩 등록
+        // 키 바인딩 등록 (실제 보이는 패널에 연결)
         setupKeyBindings();
 
         drawBoard();
-        timer.start();                                     
-        clockTimer.start();                                 
+        timer.start();
+        clockTimer.start();
 
         // 창 크기 & 표시 (wider for HUD)
-        setSize(560, 720);                                  
-        setLocationRelativeTo(null);                       
+        setSize(560, 720);
+        setLocationRelativeTo(null);
         setVisible(true);
         gamePanel.requestFocusInWindow();
     }
 
     private Block getRandomBlock() {
         Random rnd = new Random(System.currentTimeMillis());
-        int block = rnd.nextInt(7);
-        switch (block) {
+        switch (rnd.nextInt(7)) {
             case 0: return new IBlock();
             case 1: return new JBlock();
             case 2: return new LBlock();
@@ -159,24 +156,22 @@ public class Board extends JFrame {
 
     private void spawnNextPiece() {
         if (nextBlocks.isEmpty()) refillNextQueueIfNeeded();
-        spawnNextPiece();
+        curr = nextBlocks.poll();
+        refillNextQueueIfNeeded();
+        refreshNextHUD();
+        x = 3; y = 0;
         if (!canMove(curr, x, y)) {
             gameOver();
-            return;
         }
-
     }
 
     private boolean canMove(Block block, int newX, int newY) {
         for (int j = 0; j < block.height(); j++) {
             for (int i = 0; i < block.width(); i++) {
                 if (block.getShape(i, j) == 1) {
-                    int bx = newX + i;
-                    int by = newY + j;
-                    if (bx < 0 || bx >= WIDTH || by < 0 || by >= HEIGHT)
-                        return false;
-                    if (board[by][bx] != null)
-                        return false;
+                    int bx = newX + i, by = newY + j;
+                    if (bx < 0 || bx >= WIDTH || by < 0 || by >= HEIGHT) return false;
+                    if (board[by][bx] != null) return false;
                 }
             }
         }
@@ -211,75 +206,51 @@ public class Board extends JFrame {
         if (canMove(curr, x, y + 1)) {
             y++;
             score++;
+            hud.setScore(score);
         } else {
-            // 고정
+            // 고정 (경계 체크 포함)
             for (int j = 0; j < curr.height(); j++) {
                 for (int i = 0; i < curr.width(); i++) {
                     if (curr.getShape(i, j) == 1) {
                         int bx = x + i, by = y + j;
                         if (bx >= 0 && bx < WIDTH && by >= 0 && by < HEIGHT) {
-                            board[by][bx] = colorFor(curr); // use palette
+                            board[by][bx] = colorFor(curr);
                         }
-                    }           
-
+                    }
                 }
             }
             clearLines();
-
-            // 새 블럭
-            curr = nextBlocks.poll();
-            nextBlocks.add(getRandomBlock());
-            refreshNextHUD(); // NEW: 3개 미리보기 갱신
-            x = 3;
-            y = 0;
-
-            if (!canMove(curr, x, y)) {
+            spawnNextPiece();                    // 새 블럭 소환
+            if (!canMove(curr, x, y)) {          // 즉시 게임오버 체크
                 gameOver();
+                return;
             }
         }
+        drawBoard();
     }
 
-    protected void moveRight() {
-        if (canMove(curr, x + 1, y))
-            x++;
-    }
-
-    protected void moveLeft() {
-        if (canMove(curr, x - 1, y))
-            x--;
-    }
+    protected void moveRight() { if (canMove(curr, x + 1, y)) x++; }
+    protected void moveLeft()  { if (canMove(curr, x - 1, y)) x--; }
 
     protected void hardDrop() {
-        while (canMove(curr, x, y + 1)) {
-            y++;
-            score += 2;
-        }
-        hud.setScore(score);                    
+        while (canMove(curr, x, y + 1)) { y++; score += 2; }
+        hud.setScore(score);
         moveDown();
     }
 
-    // ===== 줄 삭제/난이도 =====
+    //  줄 삭제/난이도 
     private void clearLines() {
-        for (int i = 0; i < HEIGHT; i++) {
+        for (int r = 0; r < HEIGHT; r++) {
             boolean full = true;
-            for (int j = 0; j < WIDTH; j++) {
-                if (board[i][j] == null) {
-                    full = false;
-                    break;
-                }
+            for (int c = 0; c < WIDTH; c++) {
+                if (board[r][c] == null) { full = false; break; }
             }
             if (full) {
-                for (int k = i; k > 0; k--) {
-                    board[k] = board[k - 1].clone();
-                }
+                for (int k = r; k > 0; k--) board[k] = board[k - 1].clone();
                 board[0] = new Color[WIDTH];
-                score += 100;
+                score += 100; hud.setScore(score);
                 clearedLines++;
-
-                // 난이도 상승 체크
-                if (clearedLines % 10 == 0) {
-                    increaseSpeed();
-                }
+                if (clearedLines % 10 == 0) increaseSpeed();
             }
         }
     }
@@ -288,13 +259,13 @@ public class Board extends JFrame {
         int newDelay = Math.max(200, timer.getDelay() - 100);
         timer.setDelay(newDelay);
         speedLevel++;
-        hud.setLevel(speedLevel);                           
+        hud.setLevel(speedLevel);
         setStatus("Level Up! " + speedLevel);
     }
 
     private void gameOver() {
         timer.stop();
-        if (clockTimer != null) clockTimer.stop();          
+        if (clockTimer != null) clockTimer.stop();
         setStatus("GAME OVER! Score: " + score);
         JOptionPane.showMessageDialog(this, "Game Over!\nScore: " + score,
                 "Game Over", JOptionPane.INFORMATION_MESSAGE);
@@ -312,64 +283,10 @@ public class Board extends JFrame {
         hud.setNextQueue(shapes);
     }
 
-    // 키 바인딩 설정 (즉시 반응 & 반복 입력 지원)
+    // 키 바인딩 설정 (보이는 컴포넌트에 연결)
     private void setupKeyBindings() {
-
-        InputMap im = pane.getInputMap(JComponent.WHEN_FOCUSED);
-        ActionMap am = pane.getActionMap();
-
-        pane.setFocusTraversalKeysEnabled(false);
-
-        im.put(KeyStroke.getKeyStroke("RIGHT"), "moveRight");
-        im.put(KeyStroke.getKeyStroke("LEFT"), "moveLeft");
-        im.put(KeyStroke.getKeyStroke("DOWN"), "moveDown");
-        im.put(KeyStroke.getKeyStroke("UP"), "rotate");
-        im.put(KeyStroke.getKeyStroke("SPACE"), "hardDrop");
-        im.put(KeyStroke.getKeyStroke("P"), "pause");
-        im.put(KeyStroke.getKeyStroke("ESCAPE"), "exit");
-
-        am.put("moveRight", new AbstractAction() {
-            public void actionPerformed(ActionEvent e) {
-                moveRight();
-                drawBoard();
-            }
-        });
-        am.put("moveLeft", new AbstractAction() {
-            public void actionPerformed(ActionEvent e) {
-                moveLeft();
-                drawBoard();
-            }
-        });
-        am.put("moveDown", new AbstractAction() {
-            public void actionPerformed(ActionEvent e) {
-                moveDown();
-                drawBoard();
-            }
-        });
-        am.put("rotate", new AbstractAction() {
-            public void actionPerformed(ActionEvent e) {
-                rotateBlock();
-            }
-        });
-        am.put("hardDrop", new AbstractAction() {
-            public void actionPerformed(ActionEvent e) {
-                hardDrop();
-                drawBoard();
-            }
-        });
-        am.put("pause", new AbstractAction() {
-            public void actionPerformed(ActionEvent e) {
-                togglePause();
-            }
-        });
-        am.put("exit", new AbstractAction() {
-            public void actionPerformed(ActionEvent e) {
-                exitGame();
-            }
-        });
         attachBindingsTo(rootPanel);
         attachBindingsTo(gamePanel);
-
     }
     private void attachBindingsTo(JComponent comp) {
         InputMap im = comp.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
@@ -392,7 +309,6 @@ public class Board extends JFrame {
         am.put("pause",     new AbstractAction() { public void actionPerformed(ActionEvent e) { togglePause(); }});
         am.put("exit",      new AbstractAction() { public void actionPerformed(ActionEvent e) { exitGame(); }});
     }
-
 
     public void drawBoard() {
         // NEW: 텍스트가 아닌 그래픽으로 보드 그리기 (라운드 사각형 블럭)
@@ -425,7 +341,7 @@ public class Board extends JFrame {
 
     private void setStatus(String s) { setTitle("TETRIS — " + s); }
 
-    private char[][] blockToShape(Block b) {                 
+    private char[][] blockToShape(Block b) {
         int h = b.height(), w = b.width();
         int size = 4;
         char[][] arr = new char[size][size];
@@ -436,6 +352,18 @@ public class Board extends JFrame {
                 if (b.getShape(i, j) == 1)
                     arr[offY + j][offX + i] = 'O';
         return arr;
+    }
+
+    // block palette (bright, classic)
+    private Color colorFor(Block b) {
+        if (b instanceof IBlock) return new Color(0x00FFFF);
+        if (b instanceof JBlock) return new Color(0x3B82F6);
+        if (b instanceof LBlock) return new Color(0xF59E0B);
+        if (b instanceof OBlock) return new Color(0xFFD400);
+        if (b instanceof SBlock) return new Color(0x10B981);
+        if (b instanceof TBlock) return new Color(0xA855F7);
+        if (b instanceof ZBlock) return new Color(0xEF4444);
+        return new Color(0xCCCCCC);
     }
 
     // NEW: 보드 칸과 현재 블럭을 라운드 사각형으로 그리는 패널
@@ -458,6 +386,7 @@ public class Board extends JFrame {
 
             // 셀 크기 계산
             int cell = Math.min(gridW / WIDTH, gridH / HEIGHT);
+            if (cell <= 0) { g2.dispose(); return; }
             int startX = (w - cell * WIDTH) / 2;
             int startY = (h - cell * HEIGHT) / 2;
 
@@ -469,32 +398,32 @@ public class Board extends JFrame {
             g2.setColor(new Color(0x1F2531));
             g2.fillRoundRect(startX, startY, cell * WIDTH, cell * HEIGHT, 12, 12);
 
-            // 고정된 블럭들
+            // 고정된 블럭들 (글로시 그라디언트)
             for (int r = 0; r < HEIGHT; r++) {
                 for (int c = 0; c < WIDTH; c++) {
                     Color tile = board[r][c];
                     if (tile != null) {
                         int x0 = startX + c * cell + CELL_GAP;
                         int y0 = startY + r * cell + CELL_GAP;
-                        int s = cell - CELL_GAP * 2;
-                        g2.setColor(tile);
+                        int s  = cell - CELL_GAP * 2;
+                        g2.setPaint(new GradientPaint(x0, y0, tile.brighter(), x0, y0 + s, tile.darker()));
                         g2.fillRoundRect(x0, y0, s, s, ARC, ARC);
                     }
                 }
             }
 
-            // 현재 떨어지는 블럭
+            // 현재 떨어지는 블럭 (글로시 그라디언트)
             if (curr != null) {
-                g2.setColor(curr.getColor());
+                Color col = colorFor(curr);
                 for (int dy = 0; dy < curr.height(); dy++) {
                     for (int dx = 0; dx < curr.width(); dx++) {
                         if (curr.getShape(dx, dy) == 1) {
-                            int cx = x + dx;
-                            int cy = y + dy;
+                            int cx = x + dx, cy = y + dy;
                             if (cx >= 0 && cx < WIDTH && cy >= 0 && cy < HEIGHT) {
                                 int x0 = startX + cx * cell + CELL_GAP;
                                 int y0 = startY + cy * cell + CELL_GAP;
-                                int s = cell - CELL_GAP * 2;
+                                int s  = cell - CELL_GAP * 2;
+                                g2.setPaint(new GradientPaint(x0, y0, col.brighter(), x0, y0 + s, col.darker()));
                                 g2.fillRoundRect(x0, y0, s, s, ARC, ARC);
                             }
                         }
@@ -505,15 +434,4 @@ public class Board extends JFrame {
             g2.dispose();
         }
     }
-    private Color colorFor(Block b) {
-        if (b instanceof IBlock) return new Color(0x00FFFF);
-        if (b instanceof JBlock) return new Color(0x3B82F6);
-        if (b instanceof LBlock) return new Color(0xF59E0B);
-        if (b instanceof OBlock) return new Color(0xFFD400);
-        if (b instanceof SBlock) return new Color(0x10B981);
-        if (b instanceof TBlock) return new Color(0xA855F7);
-        if (b instanceof ZBlock) return new Color(0xEF4444);
-        return new Color(0xCCCCCC);
-    }
-
 }

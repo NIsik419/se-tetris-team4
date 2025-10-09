@@ -17,13 +17,14 @@ public class HUDSidebar extends JPanel {
     private final JLabel levelLabel = value("1");
     private final JLabel timeLabel  = value("00:00");
 
-    // smaller preview boxes
-    private final NextBlockPanel next1 = new NextBlockPanel(96);
-    private final NextBlockPanel next2 = new NextBlockPanel(96);
-    private final NextBlockPanel next3 = new NextBlockPanel(96);
+    // 3 preview boxes
+    private final NextBlockPanel next1 = new NextBlockPanel(110);
+    private final NextBlockPanel next2 = new NextBlockPanel(110);
+    private final NextBlockPanel next3 = new NextBlockPanel(110);
 
     public HUDSidebar() {
-        setBackground(new Color(0x0F141C));
+        // --- colors (tweak freely)
+        setBackground(new Color(0x0F141C));                      // sidebar bg
         setBorder(BorderFactory.createEmptyBorder(18, 18, 18, 18));
         setPreferredSize(new Dimension(220, 720));
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
@@ -31,6 +32,7 @@ public class HUDSidebar extends JPanel {
         add(title("Next"));
         add(Box.createVerticalStrut(8));
 
+        // container for 3 next boxes
         JPanel nextWrap = new JPanel();
         nextWrap.setOpaque(false);
         nextWrap.setLayout(new GridLayout(3, 1, 10, 10));
@@ -68,7 +70,7 @@ public class HUDSidebar extends JPanel {
         timeLabel.setText(String.format("%02d:%02d", m, s));
     }
 
-    /** Set up to 3 next shapes; extra slots may be null. */
+    // Set up to 3 next shapes; extra slots may be null. 
     public void setNextQueue(List<char[][]> shapes) {
         next1.setShape(shapes.size() > 0 ? shapes.get(0) : null);
         next2.setShape(shapes.size() > 1 ? shapes.get(1) : null);
