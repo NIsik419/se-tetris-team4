@@ -1,8 +1,22 @@
 package component;
 
-import javax.swing.*;
-import java.awt.*;
-import java.awt.event.*;
+import java.awt.BorderLayout;
+import java.awt.CardLayout;
+import java.awt.Font;
+import java.awt.event.ActionEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+
+import javax.swing.AbstractAction;
+import javax.swing.ActionMap;
+import javax.swing.InputMap;
+import javax.swing.JComponent;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.KeyStroke;
+import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
 
 public class App {
 
@@ -40,14 +54,12 @@ public class App {
         root.requestFocusInWindow();
     }
 
-
     private JPanel stubPanel(String text) {
         JPanel p = new JPanel(new BorderLayout());
         JLabel l = new JLabel(text, SwingConstants.CENTER);
         l.setFont(l.getFont().deriveFont(Font.PLAIN, 18f));
         p.add(l, BorderLayout.CENTER);
 
-    
         InputMap im = p.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
         ActionMap am = p.getActionMap();
         im.put(KeyStroke.getKeyStroke("ESCAPE"), "back");
@@ -69,7 +81,6 @@ public class App {
     }
 
     private void launchBoard() {
-
         frame.setVisible(false);
 
         Board game = new Board();
@@ -77,7 +88,6 @@ public class App {
         game.setLocationRelativeTo(null);
         game.setVisible(true);
 
-        
         SwingUtilities.invokeLater(() -> {
             game.requestFocusInWindow();
             game.requestFocus();
