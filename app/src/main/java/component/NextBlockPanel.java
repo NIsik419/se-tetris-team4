@@ -12,6 +12,7 @@ import javax.swing.JPanel;
 
 public class NextBlockPanel extends JPanel {
     private char[][] shape; // 4x4, 'O' filled
+
     private final int box;  // side length
 
     public NextBlockPanel() { this(96); }
