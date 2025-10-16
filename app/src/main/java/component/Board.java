@@ -63,16 +63,27 @@ public class Board extends JFrame {
 
     // Stats
     private int score = 0;
+<<<<<<< HEAD
     private int level = 1;
     private int linesCleared = 0;
     private final JLabel scoreLabel = new JLabel("0");
     private final JLabel levelLabel = new JLabel("1");
     private final JLabel linesLabel = new JLabel("0");
     private final JPanel nextPanel = new JPanel();
+=======
+    private int clearedLines = 0;
+
+    private BlockBag bag = new BlockBag();
+>>>>>>> origin/dev
 
     // Game loop
     private javax.swing.Timer timer;
+<<<<<<< HEAD
     private int baseSpeed = 500; // ms
+=======
+    private boolean isPaused = false;
+    private final SpeedManager speedManager = new SpeedManager();
+>>>>>>> origin/dev
 
     // Full screen
     private boolean isFullScreen = false;
@@ -110,12 +121,41 @@ public class Board extends JFrame {
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         getContentPane().setBackground(BG_DARK);
 
+<<<<<<< HEAD
         // optional: adjust start speed by difficulty
         if (cfg != null) {
             switch (cfg.difficulty()) {
                 case EASY   -> baseSpeed = 600;
                 case NORMAL -> baseSpeed = 500;
                 case HARD   -> baseSpeed = 380;
+=======
+        // ===== 사이드 패널 =====
+        JPanel side = new JPanel();
+        side.setLayout(new BoxLayout(side, BoxLayout.Y_AXIS));
+        side.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        scoreLabel = new JLabel("Score: 0");
+        statusLabel = new JLabel("Ready");
+        scoreLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        statusLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        side.add(scoreLabel);
+        side.add(Box.createVerticalStrut(8));
+        side.add(statusLabel);
+
+        rootPanel.add(side, BorderLayout.EAST);
+        setContentPane(rootPanel);
+
+        // ===== 보드/블럭 초기화 =====
+        board = new Color[HEIGHT][WIDTH];
+        curr = bag.next();
+
+        // ===== 게임 루프 타이머 =====
+        timer = new javax.swing.Timer(speedManager.getDropInterval(), e -> {
+            if (!isPaused) {
+                moveDown();
+                drawBoard();
+>>>>>>> origin/dev
             }
         }
 
@@ -576,8 +616,105 @@ public class Board extends JFrame {
                 g2.setColor(new Color(255, 255, 255, 140));
                 g2.fillRect(0, 0, getWidth(), getHeight());
             }
+<<<<<<< HEAD
 
             g2.dispose();
+=======
+            if (full) {
+                for (int k = i; k > 0; k--) {
+                    board[k] = board[k - 1].clone();
+                }
+                board[0] = new Color[WIDTH];
+                score += 100;
+                clearedLines++;
+                if (clearedLines % 10 == 0)
+                    speedManager.increaseLevel();
+                    timer.setDelay(speedManager.getDropInterval());
+            }
+        }
+    }
+
+    private void gameOver() {
+        timer.stop();
+        setStatus("GAME OVER! Score: " + score);
+    }
+
+    // ===== 키 바인딩 =====
+    private void setupKeyBindings() {
+        InputMap im = rootPanel.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        ActionMap am = rootPanel.getActionMap();
+        rootPanel.setFocusTraversalKeysEnabled(false);
+
+        im.put(KeyStroke.getKeyStroke("RIGHT"), "moveRight");
+        im.put(KeyStroke.getKeyStroke("LEFT"), "moveLeft");
+        im.put(KeyStroke.getKeyStroke("DOWN"), "moveDown");
+        im.put(KeyStroke.getKeyStroke("UP"), "rotate");
+        im.put(KeyStroke.getKeyStroke("SPACE"), "hardDrop");
+        im.put(KeyStroke.getKeyStroke("P"), "pause");
+        im.put(KeyStroke.getKeyStroke("ESCAPE"), "exit");
+
+        am.put("moveRight", new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                moveRight();
+                drawBoard();
+            }
+        });
+        am.put("moveLeft", new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                moveLeft();
+                drawBoard();
+            }
+        });
+        am.put("moveDown", new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                moveDown();
+                drawBoard();
+            }
+        });
+        am.put("rotate", new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                rotateBlock();
+            }
+        });
+        am.put("hardDrop", new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                hardDrop();
+                drawBoard();
+            }
+        });
+        am.put("pause", new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                togglePause();
+            }
+        });
+        am.put("exit", new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                exitGame();
+            }
+        });
+    }
+
+    public void drawBoard() {
+        StringBuilder sb = new StringBuilder();
+
+        // ====== 보드 문자열 구성 ======
+        // 윗 테두리
+        for (int t = 0; t < WIDTH + 2; t++)
+            sb.append(BORDER_CHAR);
+        sb.append("\n");
+
+        // 내부
+        for (int i = 0; i < HEIGHT; i++) {
+            sb.append(BORDER_CHAR); // 왼쪽 테두리
+            for (int j = 0; j < WIDTH; j++) {
+                if (board[i][j] != null || isCurrBlockAt(j, i)) {
+                    sb.append("O"); // 블록
+                } else {
+                    sb.append(" "); // 빈칸은 그냥 공백
+                }
+            }
+            sb.append(BORDER_CHAR).append("\n"); // 오른쪽 테두리
+>>>>>>> origin/dev
         }
 
         private void drawCell(Graphics2D g2, int col, int row, Color color) {
@@ -585,9 +722,18 @@ public class Board extends JFrame {
             int py = row * CELL_SIZE + CELL_GAP;
             int size = CELL_SIZE - CELL_GAP * 2;
 
+<<<<<<< HEAD
             // body
             g2.setColor(color);
             g2.fillRoundRect(px, py, size, size, ARC, ARC);
+=======
+        // 게임 정보
+        sb.append("\nSCORE: ").append(score);
+        sb.append("\nLEVEL: ").append(speedManager.getLevel());
+        sb.append("\nNEXT: ").append(bag.peekNext(1).get(0).getClass().getSimpleName());
+        if (isPaused)
+            sb.append("\n[일시정지]");
+>>>>>>> origin/dev
 
             // highlight
             g2.setColor(new Color(255, 255, 255, 60));
