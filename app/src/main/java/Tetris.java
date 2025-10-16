@@ -1,10 +1,10 @@
-import component.Board;
+
+import component.App;
 
 public class Tetris {
 
 	public static void main(String[] args) {
-		Board main = new Board();
-		main.setSize(400, 500);
-		main.setVisible(true);
+		App main = new App();
+		main.main(args);
 	}
 }	

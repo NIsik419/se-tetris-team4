@@ -1,8 +1,23 @@
 package component;
 
-import javax.swing.*;
-import java.awt.*;
-import java.awt.event.*;
+import java.awt.BorderLayout;
+import java.awt.CardLayout;
+import java.awt.Font;
+import java.awt.event.ActionEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+
+import javax.swing.AbstractAction;
+import javax.swing.ActionMap;
+import javax.swing.InputMap;
+import javax.swing.JComponent;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.KeyStroke;
+import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
+
 
 public class App {
 
@@ -16,8 +31,10 @@ public class App {
     private final CardLayout cards = new CardLayout();
     private final JPanel root = new JPanel(cards);
 
-    private final MenuPanel menuPanel = new MenuPanel(this::onMenuSelect);
-    private final JPanel settingsPanel = stubPanel("설정 (Settings) – 추후 구현");
+    private final MenuPanel menuPanel =
+            new MenuPanel(this::startGameWithConfig, this::onMenuSelect);
+
+    private final JPanel settingsPanel  = stubPanel("설정 (Settings) – 추후 구현");
     private final JPanel scoreboardPanel = stubPanel("스코어보드 (Scoreboard) – 추후 구현");
 
     private void show() {
@@ -40,14 +57,12 @@ public class App {
         root.requestFocusInWindow();
     }
 
-
     private JPanel stubPanel(String text) {
         JPanel p = new JPanel(new BorderLayout());
         JLabel l = new JLabel(text, SwingConstants.CENTER);
         l.setFont(l.getFont().deriveFont(Font.PLAIN, 18f));
         p.add(l, BorderLayout.CENTER);
 
-    
         InputMap im = p.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
         ActionMap am = p.getActionMap();
         im.put(KeyStroke.getKeyStroke("ESCAPE"), "back");
@@ -61,26 +76,22 @@ public class App {
 
     private void onMenuSelect(MenuPanel.MenuItem item) {
         switch (item) {
-            case START -> launchBoard();
-            case SETTINGS -> showScreen(Screen.SETTINGS);
+            case SETTINGS   -> showScreen(Screen.SETTINGS);
             case SCOREBOARD -> showScreen(Screen.SCOREBOARD);
-            case EXIT -> System.exit(0);
+            case EXIT       -> System.exit(0);
         }
     }
 
-    private void launchBoard() {
-
+    /** Start game with selected mode/difficulty from the menu. */
+    private void startGameWithConfig(GameConfig cfg) {
         frame.setVisible(false);
 
-        Board game = new Board();
-        game.setTitle("TETRIS – Game");
+        Board game = new Board(cfg);
         game.setLocationRelativeTo(null);
         game.setVisible(true);
 
-        
         SwingUtilities.invokeLater(() -> {
             game.requestFocusInWindow();
-            game.requestFocus();
             game.toFront();
         });
 
@@ -95,3 +106,4 @@ public class App {
         });
     }
 }
+
