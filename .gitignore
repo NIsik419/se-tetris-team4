@@ -31,8 +31,13 @@ replay_pid*
 
 # Ignore Gradle build output directory
 build
+
 .vscode/
 
 # build & temp
 app/bin/
 *.save
+
+
+app/config/settings.properties
+

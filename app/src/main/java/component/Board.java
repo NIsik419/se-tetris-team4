@@ -63,6 +63,7 @@ public class Board extends JFrame {
 
     // Stats
     private int score = 0;
+
     private int level = 1;
     private int linesCleared = 0;
     private final JLabel scoreLabel = new JLabel("0");
@@ -101,9 +102,12 @@ public class Board extends JFrame {
     public Board() {
         this(null);
     }
+    private int clearedLines = 0;
+
 
     public Board(GameConfig cfg) {
         this.config = cfg;
+
 
         setTitle(cfg == null ? "TETRIS"
                 : "TETRIS – " + cfg.mode() + " / " + cfg.difficulty());
@@ -116,6 +120,56 @@ public class Board extends JFrame {
                 case EASY   -> baseSpeed = 600;
                 case NORMAL -> baseSpeed = 500;
                 case HARD   -> baseSpeed = 380;
+
+    private javax.swing.Timer timer;
+    private boolean isPaused = false;
+    private final SpeedManager speedManager = new SpeedManager();
+
+    public Board() {
+        super("SeoulTech SE Tetris");
+        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+
+        // ===== 메인 보드 패널 =====
+        pane = new JTextPane();
+        pane.setEditable(false);
+        pane.setFocusable(false);
+        pane.setBackground(Color.BLACK);
+        pane.setFont(new Font("Courier New", Font.PLAIN, 18)); // 고정폭 폰트 강제
+        CompoundBorder border = BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(Color.GRAY, 10),
+                BorderFactory.createLineBorder(Color.DARK_GRAY, 5));
+        pane.setBorder(border);
+
+        rootPanel = new JPanel(new BorderLayout());
+        rootPanel.add(pane, BorderLayout.CENTER);
+
+        // ===== 사이드 패널 =====
+        JPanel side = new JPanel();
+        side.setLayout(new BoxLayout(side, BoxLayout.Y_AXIS));
+        side.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        scoreLabel = new JLabel("Score: 0");
+        statusLabel = new JLabel("Ready");
+        scoreLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        statusLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        side.add(scoreLabel);
+        side.add(Box.createVerticalStrut(8));
+        side.add(statusLabel);
+
+        rootPanel.add(side, BorderLayout.EAST);
+        setContentPane(rootPanel);
+
+        // ===== 보드/블럭 초기화 =====
+        board = new Color[HEIGHT][WIDTH];
+        curr = bag.next();
+
+        // ===== 게임 루프 타이머 =====
+        timer = new javax.swing.Timer(speedManager.getDropInterval(), e -> {
+            if (!isPaused) {
+                moveDown();
+                drawBoard();
+
             }
         }
 
@@ -414,7 +468,15 @@ public class Board extends JFrame {
                 cleared++;
                 for (int k = r; k > 0; k--) board[k] = board[k - 1].clone();
                 board[0] = new Color[WIDTH];
+
                 r++;
+
+                score += 100;
+                clearedLines++;
+                if (clearedLines % 10 == 0)
+                    speedManager.increaseLevel();
+                    timer.setDelay(speedManager.getDropInterval());
+
             }
         }
         if (cleared > 0) {
@@ -429,6 +491,7 @@ public class Board extends JFrame {
             // speed up
             int newSpeed = Math.max(100, baseSpeed - (level - 1) * 50);
             timer.setDelay(newSpeed);
+
 
             // merged: trigger flash
             triggerLineClearFlash();
@@ -486,6 +549,11 @@ public class Board extends JFrame {
         }
         nextPanel.revalidate();
         nextPanel.repaint();
+
+    private void gameOver() {
+        timer.stop();
+        setStatus("GAME OVER! Score: " + score);
+
     }
 
     private Color getColor(Block b) {
@@ -517,6 +585,7 @@ public class Board extends JFrame {
             setBorder(BorderFactory.createLineBorder(GRID_LINE, 3));
         }
 
+
         @Override protected void paintComponent(Graphics g) {
             super.paintComponent(g);
             Graphics2D g2 = (Graphics2D) g.create();
@@ -535,6 +604,36 @@ public class Board extends JFrame {
                     if (board[r][c] != null) {
                         drawCell(g2, c, r, board[r][c]);
                     }
+
+        // 아랫 테두리
+        for (int t = 0; t < WIDTH + 2; t++)
+            sb.append(BORDER_CHAR);
+
+        // 게임 정보
+        sb.append("\nSCORE: ").append(score);
+        sb.append("\nLEVEL: ").append(speedManager.getLevel());
+        sb.append("\nNEXT: ").append(bag.peekNext(1).get(0).getClass().getSimpleName());
+        if (isPaused)
+            sb.append("\n[일시정지]");
+
+        // ====== 텍스트 반영 ======
+        pane.setText(sb.toString());
+        StyledDocument doc = pane.getStyledDocument();
+
+        // ====== 색칠 ======
+        // 전체 문자열 좌표 순회 (테두리 포함)
+        for (int i = 0; i < HEIGHT; i++) {
+            for (int j = 0; j < WIDTH; j++) {
+                Color c = null;
+
+                // 보드 블록
+                if (board[i][j] != null) {
+                    c = board[i][j];
+                }
+                // 현재 움직이는 블록
+                if (isCurrBlockAt(j, i)) {
+                    c = curr.getColor();
+
                 }
             }
 
