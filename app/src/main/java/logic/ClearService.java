@@ -1,7 +1,6 @@
 package logic;
 
 import java.awt.Color;
-import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import java.util.ArrayList;
 import java.util.List;
@@ -9,14 +8,16 @@ import java.util.List;
 public class ClearService {
     private final GameState state;
     private boolean skipDuringItem = false;
+    
+    // 삭제 표시 색상 (하얀색 잔상)
+    private static final Color DELETE_MARKER = new Color(255, 255, 255, 220);
 
     public ClearService(GameState state) {
         this.state = state;
     }
 
-    /** 메인 라인 클리어 로직 */
+    /** 메인 라인 클리어 로직 - 동시 처리 방식 */
     public int clearLines(Runnable onFrameUpdate, Runnable onComplete) {
-        int linesCleared = 0;
         var board = state.getBoard();
         List<Integer> fullRows = new ArrayList<>();
 
@@ -39,10 +40,10 @@ public class ClearService {
             return 0;
         }
 
-        linesCleared = fullRows.size();
+        int linesCleared = fullRows.size();
 
-        // 순차 애니메이션 실행
-        clearRowsSequentially(fullRows, 0, onFrameUpdate, () -> {
+        // 잠깐 표시하고 삭제
+        showDeleteMarkAndClear(fullRows, onFrameUpdate, () -> {
             applyGravityInstantly();
             if (onFrameUpdate != null)
                 onFrameUpdate.run();
@@ -53,47 +54,87 @@ public class ClearService {
         return linesCleared;
     }
 
-    /** 한 줄씩 순서대로 클리어 */
-    private void clearRowsSequentially(List<Integer> rows, int index, Runnable onFrameUpdate, Runnable done) {
-        if (index >= rows.size()) {
-            done.run();
-            return;
+    /** 삭제될 줄을 잠깐 하얗게 표시하고 삭제 */
+    private void showDeleteMarkAndClear(List<Integer> rows, Runnable onFrameUpdate, Runnable onComplete) {
+        var board = state.getBoard();
+        var fade = state.getFadeLayer();
+        
+        // 1단계: 하얀색으로 표시
+        for (int row : rows) {
+            for (int x = 0; x < GameState.WIDTH; x++) {
+                fade[row][x] = DELETE_MARKER;
+            }
         }
-
-        int row = rows.get(index);
-        animateRowClearSequential(row, onFrameUpdate,
-                () -> clearRowsSequentially(rows, index + 1, onFrameUpdate, done));
-    }
-
-    /** 라인 삭제 애니메이션 */
-    public void animateRowClearSequential(int targetY, Runnable onFrameUpdate, Runnable onComplete) {
-        final int[] col = { 0 };
-        Timer t = new Timer(25, null);
-        t.addActionListener(e -> {
-            var board = state.getBoard();
-            if (col[0] < GameState.WIDTH) {
-                // 시각용 효과: fadeLayer에만 색칠
-                var fade = state.getFadeLayer();
-                fade[targetY][col[0]] = new Color(255, 255, 180);
-                if (onFrameUpdate != null)
-                    onFrameUpdate.run();
-
-                int x = col[0];
-                new Timer(60, ev -> {
-                    fade[targetY][x] = null;
-                    board[targetY][x] = null;
-                    if (onFrameUpdate != null)
-                        onFrameUpdate.run();
-                    ((Timer) ev.getSource()).stop();
-                }).start();
-                col[0]++;
-            } else {
-                ((Timer) e.getSource()).stop();
+        
+        if (onFrameUpdate != null)
+            onFrameUpdate.run();
+        
+        // 2단계: 200ms 후 삭제 + 중력
+        Timer deleteTimer = new Timer(200, e -> {
+            ((Timer) e.getSource()).stop();
+            
+            // fadeLayer 제거 + 실제 블록 삭제
+            for (int row : rows) {
+                for (int x = 0; x < GameState.WIDTH; x++) {
+                    fade[row][x] = null;
+                    board[row][x] = null;
+                }
+            }
+            
+            if (onFrameUpdate != null)
+                onFrameUpdate.run();
+            
+            // 약간의 딜레이 후 완료
+            Timer completeTimer = new Timer(50, ev -> {
+                ((Timer) ev.getSource()).stop();
                 if (onComplete != null)
                     onComplete.run();
-            }
+            });
+            completeTimer.setRepeats(false);
+            completeTimer.start();
         });
-        t.start();
+        deleteTimer.setRepeats(false);
+        deleteTimer.start();
+    }
+
+    /** 
+     * 단일 줄 표시하고 삭제 (아이템용)
+     */
+    public void animateSingleLineClear(int targetY, Runnable onFrameUpdate, Runnable onComplete) {
+        var board = state.getBoard();
+        var fade = state.getFadeLayer();
+        
+        // 1단계: 하얀색으로 표시
+        for (int x = 0; x < GameState.WIDTH; x++) {
+            fade[targetY][x] = DELETE_MARKER;
+        }
+        
+        if (onFrameUpdate != null)
+            onFrameUpdate.run();
+        
+        // 2단계: 200ms 후 삭제
+        Timer deleteTimer = new Timer(200, e -> {
+            ((Timer) e.getSource()).stop();
+            
+            // fadeLayer 제거 + 실제 블록 삭제
+            for (int x = 0; x < GameState.WIDTH; x++) {
+                fade[targetY][x] = null;
+                board[targetY][x] = null;
+            }
+            
+            if (onFrameUpdate != null)
+                onFrameUpdate.run();
+            
+            Timer completeTimer = new Timer(50, ev -> {
+                ((Timer) ev.getSource()).stop();
+                if (onComplete != null)
+                    onComplete.run();
+            });
+            completeTimer.setRepeats(false);
+            completeTimer.start();
+        });
+        deleteTimer.setRepeats(false);
+        deleteTimer.start();
     }
 
     /** 중력 적용 */
@@ -117,21 +158,29 @@ public class ClearService {
         } while (moved);
     }
 
-    /** 특정 줄 위쪽 블록만 아래로 한 칸씩 내리는 중력 */
-    public void applyGravityFromRow(int fromRow) {
+    /** 
+     * 특정 줄이 삭제된 후, 그 위의 블록들만 한 칸씩 내리는 중력
+     * - deletedRow: 이미 삭제된 줄의 인덱스
+     */
+    public void applyGravityFromRow(int deletedRow) {
+        if (skipDuringItem)
+            return;
+            
         Color[][] board = state.getBoard();
 
-        for (int col = 0; col < BoardLogic.WIDTH; col++) {
-            for (int row = GameState.HEIGHT - 2; row >= 0; row--) {
-                if (board[row][col] != null) {
-                    int dropTo = row;
-                    // 🔽 바닥까지 완전히 검사 (삭제된 줄 포함)
-                    while (dropTo + 1 < GameState.HEIGHT && board[dropTo + 1][col] == null) {
-                        dropTo++;
+        // 삭제된 줄 위쪽의 모든 블록을 한 칸씩 아래로
+        for (int y = deletedRow - 1; y >= 0; y--) {
+            for (int x = 0; x < GameState.WIDTH; x++) {
+                if (board[y][x] != null) {
+                    // 아래로 이동 가능한 만큼 이동
+                    int targetY = y;
+                    while (targetY + 1 < GameState.HEIGHT && board[targetY + 1][x] == null) {
+                        targetY++;
                     }
-                    if (dropTo != row) {
-                        board[dropTo][col] = board[row][col];
-                        board[row][col] = null;
+                    
+                    if (targetY != y) {
+                        board[targetY][x] = board[y][x];
+                        board[y][x] = null;
                     }
                 }
             }
@@ -144,6 +193,5 @@ public class ClearService {
 
     public boolean isSkipDuringItem() {
         return skipDuringItem;
-
     }
 }

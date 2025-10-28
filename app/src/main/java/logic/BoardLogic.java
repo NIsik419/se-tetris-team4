@@ -245,6 +245,14 @@ public class BoardLogic {
         return itemMode;
     }
 
+    public GameState getState() {
+        return state;
+    }
+
+    public Color[][] getFadeLayer() {
+        return state.getFadeLayer();
+    }
+
     // HUD용 NEXT 블록 미리보기 (현재 제외, 다음 3개)
     public List<Block> getNextBlocks() {
         return previewQueue.size() > 1

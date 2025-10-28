@@ -14,7 +14,7 @@ import logic.ClearService;
  * - 블록 내 한 칸에 'L'이 붙음 (무작위)
  * - 회전 시에도 L 위치가 함께 회전
  * - 착지 시 L이 위치한 줄 삭제 (꽉 차지 않아도)
- * - 삭제 후 위쪽 블록 중력 낙하 (중복 방지 + 보장 처리)
+ * - 삭제 후 위쪽 블록 중력 낙하
  */
 public class LineClearItem extends ItemBlock {
 
@@ -93,9 +93,9 @@ public class LineClearItem extends ItemBlock {
             return;
         }
 
-        // 🎮 실제 게임 모드: 페이드 애니메이션 + 중력
+        // 🎮 실제 게임 모드: 번쩍임 애니메이션 + 중력
         SwingUtilities.invokeLater(() -> {
-            clear.animateRowClearSequential(targetY, logic.getOnFrameUpdate(), () -> {
+            clear.animateSingleLineClear(targetY, logic.getOnFrameUpdate(), () -> {
                 safeApplyGravity(clear, targetY);
                 logic.addScore(100);
                 if (logic.getOnFrameUpdate() != null)
@@ -108,8 +108,7 @@ public class LineClearItem extends ItemBlock {
 
     /**
      * 안전한 중력 적용:
-     * - 이미 다른 아이템이 중력 중이면 일정 시간 대기 후 재시도
-     * - 항상 한 번은 applyGravityFromRow()가 실행되도록 보장
+     * - 해당 줄만 삭제된 상태에서 위쪽 블록을 아래로 내림
      */
     private void safeApplyGravity(ClearService clear, int targetY) {
         if (clear == null) return;
@@ -118,17 +117,18 @@ public class LineClearItem extends ItemBlock {
         if (clear.isSkipDuringItem()) {
             new Timer(80, e -> {
                 ((Timer) e.getSource()).stop();
-                safeApplyGravity(clear, targetY); // 재귀적 재시도
+                safeApplyGravity(clear, targetY);
             }).start();
             return;
         }
 
-        // 현재 중력 수행
+        // 중력 처리 시작
         clear.setSkipDuringItem(true);
-        new Timer(100, e -> {
-            clear.applyGravityFromRow(targetY);
-            clear.setSkipDuringItem(false);
-            ((Timer) e.getSource()).stop();
-        }).start();
+        
+        // 즉시 중력 적용 (targetY는 이미 삭제된 상태)
+        clear.applyGravityFromRow(targetY);
+        
+        // 중력 완료
+        clear.setSkipDuringItem(false);
     }
 }
