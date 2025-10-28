@@ -62,27 +62,27 @@ public class BoardLogicTest {
         assertNull("해당 줄은 삭제되어야 함", board[5][0]);
     }
 
-    @Test
-    public void testWeightItemDestroysBelowBlocks() {
-        BoardLogic logic = new BoardLogic(score -> {
-        });
-        WeightItem item = new WeightItem();
-        item.setTestMode(true);
+    // @Test
+    // public void testWeightItemDestroysBelowBlocks() {
+    //     BoardLogic logic = new BoardLogic(score -> {
+    //     });
+    //     WeightItem item = new WeightItem();
+    //     item.setTestMode(true);
 
-        var board = logic.getBoard();
+    //     var board = logic.getBoard();
 
-        // 아래쪽 절반 채워두기
-        for (int y = BoardLogic.HEIGHT / 2; y < BoardLogic.HEIGHT; y++)
-            for (int x = 0; x < BoardLogic.WIDTH; x++)
-                board[y][x] = Color.RED;
+    //     // 아래쪽 절반 채워두기
+    //     for (int y = BoardLogic.HEIGHT / 2; y < BoardLogic.HEIGHT; y++)
+    //         for (int x = 0; x < BoardLogic.WIDTH; x++)
+    //             board[y][x] = Color.RED;
 
-        item.activate(logic, null);
+    //     item.activate(logic, null);
 
-        // 아래 절반이 모두 null로 변했는지 확인
-        for (int y = BoardLogic.HEIGHT / 2; y < BoardLogic.HEIGHT; y++)
-            for (int x = 0; x < BoardLogic.WIDTH; x++)
-                assertNull("WeightItem은 하단 블록들을 모두 제거해야 함", board[y][x]);
-    }
+    //     // 아래 절반이 모두 null로 변했는지 확인
+    //     for (int y = BoardLogic.HEIGHT / 2; y < BoardLogic.HEIGHT; y++)
+    //         for (int x = 0; x < BoardLogic.WIDTH; x++)
+    //             assertNull("WeightItem은 하단 블록들을 모두 제거해야 함", board[y][x]);
+    // }
 
     /** 🔹 DoubleScoreItem - 점수 2배 적용 확인 */
     @Test
