@@ -138,11 +138,17 @@ public class Board extends JFrame {
         rightPanel.add(createControlsPanel());
         root.add(rightPanel, BorderLayout.EAST);
 
-        // logic.setOnNextQueueUpdate(nextBlocks ->
-        //         SwingUtilities.invokeLater(() -> updateNextHUD(nextBlocks)));
+        // SwingUtilities.invokeLater(() -> updateNextHUD(logic.getNextBlocks()));
+        // updateNextHUD(logic.getNextBlocks()); 
+        
+        logic.setOnNextQueueUpdate(blocks ->
+                SwingUtilities.invokeLater(() -> updateNextHUD(blocks)));
 
-        SwingUtilities.invokeLater(() -> updateNextHUD(logic.getNextBlocks()));
-        updateNextHUD(logic.getNextBlocks()); 
+        addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override public void windowOpened(java.awt.event.WindowEvent e) {
+                updateNextHUD(logic.getNextBlocks()); // 창 표시된 뒤 1회
+            }
+        });
 
         add(root);
         setupKeys(gamePanel);
@@ -852,14 +858,5 @@ public class Board extends JFrame {
             }
         });
     }
-
-    // public void setColorMapper(java.util.function.Function<Color, Color> mapper) {
-    //     this.colorMapper = (mapper != null) ? mapper : (c -> c);
-    // }
-
-    // private Color mapDisplayColor(Color base) {
-    //     try { return colorMapper.apply(base); }
-    //     catch (Exception ignore) { return base; }
-    // }
 
 }
