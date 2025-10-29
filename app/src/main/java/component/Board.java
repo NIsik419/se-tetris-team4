@@ -33,6 +33,7 @@ public class Board extends JFrame {
     private NameInputOverlay nameInputOverlay;
     private ScoreboardOverlay scoreboardOverlay; 
     private final GameConfig config;
+    private java.util.function.Function<Color, Color> colorMapper = c -> c;
 
     // === 시각용 상수 ===
     private static final int CELL_SIZE = 35;
@@ -67,6 +68,8 @@ public class Board extends JFrame {
 
     private Settings settings;
     private final java.util.Map<Action, Integer> boundKeys = new java.util.EnumMap<>(Action.class);
+
+    private final HUDSidebar sidebar = new HUDSidebar();
 
     private static final String ACT_LEFT = "left";
     private static final String ACT_RIGHT = "right";
@@ -134,6 +137,18 @@ public class Board extends JFrame {
         rightPanel.add(Box.createVerticalGlue());
         rightPanel.add(createControlsPanel());
         root.add(rightPanel, BorderLayout.EAST);
+
+        // SwingUtilities.invokeLater(() -> updateNextHUD(logic.getNextBlocks()));
+        // updateNextHUD(logic.getNextBlocks()); 
+        
+        logic.setOnNextQueueUpdate(blocks ->
+                SwingUtilities.invokeLater(() -> updateNextHUD(blocks)));
+
+        addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override public void windowOpened(java.awt.event.WindowEvent e) {
+                updateNextHUD(logic.getNextBlocks()); // 창 표시된 뒤 1회
+            }
+        });
 
         add(root);
         setupKeys(gamePanel);
@@ -413,6 +428,8 @@ public class Board extends JFrame {
     }
 
     private void updateNextHUD(List<Block> nextBlocks) {
+
+        nextBlocks = nextBlocks.subList(0, Math.min(3, nextBlocks.size()));
 
         nextPanel.removeAll();
         nextPanel.setLayout(new GridLayout(nextBlocks.size(), 1, 0, 10));

@@ -54,6 +54,7 @@ public class BoardLogic {
     private boolean itemMode = false;
 
     private final LinkedList<Block> previewQueue = new LinkedList<>();
+    private Consumer<List<Block>> onNextQueueUpdate;
 
     /** 기본 생성자 (NORMAL) */
     public BoardLogic(Consumer<Integer> onGameOver) {
@@ -75,6 +76,7 @@ public class BoardLogic {
         // 초기 블럭 준비
         refillPreview();
         state.setCurr(previewQueue.removeFirst());
+        fireNextQueueChanged();
     }
 
     /** 큐가 부족하면 블럭 채워넣기 */
@@ -171,25 +173,33 @@ public class BoardLogic {
 
     /** 다음 블럭 스폰 */
     private void spawnNext() {
-        refillPreview();
+        // 현재 큐에 블럭이 부족하면 채워 넣기
+    refillPreview();
 
-        Block next;
-        if (itemMode && nextIsItem) {
-            next = item.generateItemBlock();
-        } else {
-            next = bag.next();
-        }
+    // 다음 블럭을 꺼냄
+    Block next;
+    if (itemMode && nextIsItem) {
+        next = item.generateItemBlock();
         nextIsItem = false;
+    } else {
+        next = previewQueue.removeFirst(); // bag.next() 대신 previewQueue에서 꺼내기
+    }
 
-        refillPreview();
-        state.setCurr(next);
-        state.setPosition(3, 0);
+    // 현재 블럭으로 설정
+    state.setCurr(next);
+    state.setPosition(3, 0);
 
-        // 게임 오버 체크
-        if (!move.canMove(next, 3, 0)) {
-            gameOver = true;
-            onGameOver.accept(score);
-        }
+    // 다시 부족하면 채워 넣기
+    refillPreview();
+
+    // NEXT 큐 변경 알림 (여기서 3개 고정)
+    fireNextQueueChanged();
+
+    // 게임 오버 체크
+    if (!move.canMove(next, 3, 0)) {
+        gameOver = true;
+        onGameOver.accept(score);
+    }
     }
 
     // === 이동 입력 ===
@@ -310,4 +320,14 @@ public class BoardLogic {
                 : List.of();
     }
 
+    public void setOnNextQueueUpdate(Consumer<List<Block>> cb) {
+        this.onNextQueueUpdate = cb;
+    }
+
+    // nextQueue가 바뀔 때마다 호출하는 유틸
+    private void fireNextQueueChanged() {
+        if (onNextQueueUpdate != null) {
+            onNextQueueUpdate.accept(List.copyOf(previewQueue)); // nextQueue는 내부 큐
+        }
+    }
 }
