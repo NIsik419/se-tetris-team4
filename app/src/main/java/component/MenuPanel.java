@@ -42,7 +42,6 @@ import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
 import javax.swing.Timer;
 
-
 public class MenuPanel extends JPanel {
 
     public enum MenuItem { SETTINGS, SCOREBOARD, EXIT }
@@ -58,8 +57,6 @@ public class MenuPanel extends JPanel {
     private JPanel cardsContainer;
     private JPanel bottomPanel;
     private boolean isCompactMode = false;
-    private KeyboardLegendPanel keyboardLegend;
-
 
     // Title animation
     private float titleGlowPhase = 0f;
@@ -191,7 +188,7 @@ public class MenuPanel extends JPanel {
         cardsContainer.setOpaque(false);
         cardsContainer.setLayout(new GridLayout(1, 2, 26, 0));
 
-        cardsContainer.add(makeModeCard("Traditional Tetris", "Normal Game Start", GameConfig.Mode.NORMAL,
+        cardsContainer.add(makeModeCard("Traditional Tetris", "Normal Game Start", GameConfig.Mode.CLASSIC,
                 new Color(0x2B3F8C), new Color(0x1B2A55)));
         cardsContainer.add(makeModeCard("Power-ups & Items", "Start With Items", GameConfig.Mode.ITEM,
                 new Color(0x485822), new Color(0x2E3A17)));
@@ -207,14 +204,6 @@ public class MenuPanel extends JPanel {
         bottomPanel.add(linkBtn("Scoreboard (S)", () -> onSelect.accept(MenuItem.SCOREBOARD)));
         bottomPanel.add(linkBtn("Exit (Esc)", () -> onSelect.accept(MenuItem.EXIT)));
         add(bottomPanel, gb);
-        // --- Keyboard legend 
-        gb.gridy++;
-        gb.weighty = 0;
-        gb.insets = new Insets(8, 16, 16, 16);
-        keyboardLegend = new KeyboardLegendPanel();
-        keyboardLegend.setOpaque(false);
-        add(keyboardLegend, gb);
-
     }
 
     private void handleResize() {
@@ -238,11 +227,8 @@ public class MenuPanel extends JPanel {
             }
             revalidate();
         }
-        
-        if (keyboardLegend != null) {
-    // scale roughly with width (keeps it subtle)
-        keyboardLegend.setScale(Math.max(0.8f, Math.min(1.4f, getWidth() / 900f)));
-        }   
+
+        // Force repaint of all components to update their responsive fonts
         repaint();
     }
 
@@ -392,7 +378,7 @@ public class MenuPanel extends JPanel {
         topPanel.add(b, BorderLayout.WEST);
 
         // Mode icon/badge
-        JLabel badge = new JLabel(mode == GameConfig.Mode.NORMAL ? "●" : "★");
+        JLabel badge = new JLabel(mode == GameConfig.Mode.CLASSIC ? "●" : "★");
         badge.setFont(badge.getFont().deriveFont(Font.BOLD, 24f));
         badge.setForeground(new Color(cTop.getRed(), cTop.getGreen(), cTop.getBlue(), 200));
         topPanel.add(badge, BorderLayout.EAST);
@@ -678,123 +664,6 @@ public class MenuPanel extends JPanel {
             ss[i] += (Math.random()*0.08 - 0.04);
             if (ss[i] < 0.35f) ss[i] = 0.35f;
             if (ss[i] > 1.0f)  ss[i] = 1.0f;
-        }
-    }
-    
-// shows arrow keys (↑ on top, then ←  ↓  →)
-private static class KeyboardLegendPanel extends JPanel {
-    private float scale = 1.0f; // responsive scale set by parent
-
-    void setScale(float s) { this.scale = s; revalidate(); repaint(); }
-
-    @Override public Dimension getPreferredSize() {
-        int w = Math.round(360 * scale);
-        int h = Math.round(110 * scale);
-        return new Dimension(w, h);
-    }
-
-    @Override protected void paintComponent(Graphics g) {
-        super.paintComponent(g);
-        Graphics2D g2 = (Graphics2D) g.create();
-        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-
-        // colors (match your UI)
-        Color keyFill  = new Color(0xFFFFFF & 0x00FFFFFF, true); // fully transparent fill (we'll just do edge)
-        Color keyEdge  = new Color(70, 74, 84, 210);             // dark gray edge like screenshot
-        Color glyphCol = keyEdge;
-
-        int key = Math.round(64 * scale);     // key size
-        int gap = Math.round(18 * scale);     // spacing
-        int arc = Math.round(18 * scale);     // corner radius
-        int stroke = Math.max(2, Math.round(3 * scale));
-
-        // layout: one top centered, three bottom
-        int totalWidth = key * 3 + gap * 2;
-        int startX = (getWidth() - totalWidth) / 2;
-        int topY   = Math.round(4 * scale);
-        int botY   = topY + key + gap;
-
-        // rect positions
-        int upX    = startX + key + gap;      // middle of the 3-column grid
-        int leftX  = startX;
-        int downX  = startX + key + gap;
-        int rightX = startX + (key + gap) * 2;
-
-        // draw keys
-        g2.setStroke(new BasicStroke(stroke));
-        drawKey(g2, upX,   topY,  key, arc, keyFill, keyEdge);
-        drawKey(g2, leftX, botY,  key, arc, keyFill, keyEdge);
-        drawKey(g2, downX, botY,  key, arc, keyFill, keyEdge);
-        drawKey(g2, rightX,botY,  key, arc, keyFill, keyEdge);
-
-        // draw arrows
-        drawArrow(g2, upX,   topY,  key, Arrow.UP,    glyphCol, scale);
-        drawArrow(g2, leftX, botY,  key, Arrow.LEFT,  glyphCol, scale);
-        drawArrow(g2, downX, botY,  key, Arrow.DOWN,  glyphCol, scale);
-        drawArrow(g2, rightX,botY,  key, Arrow.RIGHT, glyphCol, scale);
-
-        g2.dispose();
-    }
-
-    private static void drawKey(Graphics2D g2, int x, int y, int s, int arc, Color fill, Color edge) {
-        Shape rr = new RoundRectangle2D.Float(x, y, s, s, arc, arc);
-        if (fill.getAlpha() > 0) {
-            g2.setColor(fill);
-            g2.fill(rr);
-        }
-        g2.setColor(edge);
-        g2.draw(rr);
-    }
-
-    private enum Arrow { UP, DOWN, LEFT, RIGHT }
-
-    private static void drawArrow(Graphics2D g2, int x, int y, int s, Arrow dir, Color col, float scale) {
-        g2.setColor(col);
-        g2.setStroke(new BasicStroke(Math.max(2f, 3f * scale)));
-
-        // inner box for glyph
-        int cx = x + s/2;
-        int cy = y + s/2;
-
-        int stemLen = Math.round(16 * scale);
-        int head = Math.round(10 * scale);
-
-        switch (dir) {
-            case UP: {
-                // stem
-                g2.drawLine(cx, cy + stemLen/2, cx, cy - stemLen/2);
-                // triangle head
-                int ty = cy - stemLen/2;
-                int[] px = { cx, cx - head, cx + head };
-                int[] py = { ty - head, ty + 1, ty + 1 };
-                g2.fillPolygon(px, py, 3);
-                break;
-            }
-            case DOWN: {
-                g2.drawLine(cx, cy - stemLen/2, cx, cy + stemLen/2);
-                int by = cy + stemLen/2;
-                int[] px = { cx, cx - head, cx + head };
-                int[] py = { by + head, by - 1, by - 1 };
-                g2.fillPolygon(px, py, 3);
-                break;
-            }
-            case LEFT: {
-                g2.drawLine(cx + stemLen/2, cy, cx - stemLen/2, cy);
-                int lx = cx - stemLen/2;
-                int[] px = { lx - head, lx + 1, lx + 1 };
-                int[] py = { cy, cy - head, cy + head };
-                g2.fillPolygon(px, py, 3);
-                break;
-            }
-            case RIGHT: {
-                g2.drawLine(cx - stemLen/2, cy, cx + stemLen/2, cy);
-                int rx = cx + stemLen/2;
-                int[] px = { rx + head, rx - 1, rx - 1 };
-                int[] py = { cy, cy - head, cy + head };
-                g2.fillPolygon(px, py, 3);
-                break;
-                }
-            }
         }
     }
 }
