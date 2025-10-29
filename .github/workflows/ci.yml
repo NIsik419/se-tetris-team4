@@ -2,9 +2,9 @@ name: Gradle CI
 
 on:
   push:
-    branches: [ "main", "dev" ]   # main, dev 브랜치 push 시 실행
+    branches: [ "main" ]   # main, dev 브랜치 push 시 실행
   pull_request:
-    branches: [ "main", "dev" ]   # PR 생성 시 실행
+    branches: [ "main" ]   # PR 생성 시 실행
 
 jobs:
   build:
