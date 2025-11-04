@@ -42,11 +42,12 @@ import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
 import javax.swing.Timer;
 
-
 public class MenuPanel extends JPanel {
 
     public enum MenuItem { SETTINGS, SCOREBOARD, EXIT }
-
+    public enum NavInput {
+        LEFT, RIGHT, UP, DOWN, NEXT   // NEXT acts like "confirm/enter/start"
+    }
     private final Consumer<GameConfig> onStart;
     private final Consumer<MenuItem> onSelect;
 
@@ -58,12 +59,16 @@ public class MenuPanel extends JPanel {
     private JPanel cardsContainer;
     private JPanel bottomPanel;
     private boolean isCompactMode = false;
-    private KeyboardLegendPanel keyboardLegend;
-
 
     // Title animation
     private float titleGlowPhase = 0f;
     private float titleFloat = 0f;
+
+     // Navigation/state 
+    private int selectedIndex = 0;                       
+    private final JPanel[] modeCards = new JPanel[2];    // references to each mode card component
+    private final JRadioButton[][] diffButtons = new JRadioButton[2][3]; // difficulty groups per card
+    private final JButton[] startButtons = new JButton[2];               // Start buttons (for NEXT)
 
     public MenuPanel(Consumer<GameConfig> onStart, Consumer<MenuItem> onSelect) {
         this.onStart = onStart;
@@ -72,13 +77,13 @@ public class MenuPanel extends JPanel {
         setOpaque(true);
         setBackground(new Color(0x0A0F18));
         setLayout(new GridBagLayout());
-
+        // background animation timer (stars + title glow) 
         seedStars();
         anim = new Timer(33, e -> {
             stepStars();
             titleGlowPhase += 0.03f;
             titleFloat += 0.02f;
-            title.repaint();
+            if (title != null) title.repaint(); 
             repaint();
         });
         anim.start();
@@ -89,9 +94,22 @@ public class MenuPanel extends JPanel {
         im.put(KeyStroke.getKeyStroke("ESCAPE"), "exit");
         im.put(KeyStroke.getKeyStroke('S'), "score");
         im.put(KeyStroke.getKeyStroke('T'), "settings");
+        im.put(KeyStroke.getKeyStroke("LEFT"), "left");
+        im.put(KeyStroke.getKeyStroke("RIGHT"), "right");
+        im.put(KeyStroke.getKeyStroke("UP"), "up");
+        im.put(KeyStroke.getKeyStroke("DOWN"), "down");
+        im.put(KeyStroke.getKeyStroke("ENTER"), "enter");
+        im.put(KeyStroke.getKeyStroke("SPACE"), "enter");
+
         am.put("exit", new AbstractAction() { @Override public void actionPerformed(ActionEvent e){ onSelect.accept(MenuItem.EXIT); }});
         am.put("score", new AbstractAction() { @Override public void actionPerformed(ActionEvent e){ onSelect.accept(MenuItem.SCOREBOARD); }});
         am.put("settings", new AbstractAction() { @Override public void actionPerformed(ActionEvent e){ onSelect.accept(MenuItem.SETTINGS); }});
+         // Map keyboard -> generic input API (single path for behavior)
+        am.put("left", new AbstractAction() { @Override public void actionPerformed(ActionEvent e) { handleMenuInput(NavInput.LEFT); }});
+        am.put("right", new AbstractAction() { @Override public void actionPerformed(ActionEvent e) { handleMenuInput(NavInput.RIGHT); }});
+        am.put("up", new AbstractAction() { @Override public void actionPerformed(ActionEvent e) { handleMenuInput(NavInput.UP); }});
+        am.put("down", new AbstractAction() { @Override public void actionPerformed(ActionEvent e) { handleMenuInput(NavInput.DOWN); }});
+        am.put("enter", new AbstractAction() { @Override public void actionPerformed(ActionEvent e) { handleMenuInput(NavInput.NEXT); }});
 
         buildUI();
 
@@ -102,6 +120,78 @@ public class MenuPanel extends JPanel {
                 handleResize();
             }
         });
+        highlightCard(0);
+    }
+    public void handleMenuInput(NavInput input) {
+        switch (input) {
+            case LEFT -> switchMenu(-1); // move to previous card
+            case RIGHT -> switchMenu(+1); // move to next card
+            case UP -> {
+                JRadioButton[] group = diffButtons[selectedIndex];
+                int idx = getSelectedIndex(group);
+                if (idx > 0) group[idx - 1].setSelected(true);
+            }
+            case DOWN -> {
+                JRadioButton[] group = diffButtons[selectedIndex];
+                int idx = getSelectedIndex(group);
+                if (idx < group.length - 1) group[idx + 1].setSelected(true);
+            }
+            case NEXT -> {
+                // Centralized confirm: just click the Start for the current card.
+                JButton b = startButtons[selectedIndex];
+                if (b != null) b.doClick();
+            }
+        }
+    }
+     // Move selection by delta (-1 left, +1 right). Clamps between [0, modeCards.length-1].
+     
+    public void switchMenu(int delta) {
+        int next = Math.max(0, Math.min(modeCards.length - 1, selectedIndex + delta));
+        if (next != selectedIndex) {
+            selectedIndex = next;
+            highlightCard(selectedIndex);
+        }
+    }
+    // Jump directly to a mode
+    public void setSelectedMode(GameConfig.Mode mode) {
+        selectedIndex = (mode == GameConfig.Mode.CLASSIC) ? 0 : 1;
+        highlightCard(selectedIndex);
+    }
+    // Read which mode is currently selected. 
+    public GameConfig.Mode getSelectedMode() {
+        return (selectedIndex == 0) ? GameConfig.Mode.CLASSIC : GameConfig.Mode.ITEM;
+    }
+     public GameConfig.Difficulty getSelectedDifficulty() {
+        JRadioButton[] group = diffButtons[selectedIndex];
+        int idx = getSelectedIndex(group);
+        return switch (idx) {
+            case 0 -> GameConfig.Difficulty.EASY;
+            case 2 -> GameConfig.Difficulty.HARD;
+            default -> GameConfig.Difficulty.NORMAL;
+        };
+    }
+    public GameConfig getCurrentConfig() {
+        return new GameConfig(getSelectedMode(), getSelectedDifficulty(), false);
+    }
+    // visually show which card is selected
+    private void highlightCard(int index) {
+        for (int i = 0; i < modeCards.length; i++) {
+            JPanel c = modeCards[i];
+            if (c != null) {
+                c.setBorder(BorderFactory.createLineBorder(
+                        i == index ? new Color(100, 180, 255) : new Color(0, 0, 0, 0), 3));
+            }
+        }
+        repaint();
+    }
+
+    // utility: current selected radio index in a difficulty group
+    private int getSelectedIndex(JRadioButton[] group) {
+        if (group == null) return 0;
+        for (int i = 0; i < group.length; i++) {
+            if (group[i] != null && group[i].isSelected()) return i;
+        }
+        return 0;
     }
 
     private void buildUI() {
@@ -191,10 +281,16 @@ public class MenuPanel extends JPanel {
         cardsContainer.setOpaque(false);
         cardsContainer.setLayout(new GridLayout(1, 2, 26, 0));
 
-        cardsContainer.add(makeModeCard("Traditional Tetris", "Normal Game Start", GameConfig.Mode.NORMAL,
-                new Color(0x2B3F8C), new Color(0x1B2A55)));
-        cardsContainer.add(makeModeCard("Power-ups & Items", "Start With Items", GameConfig.Mode.ITEM,
-                new Color(0x485822), new Color(0x2E3A17)));
+        JPanel classicCard = makeModeCard("Traditional Tetris", "Normal Game Start", GameConfig.Mode.CLASSIC,
+        new Color(0x2B3F8C), new Color(0x1B2A55));
+        JPanel itemCard = makeModeCard("Power-ups & Items", "Start With Items", GameConfig.Mode.ITEM,
+        new Color(0x485822), new Color(0x2E3A17));
+
+        modeCards[0] = classicCard;
+        modeCards[1] = itemCard;
+
+        cardsContainer.add(classicCard);
+        cardsContainer.add(itemCard);
         add(cardsContainer, gb);
 
         // Bottom actions
@@ -207,14 +303,6 @@ public class MenuPanel extends JPanel {
         bottomPanel.add(linkBtn("Scoreboard (S)", () -> onSelect.accept(MenuItem.SCOREBOARD)));
         bottomPanel.add(linkBtn("Exit (Esc)", () -> onSelect.accept(MenuItem.EXIT)));
         add(bottomPanel, gb);
-        // --- Keyboard legend 
-        gb.gridy++;
-        gb.weighty = 0;
-        gb.insets = new Insets(8, 16, 16, 16);
-        keyboardLegend = new KeyboardLegendPanel();
-        keyboardLegend.setOpaque(false);
-        add(keyboardLegend, gb);
-
     }
 
     private void handleResize() {
@@ -238,11 +326,8 @@ public class MenuPanel extends JPanel {
             }
             revalidate();
         }
-        
-        if (keyboardLegend != null) {
-    // scale roughly with width (keeps it subtle)
-        keyboardLegend.setScale(Math.max(0.8f, Math.min(1.4f, getWidth() / 900f)));
-        }   
+
+        // Force repaint of all components to update their responsive fonts
         repaint();
     }
 
@@ -392,7 +477,7 @@ public class MenuPanel extends JPanel {
         topPanel.add(b, BorderLayout.WEST);
 
         // Mode icon/badge
-        JLabel badge = new JLabel(mode == GameConfig.Mode.NORMAL ? "●" : "★");
+        JLabel badge = new JLabel(mode == GameConfig.Mode.CLASSIC ? "●" : "★");
         badge.setFont(badge.getFont().deriveFont(Font.BOLD, 24f));
         badge.setForeground(new Color(cTop.getRed(), cTop.getGreen(), cTop.getBlue(), 200));
         topPanel.add(badge, BorderLayout.EAST);
@@ -405,6 +490,12 @@ public class MenuPanel extends JPanel {
         JRadioButton rHard   = pill("Hard", false);
         ButtonGroup group = new ButtonGroup();
         group.add(rEasy); group.add(rMedium); group.add(rHard);
+        // keep difficulty references for UP/DOWN navigation
+        if (mode == GameConfig.Mode.CLASSIC) {
+            diffButtons[0] = new JRadioButton[] { rEasy, rMedium, rHard };
+        } else {
+            diffButtons[1] = new JRadioButton[] { rEasy, rMedium, rHard };
+        }
 
         JPanel diff = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
         diff.setOpaque(false);
@@ -427,6 +518,12 @@ public class MenuPanel extends JPanel {
                     : (rHard.isSelected() ? GameConfig.Difficulty.HARD : GameConfig.Difficulty.NORMAL);
             onStart.accept(new GameConfig(mode, d, false));
         });
+        // keep Start reference so NavInput.NEXT can trigger it
+        if (mode == GameConfig.Mode.CLASSIC) {
+            startButtons[0] = start;
+        } else {
+            startButtons[1] = start;
+        }
 
         // Center panel combining difficulty and button
         JPanel centerPanel = new JPanel(new BorderLayout(0, 8));
@@ -678,119 +775,6 @@ public class MenuPanel extends JPanel {
             ss[i] += (Math.random()*0.08 - 0.04);
             if (ss[i] < 0.35f) ss[i] = 0.35f;
             if (ss[i] > 1.0f)  ss[i] = 1.0f;
-        }
-    }
-    
-// shows arrow keys (↑ on top, then ←  ↓  →)
-private static class KeyboardLegendPanel extends JPanel {
-    private float scale = 1.0f; // responsive scale set by parent
-
-    void setScale(float s) { this.scale = s; revalidate(); repaint(); }
-
-    @Override public Dimension getPreferredSize() {
-        int w = Math.round(360 * scale);
-        int h = Math.round(110 * scale);
-        return new Dimension(w, h);
-    }
-
-    @Override protected void paintComponent(Graphics g) {
-        super.paintComponent(g);
-        Graphics2D g2 = (Graphics2D) g.create();
-        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-
-        // colors (match your UI)
-        Color keyFill  = new Color(0xFFFFFF & 0x00FFFFFF, true); // fully transparent fill (we'll just do edge)
-        Color keyEdge  = new Color(70, 74, 84, 210);             // dark gray edge like screenshot
-        Color glyphCol = keyEdge;
-
-        int key = Math.round(64 * scale);     // key size
-        int gap = Math.round(18 * scale);     // spacing
-        int arc = Math.round(18 * scale);     // corner radius
-        int stroke = Math.max(2, Math.round(3 * scale));
-
-        // layout: one top centered, three bottom
-        int totalWidth = key * 3 + gap * 2;
-        int startX = (getWidth() - totalWidth) / 2;
-        int topY   = Math.round(4 * scale);
-        int botY   = topY + key + gap;
-
-        // rect positions
-        int upX    = startX + key + gap;      // middle of the 3-column grid
-        int leftX  = startX;
-        int downX  = startX + key + gap;
-        int rightX = startX + (key + gap) * 2;
-
-        // draw keys
-        g2.setStroke(new BasicStroke(stroke));
-        drawKey(g2, upX,   topY,  key, arc, keyFill, keyEdge);
-        drawKey(g2, leftX, botY,  key, arc, keyFill, keyEdge);
-        drawKey(g2, downX, botY,  key, arc, keyFill, keyEdge);
-        drawKey(g2, rightX,botY,  key, arc, keyFill, keyEdge);
-
-        // draw arrows
-        drawArrow(g2, upX,   topY,  key, Arrow.UP,    glyphCol, scale);
-        drawArrow(g2, leftX, botY,  key, Arrow.LEFT,  glyphCol, scale);
-        drawArrow(g2, downX, botY,  key, Arrow.DOWN,  glyphCol, scale);
-        drawArrow(g2, rightX,botY,  key, Arrow.RIGHT, glyphCol, scale);
-
-        g2.dispose();
-    }
-
-    private static void drawKey(Graphics2D g2, int x, int y, int s, int arc, Color fill, Color edge) {
-        Shape rr = new RoundRectangle2D.Float(x, y, s, s, arc, arc);
-        if (fill.getAlpha() > 0) {
-            g2.setColor(fill);
-            g2.fill(rr);
-        }
-        g2.setColor(edge);
-        g2.draw(rr);
-    }
-
-    private enum Arrow { UP, DOWN, LEFT, RIGHT }
-
-    private static void drawArrow(Graphics2D g2, int x, int y, int s, Arrow dir, Color col, float scale) {
-        g2.setColor(col);
-        g2.setStroke(new BasicStroke(Math.max(2f, 3f * scale)));
-
-        // inner box for glyph
-        int cx = x + s/2;
-        int cy = y + s/2;
-
-        int stemLen = Math.round(16 * scale);
-        int head = Math.round(10 * scale);
-
-        switch (dir) {
-            case UP ->  {
-                // stem
-                g2.drawLine(cx, cy + stemLen/2, cx, cy - stemLen/2);
-                // triangle head
-                int ty = cy - stemLen/2;
-                int[] px = { cx, cx - head, cx + head };
-                int[] py = { ty - head, ty + 1, ty + 1 };
-                g2.fillPolygon(px, py, 3);
-            }
-            case DOWN ->  {
-                g2.drawLine(cx, cy - stemLen/2, cx, cy + stemLen/2);
-                int by = cy + stemLen/2;
-                int[] px = { cx, cx - head, cx + head };
-                int[] py = { by + head, by - 1, by - 1 };
-                g2.fillPolygon(px, py, 3);
-            }
-            case LEFT ->  {
-                g2.drawLine(cx + stemLen/2, cy, cx - stemLen/2, cy);
-                int lx = cx - stemLen/2;
-                int[] px = { lx - head, lx + 1, lx + 1 };
-                int[] py = { cy, cy - head, cy + head };
-                g2.fillPolygon(px, py, 3);
-            }
-            case RIGHT ->  {
-                g2.drawLine(cx - stemLen/2, cy, cx + stemLen/2, cy);
-                int rx = cx + stemLen/2;
-                int[] px = { rx + head, rx - 1, rx - 1 };
-                int[] py = { cy, cy - head, cy + head };
-                g2.fillPolygon(px, py, 3);
-                }
-            }
         }
     }
 }
