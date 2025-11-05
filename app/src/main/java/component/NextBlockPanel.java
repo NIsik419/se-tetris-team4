@@ -10,9 +10,11 @@ import java.awt.RenderingHints;
 import javax.swing.BorderFactory;
 import javax.swing.JPanel;
 
+import blocks.Block;
+
 public class NextBlockPanel extends JPanel {
     private char[][] shape; // 4x4, 'O' filled
-
+    private Block block;
     private final int box;  // side length
 
     public NextBlockPanel() { this(96); }
@@ -29,6 +31,8 @@ public class NextBlockPanel extends JPanel {
 
     public void setShape(char[][] s) { this.shape = s; repaint(); }
 
+    public void setBlock(Block b) { this.block = b; this.shape = null; repaint(); }
+
     @Override protected void paintComponent(Graphics g) {
         super.paintComponent(g);
         Graphics2D g2 = (Graphics2D) g.create();
@@ -41,7 +45,26 @@ public class NextBlockPanel extends JPanel {
         g2.setColor(new Color(0x232937));
         g2.fillRoundRect(6,6,getWidth()-12,getHeight()-12,16,16);
 
-        if (shape != null) {
+        if (block != null) {
+            // Block을 4x4에 중앙 배치
+            int bw = block.width(), bh = block.height();
+            int ox = offX + (4 - bw) / 2 * cell;
+            int oy = offY + (4 - bh) / 2 * cell;
+
+            for (int r=0; r<bh; r++) {
+                for (int c=0; c<bw; c++) {
+                    if (block.getShape(c, r) == 1) {
+                        int x = ox + c*cell + 2;
+                        int y = oy + r*cell + 2;
+                        int s = cell - 4;
+
+                        Color base = block.getColor(); // ★ 블록 고유색 반영
+                        g2.setPaint(new GradientPaint(x, y, base.brighter(), x, y+s, base.darker()));
+                        g2.fillRoundRect(x, y, s, s, 10, 10);
+                    }
+                }
+            }
+        } else if (shape != null) {
             for (int r=0; r<shape.length; r++) {
                 for (int c=0; c<shape[r].length; c++) {
                     if (shape[r][c] != ' ') {
@@ -55,6 +78,7 @@ public class NextBlockPanel extends JPanel {
                 }
             }
         }
+
         g2.dispose();
     }
 }
