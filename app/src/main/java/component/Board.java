@@ -6,6 +6,7 @@ import blocks.Block;
 import component.items.*;
 import component.config.Settings;
 import component.config.Settings.Action;
+import component.NextPreviewPanel;
 
 import static component.config.Settings.Action;
 
@@ -55,7 +56,7 @@ public class Board extends JFrame {
     private final JLabel scoreLabel = new JLabel("0");
     private final JLabel levelLabel = new JLabel("1");
     private final JLabel linesLabel = new JLabel("0");
-    private final JPanel nextPanel = new JPanel();
+    private final NextPreviewPanel nextPanel = new NextPreviewPanel();
 
     private final MovementService move;
     private boolean isFullScreen = false;
@@ -114,21 +115,30 @@ public class Board extends JFrame {
         titleLabel.setForeground(ACCENT);
         titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         rightPanel.add(titleLabel);
-        rightPanel.add(Box.createRigidArea(new Dimension(0, 30)));
+        rightPanel.add(Box.createRigidArea(new Dimension(0, 10)));
 
         rightPanel.add(createStatPanel("SCORE", scoreLabel));
-        rightPanel.add(Box.createRigidArea(new Dimension(0, 15)));
+        rightPanel.add(Box.createRigidArea(new Dimension(0, 10)));
         rightPanel.add(createStatPanel("LEVEL", levelLabel));
-        rightPanel.add(Box.createRigidArea(new Dimension(0, 15)));
+        rightPanel.add(Box.createRigidArea(new Dimension(0, 10)));
         rightPanel.add(createStatPanel("LINES", linesLabel));
-        rightPanel.add(Box.createRigidArea(new Dimension(0, 30)));
+        rightPanel.add(Box.createRigidArea(new Dimension(0, 20)));
+
+        JPanel nextSection = new JPanel();
+        nextSection.setLayout(new BoxLayout(nextSection, BoxLayout.Y_AXIS));
+        nextSection.setBackground(BG_DARK);
+        nextSection.setAlignmentX(Component.CENTER_ALIGNMENT);
+        nextSection.setMaximumSize(new Dimension(220, Integer.MAX_VALUE)); 
 
         JLabel nextLabel = new JLabel("NEXT");
         nextLabel.setFont(new Font("Arial", Font.BOLD, 18));
         nextLabel.setForeground(TEXT_PRIMARY);
         nextLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         rightPanel.add(nextLabel);
-        rightPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+        nextPanel.setColorMode(colorMode);
+        rightPanel.add(Box.createRigidArea(new Dimension(0, 5)));
+
+        nextLabel.setBorder(new EmptyBorder(0, 0, 0, 0)); 
 
         nextPanel.setBackground(BG_DARK);
         nextPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -142,11 +152,11 @@ public class Board extends JFrame {
         // updateNextHUD(logic.getNextBlocks()); 
         
         logic.setOnNextQueueUpdate(blocks ->
-                SwingUtilities.invokeLater(() -> updateNextHUD(blocks)));
+                SwingUtilities.invokeLater(() -> nextPanel.setBlocks(blocks)));
 
         addWindowListener(new java.awt.event.WindowAdapter() {
             @Override public void windowOpened(java.awt.event.WindowEvent e) {
-                updateNextHUD(logic.getNextBlocks()); // 창 표시된 뒤 1회
+                nextPanel.setBlocks(logic.getNextBlocks()); // 창 표시된 뒤 1회
             }
         });
 
@@ -240,8 +250,8 @@ public class Board extends JFrame {
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
         panel.setBackground(BG_PANEL);
-        panel.setBorder(new EmptyBorder(15, 15, 15, 15));
-        panel.setMaximumSize(new Dimension(200, 230));
+        panel.setBorder(new EmptyBorder(10, 15, 5, 15));
+        panel.setMaximumSize(new Dimension(200, 170));
 
         JLabel titleLabel = new JLabel("CONTROLS");
         titleLabel.setFont(new Font("Arial", Font.BOLD, 12));
@@ -251,9 +261,7 @@ public class Board extends JFrame {
         panel.add(Box.createRigidArea(new Dimension(0, 10)));
 
         String[] controls = {
-                "← → Move", "↑ Rotate", "↓ Soft Drop",
-                "SPACE Hard Drop", "P Pause",
-                "F11 Full Screen", "ESC Exit"
+                "P Pause", "F11 Full Screen", "ESC Exit"
         };
         for (String control : controls) {
             JLabel label = new JLabel(control);
@@ -343,6 +351,7 @@ public class Board extends JFrame {
                     case TRITAN -> colorMode = ColorBlindPalette.Mode.NORMAL;
                 }
                 setTitle("TETRIS - " + colorMode.name() + " mode");
+                nextPanel.setColorMode(colorMode);
                 drawBoard();
             }
         });
@@ -423,78 +432,7 @@ public class Board extends JFrame {
         // === 디버깅: 다음 블록 확인 ===
         List<Block> nextBlocks = logic.getNextBlocks();
 
-        updateNextHUD(nextBlocks);
         gamePanel.repaint();
-    }
-
-    private void updateNextHUD(List<Block> nextBlocks) {
-
-        nextBlocks = nextBlocks.subList(0, Math.min(3, nextBlocks.size()));
-
-        nextPanel.removeAll();
-        nextPanel.setLayout(new GridLayout(nextBlocks.size(), 1, 0, 10));
-
-        for (int idx = 0; idx < nextBlocks.size(); idx++) {
-            Block b = nextBlocks.get(idx);
-
-            JPanel container = new JPanel(new BorderLayout());
-            container.setBackground(BG_PANEL);
-            container.setPreferredSize(new Dimension(120, 80));
-
-            JPanel blockPanel = new JPanel() {
-                @Override
-                protected void paintComponent(Graphics g) {
-                    super.paintComponent(g);
-
-                    Graphics2D g2 = (Graphics2D) g;
-
-                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
-                            RenderingHints.VALUE_ANTIALIAS_ON);
-
-                    int blockSize = 18;
-                    int totalWidth = b.width() * blockSize;
-                    int totalHeight = b.height() * blockSize;
-                    int offsetX = (getWidth() - totalWidth) / 2;
-                    int offsetY = (getHeight() - totalHeight) / 2;
-
-                    // 배경 (디버깅용으로 더 진하게)
-                    g2.setColor(new Color(60, 65, 80));
-                    g2.fillRoundRect(offsetX - 5, offsetY - 5,
-                            totalWidth + 10, totalHeight + 10, 8, 8);
-
-                    // 블록 그리기
-                    int cellsDrawn = 0;
-                    for (int j = 0; j < b.height(); j++) {
-                        for (int i = 0; i < b.width(); i++) {
-                            if (b.getShape(i, j) == 1) {
-                                cellsDrawn++;
-                                int x = offsetX + i * blockSize;
-                                int y = offsetY + j * blockSize;
-
-                                g2.setColor(b.getColor());
-                                g2.fillRoundRect(x, y, blockSize - 2, blockSize - 2, 4, 4);
-
-                                g2.setColor(new Color(255, 255, 255, 60));
-                                g2.fillRoundRect(x, y, blockSize - 2, (blockSize - 2) / 3, 4, 4);
-
-                                g2.setColor(new Color(0, 0, 0, 40));
-                                g2.fillRoundRect(x, y + (blockSize - 2) * 2 / 3,
-                                        blockSize - 2, (blockSize - 2) / 3, 4, 4);
-                            }
-                        }
-                    }
-
-                }
-            };
-            blockPanel.setBackground(BG_PANEL);
-            blockPanel.setPreferredSize(new Dimension(120, 80));
-
-            container.add(blockPanel, BorderLayout.CENTER);
-            nextPanel.add(container);
-        }
-
-        nextPanel.revalidate();
-        nextPanel.repaint();
     }
 
     private void showGameOver(int score) {
@@ -807,6 +745,7 @@ public class Board extends JFrame {
 
         colorMode = settings.colorBlindMode;
         System.out.println("[Settings] blindMode=" + colorMode);
+        nextPanel.setColorMode(colorMode);  
 
         // 키맵 재바인딩
         rebindKeymap();
