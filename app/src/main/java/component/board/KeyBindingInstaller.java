@@ -17,46 +17,57 @@ public class KeyBindingInstaller {
 
     /** Board 쪽에서 제공해야 하는 의존성(콜백/상태) */
     public static class Deps {
-        public final BoardLogic logic;
+    public final logic.BoardLogic logic;
 
-        // 상태/콜백
-        public final Runnable drawBoard;
-        public final Runnable toggleFullScreen;
-        public final Runnable disposeWindow;
+    public final Runnable drawBoard;
+    public final Runnable toggleFullScreen;
+    public final Runnable disposeWindow;
 
-        // 일시정지 관련
-        public final JPanel pausePanel; // PausePanel은 JPanel 상속 가정
-        public final javax.swing.Timer timer;
-        public final java.util.function.Consumer<String> setTitle;
+    // Pause 제어
+    public final java.util.function.Supplier<Boolean> isPauseVisible;
+    public final Runnable showPause, hidePause;
+    public final Runnable startLoop, stopLoop;    
+    public final java.util.function.Consumer<String> setTitle;
 
-        // 색약 모드
-        public final java.util.function.Supplier<ColorBlindPalette.Mode> getColorMode;
-        public final java.util.function.Consumer<ColorBlindPalette.Mode> setColorMode;
-        public final java.util.function.Consumer<ColorBlindPalette.Mode> onColorModeChanged; // 예: nextPanel.setColorMode
+    // 색약 모드
+    public final java.util.function.Supplier<component.ColorBlindPalette.Mode> getColorMode;
+    public final java.util.function.Consumer<component.ColorBlindPalette.Mode> setColorMode;
+    public final java.util.function.Consumer<component.ColorBlindPalette.Mode> onColorModeChanged;
 
-        public Deps(BoardLogic logic,
-                    Runnable drawBoard,
-                    Runnable toggleFullScreen,
-                    Runnable disposeWindow,
-                    JPanel pausePanel,
-                    javax.swing.Timer timer,
-                    java.util.function.Consumer<String> setTitle,
-                    java.util.function.Supplier<ColorBlindPalette.Mode> getColorMode,
-                    java.util.function.Consumer<ColorBlindPalette.Mode> setColorMode,
-                    java.util.function.Consumer<ColorBlindPalette.Mode> onColorModeChanged) {
+    /** 모든 의존성을 주입받는 생성자 */
+    public Deps(
+                logic.BoardLogic logic,
+                Runnable drawBoard,
+                Runnable toggleFullScreen,
+                Runnable disposeWindow,
+                java.util.function.Supplier<Boolean> isPauseVisible,
+                Runnable showPause,
+                Runnable hidePause,
+                Runnable startLoop,
+                Runnable stopLoop,
+                java.util.function.Consumer<String> setTitle,
+                java.util.function.Supplier<component.ColorBlindPalette.Mode> getColorMode,
+                java.util.function.Consumer<component.ColorBlindPalette.Mode> setColorMode,
+                java.util.function.Consumer<component.ColorBlindPalette.Mode> onColorModeChanged
+        ) {
+            this.logic = logic;
+            this.drawBoard = drawBoard;
+            this.toggleFullScreen = toggleFullScreen;
+            this.disposeWindow = disposeWindow;
 
-            this.logic = Objects.requireNonNull(logic);
-            this.drawBoard = Objects.requireNonNull(drawBoard);
-            this.toggleFullScreen = Objects.requireNonNull(toggleFullScreen);
-            this.disposeWindow = Objects.requireNonNull(disposeWindow);
-            this.pausePanel = Objects.requireNonNull(pausePanel);
-            this.timer = Objects.requireNonNull(timer);
-            this.setTitle = Objects.requireNonNull(setTitle);
-            this.getColorMode = Objects.requireNonNull(getColorMode);
-            this.setColorMode = Objects.requireNonNull(setColorMode);
-            this.onColorModeChanged = Objects.requireNonNull(onColorModeChanged);
+            this.isPauseVisible = isPauseVisible;
+            this.showPause = showPause;
+            this.hidePause = hidePause;
+            this.startLoop = startLoop;
+            this.stopLoop = stopLoop;
+            this.setTitle = setTitle;
+
+            this.getColorMode = getColorMode;
+            this.setColorMode = setColorMode;
+            this.onColorModeChanged = onColorModeChanged;
         }
     }
+
 
     // 액션명 상수
     private static final String ACT_LEFT  = "left";
@@ -97,14 +108,14 @@ public class KeyBindingInstaller {
 
         am.put("pause", new AbstractAction() {
             public void actionPerformed(ActionEvent e) {
-                if (d.pausePanel.isVisible()) {
-                    d.pausePanel.setVisible(false);
-                    d.timer.start();
+                if (d.isPauseVisible.get()) {
+                    d.hidePause.run();
+                    d.startLoop.run();
                     d.setTitle.accept("TETRIS");
                 } else {
-                    d.timer.stop();
+                    d.stopLoop.run();
                     d.setTitle.accept("TETRIS (PAUSED)");
-                    d.pausePanel.setVisible(true);
+                    d.showPause.run();
                 }
             }
         });

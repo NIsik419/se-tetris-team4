@@ -112,7 +112,7 @@ public class SettingsScreen extends JPanel {
 
         // Defaults
         btnDefaults.addActionListener(e -> {
-            settings.resetToDefaults();
+            localSettings.resetToDefaults();
             loadFromSettings();
             validateKeys();
         });

@@ -1,24 +1,19 @@
 package component;
 
 import logic.BoardLogic;
-import logic.GameState;
 import blocks.Block;
 import component.items.*;
 import component.config.Settings;
-import component.config.Settings.Action;
 import component.board.KeyBindingInstaller;
 import component.board.KeyBindingInstaller.Deps;
+import component.logic.GameLoop;
 
 import static component.config.Settings.Action;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.KeyEvent;
-import java.util.EnumMap;
 import java.util.List;
-import java.util.Map;
 
 import logic.MovementService;
 import component.score.*;
@@ -68,7 +63,7 @@ public class Board extends JFrame {
     private ColorBlindPalette.Mode colorMode = ColorBlindPalette.Mode.NORMAL;
 
     private final GamePanel gamePanel;
-    private final javax.swing.Timer timer;
+    private final GameLoop loop;
 
     private Settings settings;
     private final java.util.Map<Action, Integer> boundKeys = new java.util.EnumMap<>(Action.class);
@@ -192,50 +187,52 @@ public class Board extends JFrame {
         setVisible(true);
 
         // === 드롭 타이머 ===
-        timer = new javax.swing.Timer(logic.getDropInterval(), e -> {
+        loop = new GameLoop(() -> {
             if (!logic.isGameOver()) {
                 logic.moveDown();
                 drawBoard();
             }
-        });
-        timer.start();
-        SwingUtilities.invokeLater(() -> {
-            requestGameFocus();
-        });
+        }, logic.getDropInterval());
+        loop.start();
+
+        SwingUtilities.invokeLater(this::requestGameFocus);
 
         // === 일시정지 패널 ===
         pausePanel = new PausePanel(
                 this,
                 () -> { // Resume
-                    timer.start();
+                    loop.start();
                     pausePanel.hidePanel();
                     setTitle("TETRIS");
                 },
                 () -> { // Restart
                     isRestarting = true;
-                    timer.stop();
+                    loop.stop();
                     dispose(); // 현재 창 닫기
                     new Board(config); // 새 게임 시작
                 },
-
                 () -> { // Exit to Menu
-                    timer.stop();
+                    loop.stop();
                     dispose();
                     new GameLauncher();
-                });
+                }
+        );
 
         KeyBindingInstaller installer = new KeyBindingInstaller();
         installer.install(gamePanel, new KeyBindingInstaller.Deps(
                 logic,
-                this::drawBoard,          // Runnable
-                this::toggleFullScreen,   // Runnable
-                this::dispose,            // Runnable
-                pausePanel,               // JPanel (PausePanel 객체 자체)
-                timer,                    // javax.swing.Timer
-                this::setTitle,           // Consumer<String>
-                () -> colorMode,          // Supplier<Mode>
-                m -> colorMode = m,       // Consumer<Mode>
-                nextPanel::setColorMode   // Consumer<Mode>
+                this::drawBoard,
+                this::toggleFullScreen,
+                this::dispose,
+                () -> pausePanel.isVisible(),
+                () -> pausePanel.showPanel(),
+                () -> pausePanel.hidePanel(),
+                () -> loop.start(),          
+                () -> loop.stop(),          
+                this::setTitle,
+                () -> colorMode,
+                m -> colorMode = m,
+                nextPanel::setColorMode
         ));
 
         SwingUtilities.invokeLater(() -> {
@@ -303,7 +300,7 @@ public class Board extends JFrame {
         levelLabel.setText(String.valueOf(logic.getLevel()));
         linesLabel.setText(String.valueOf(logic.getLinesCleared()));
 
-        timer.setDelay(logic.getDropInterval());
+        loop.setInterval(logic.getDropInterval());
 
         // === 디버깅: 다음 블록 확인 ===
         List<Block> nextBlocks = logic.getNextBlocks();
@@ -312,7 +309,7 @@ public class Board extends JFrame {
     }
 
     private void showGameOver(int score) {
-        timer.stop();
+        loop.stop();
         setStatus("GAME OVER! Score: " + score);
         showNameInputOverlay(score);
 
@@ -559,7 +556,7 @@ public class Board extends JFrame {
                 () -> {
                     hideOverlay();
                     isRestarting = true;
-                    timer.stop();
+                    loop.stop();
                     dispose();
                     Board newBoard = new Board(config);
                     newBoard.requestGameFocus();
@@ -567,7 +564,7 @@ public class Board extends JFrame {
 
                 () -> {
                     hideOverlay();
-                    timer.stop();
+                    loop.stop();
                     dispose();
                 });
     }
