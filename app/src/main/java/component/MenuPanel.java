@@ -45,7 +45,9 @@ import javax.swing.Timer;
 public class MenuPanel extends JPanel {
 
     public enum MenuItem { SETTINGS, SCOREBOARD, EXIT }
-
+    public enum NavInput {
+        LEFT, RIGHT, UP, DOWN, NEXT   // NEXT acts like "confirm/enter/start"
+    }
     private final Consumer<GameConfig> onStart;
     private final Consumer<MenuItem> onSelect;
 
@@ -62,6 +64,12 @@ public class MenuPanel extends JPanel {
     private float titleGlowPhase = 0f;
     private float titleFloat = 0f;
 
+     // Navigation/state 
+    private int selectedIndex = 0;                       
+    private final JPanel[] modeCards = new JPanel[2];    // references to each mode card component
+    private final JRadioButton[][] diffButtons = new JRadioButton[2][3]; // difficulty groups per card
+    private final JButton[] startButtons = new JButton[2];               // Start buttons (for NEXT)
+
     public MenuPanel(Consumer<GameConfig> onStart, Consumer<MenuItem> onSelect) {
         this.onStart = onStart;
         this.onSelect = onSelect;
@@ -69,13 +77,13 @@ public class MenuPanel extends JPanel {
         setOpaque(true);
         setBackground(new Color(0x0A0F18));
         setLayout(new GridBagLayout());
-
+        // background animation timer (stars + title glow) 
         seedStars();
         anim = new Timer(33, e -> {
             stepStars();
             titleGlowPhase += 0.03f;
             titleFloat += 0.02f;
-            title.repaint();
+            if (title != null) title.repaint(); 
             repaint();
         });
         anim.start();
@@ -86,9 +94,22 @@ public class MenuPanel extends JPanel {
         im.put(KeyStroke.getKeyStroke("ESCAPE"), "exit");
         im.put(KeyStroke.getKeyStroke('S'), "score");
         im.put(KeyStroke.getKeyStroke('T'), "settings");
+        im.put(KeyStroke.getKeyStroke("LEFT"), "left");
+        im.put(KeyStroke.getKeyStroke("RIGHT"), "right");
+        im.put(KeyStroke.getKeyStroke("UP"), "up");
+        im.put(KeyStroke.getKeyStroke("DOWN"), "down");
+        im.put(KeyStroke.getKeyStroke("ENTER"), "enter");
+        im.put(KeyStroke.getKeyStroke("SPACE"), "enter");
+
         am.put("exit", new AbstractAction() { @Override public void actionPerformed(ActionEvent e){ onSelect.accept(MenuItem.EXIT); }});
         am.put("score", new AbstractAction() { @Override public void actionPerformed(ActionEvent e){ onSelect.accept(MenuItem.SCOREBOARD); }});
         am.put("settings", new AbstractAction() { @Override public void actionPerformed(ActionEvent e){ onSelect.accept(MenuItem.SETTINGS); }});
+         // Map keyboard -> generic input API (single path for behavior)
+        am.put("left", new AbstractAction() { @Override public void actionPerformed(ActionEvent e) { handleMenuInput(NavInput.LEFT); }});
+        am.put("right", new AbstractAction() { @Override public void actionPerformed(ActionEvent e) { handleMenuInput(NavInput.RIGHT); }});
+        am.put("up", new AbstractAction() { @Override public void actionPerformed(ActionEvent e) { handleMenuInput(NavInput.UP); }});
+        am.put("down", new AbstractAction() { @Override public void actionPerformed(ActionEvent e) { handleMenuInput(NavInput.DOWN); }});
+        am.put("enter", new AbstractAction() { @Override public void actionPerformed(ActionEvent e) { handleMenuInput(NavInput.NEXT); }});
 
         buildUI();
 
@@ -99,6 +120,78 @@ public class MenuPanel extends JPanel {
                 handleResize();
             }
         });
+        highlightCard(0);
+    }
+    public void handleMenuInput(NavInput input) {
+        switch (input) {
+            case LEFT -> switchMenu(-1); // move to previous card
+            case RIGHT -> switchMenu(+1); // move to next card
+            case UP -> {
+                JRadioButton[] group = diffButtons[selectedIndex];
+                int idx = getSelectedIndex(group);
+                if (idx > 0) group[idx - 1].setSelected(true);
+            }
+            case DOWN -> {
+                JRadioButton[] group = diffButtons[selectedIndex];
+                int idx = getSelectedIndex(group);
+                if (idx < group.length - 1) group[idx + 1].setSelected(true);
+            }
+            case NEXT -> {
+                // Centralized confirm: just click the Start for the current card.
+                JButton b = startButtons[selectedIndex];
+                if (b != null) b.doClick();
+            }
+        }
+    }
+     // Move selection by delta (-1 left, +1 right). Clamps between [0, modeCards.length-1].
+     
+    public void switchMenu(int delta) {
+        int next = Math.max(0, Math.min(modeCards.length - 1, selectedIndex + delta));
+        if (next != selectedIndex) {
+            selectedIndex = next;
+            highlightCard(selectedIndex);
+        }
+    }
+    // Jump directly to a mode
+    public void setSelectedMode(GameConfig.Mode mode) {
+        selectedIndex = (mode == GameConfig.Mode.CLASSIC) ? 0 : 1;
+        highlightCard(selectedIndex);
+    }
+    // Read which mode is currently selected. 
+    public GameConfig.Mode getSelectedMode() {
+        return (selectedIndex == 0) ? GameConfig.Mode.CLASSIC : GameConfig.Mode.ITEM;
+    }
+     public GameConfig.Difficulty getSelectedDifficulty() {
+        JRadioButton[] group = diffButtons[selectedIndex];
+        int idx = getSelectedIndex(group);
+        return switch (idx) {
+            case 0 -> GameConfig.Difficulty.EASY;
+            case 2 -> GameConfig.Difficulty.HARD;
+            default -> GameConfig.Difficulty.NORMAL;
+        };
+    }
+    public GameConfig getCurrentConfig() {
+        return new GameConfig(getSelectedMode(), getSelectedDifficulty(), false);
+    }
+    // visually show which card is selected
+    private void highlightCard(int index) {
+        for (int i = 0; i < modeCards.length; i++) {
+            JPanel c = modeCards[i];
+            if (c != null) {
+                c.setBorder(BorderFactory.createLineBorder(
+                        i == index ? new Color(100, 180, 255) : new Color(0, 0, 0, 0), 3));
+            }
+        }
+        repaint();
+    }
+
+    // utility: current selected radio index in a difficulty group
+    private int getSelectedIndex(JRadioButton[] group) {
+        if (group == null) return 0;
+        for (int i = 0; i < group.length; i++) {
+            if (group[i] != null && group[i].isSelected()) return i;
+        }
+        return 0;
     }
 
     private void buildUI() {
@@ -188,10 +281,16 @@ public class MenuPanel extends JPanel {
         cardsContainer.setOpaque(false);
         cardsContainer.setLayout(new GridLayout(1, 2, 26, 0));
 
-        cardsContainer.add(makeModeCard("Traditional Tetris", "Normal Game Start", GameConfig.Mode.CLASSIC,
-                new Color(0x2B3F8C), new Color(0x1B2A55)));
-        cardsContainer.add(makeModeCard("Power-ups & Items", "Start With Items", GameConfig.Mode.ITEM,
-                new Color(0x485822), new Color(0x2E3A17)));
+        JPanel classicCard = makeModeCard("Traditional Tetris", "Normal Game Start", GameConfig.Mode.CLASSIC,
+        new Color(0x2B3F8C), new Color(0x1B2A55));
+        JPanel itemCard = makeModeCard("Power-ups & Items", "Start With Items", GameConfig.Mode.ITEM,
+        new Color(0x485822), new Color(0x2E3A17));
+
+        modeCards[0] = classicCard;
+        modeCards[1] = itemCard;
+
+        cardsContainer.add(classicCard);
+        cardsContainer.add(itemCard);
         add(cardsContainer, gb);
 
         // Bottom actions
@@ -391,6 +490,12 @@ public class MenuPanel extends JPanel {
         JRadioButton rHard   = pill("Hard", false);
         ButtonGroup group = new ButtonGroup();
         group.add(rEasy); group.add(rMedium); group.add(rHard);
+        // keep difficulty references for UP/DOWN navigation
+        if (mode == GameConfig.Mode.CLASSIC) {
+            diffButtons[0] = new JRadioButton[] { rEasy, rMedium, rHard };
+        } else {
+            diffButtons[1] = new JRadioButton[] { rEasy, rMedium, rHard };
+        }
 
         JPanel diff = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
         diff.setOpaque(false);
@@ -413,6 +518,12 @@ public class MenuPanel extends JPanel {
                     : (rHard.isSelected() ? GameConfig.Difficulty.HARD : GameConfig.Difficulty.NORMAL);
             onStart.accept(new GameConfig(mode, d, false));
         });
+        // keep Start reference so NavInput.NEXT can trigger it
+        if (mode == GameConfig.Mode.CLASSIC) {
+            startButtons[0] = start;
+        } else {
+            startButtons[1] = start;
+        }
 
         // Center panel combining difficulty and button
         JPanel centerPanel = new JPanel(new BorderLayout(0, 8));
