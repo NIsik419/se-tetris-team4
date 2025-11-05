@@ -135,6 +135,7 @@ public class Board extends JFrame {
         nextLabel.setForeground(TEXT_PRIMARY);
         nextLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         rightPanel.add(nextLabel);
+        nextPanel.setColorMode(colorMode);
         rightPanel.add(Box.createRigidArea(new Dimension(0, 5)));
 
         nextLabel.setBorder(new EmptyBorder(0, 0, 0, 0)); 
@@ -350,6 +351,7 @@ public class Board extends JFrame {
                     case TRITAN -> colorMode = ColorBlindPalette.Mode.NORMAL;
                 }
                 setTitle("TETRIS - " + colorMode.name() + " mode");
+                nextPanel.setColorMode(colorMode);
                 drawBoard();
             }
         });
@@ -743,6 +745,7 @@ public class Board extends JFrame {
 
         colorMode = settings.colorBlindMode;
         System.out.println("[Settings] blindMode=" + colorMode);
+        nextPanel.setColorMode(colorMode);  
 
         // 키맵 재바인딩
         rebindKeymap();

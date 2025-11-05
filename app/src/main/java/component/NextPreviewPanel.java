@@ -13,6 +13,14 @@ public class NextPreviewPanel extends JPanel {
     private int maxCount = 3;
     private final List<Block> blocks = new ArrayList<>();
 
+    private ColorBlindPalette.Mode colorMode = ColorBlindPalette.Mode.NORMAL;
+
+    public void setColorMode(ColorBlindPalette.Mode mode) {
+        System.out.println("[NextPreviewPanel] colorMode=" + mode);
+        this.colorMode = mode;
+        repaint();
+    }
+
     public NextPreviewPanel() {
         setOpaque(true);
         setBackground(new Color(25, 30, 42)); 
@@ -47,7 +55,7 @@ public class NextPreviewPanel extends JPanel {
     private JComponent createCell(Block b) {
         JPanel container = new JPanel(new BorderLayout());
         container.setBackground(BG_PANEL);
-        container.setPreferredSize(new Dimension(120, 70)); // 원본과 동일
+        container.setPreferredSize(new Dimension(120, 70)); 
 
         JPanel blockPanel = new JPanel() {
             @Override protected void paintComponent(Graphics g) {
@@ -72,7 +80,9 @@ public class NextPreviewPanel extends JPanel {
                             int y = offY + j * blockSize;
                             int s = blockSize - 2;
 
-                            g2.setColor(b.getColor());
+                            Color base = ColorBlindPalette.convert(b.getColor(), colorMode);
+
+                            g2.setColor(base);
                             g2.fillRoundRect(x, y, s, s, 4, 4);
 
                             g2.setColor(new Color(255, 255, 255, 60));
