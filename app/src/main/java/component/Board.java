@@ -6,7 +6,8 @@ import blocks.Block;
 import component.items.*;
 import component.config.Settings;
 import component.config.Settings.Action;
-import component.NextPreviewPanel;
+import component.board.KeyBindingInstaller;
+import component.board.KeyBindingInstaller.Deps;
 
 import static component.config.Settings.Action;
 
@@ -21,6 +22,8 @@ import java.util.Map;
 
 import logic.MovementService;
 import component.score.*;
+import component.sidebar.HUDSidebar;
+import component.sidebar.NextPreviewPanel;
 import launcher.GameLauncher;
 
 public class Board extends JFrame {
@@ -161,7 +164,6 @@ public class Board extends JFrame {
         });
 
         add(root);
-        setupKeys(gamePanel);
 
         pack();
         setLocationRelativeTo(null);
@@ -198,7 +200,6 @@ public class Board extends JFrame {
         });
         timer.start();
         SwingUtilities.invokeLater(() -> {
-            setupKeys(gamePanel);
             requestGameFocus();
         });
 
@@ -222,7 +223,29 @@ public class Board extends JFrame {
                     dispose();
                     new GameLauncher();
                 });
+
+        KeyBindingInstaller installer = new KeyBindingInstaller();
+        installer.install(gamePanel, new KeyBindingInstaller.Deps(
+                logic,
+                this::drawBoard,          // Runnable
+                this::toggleFullScreen,   // Runnable
+                this::dispose,            // Runnable
+                pausePanel,               // JPanel (PausePanel 객체 자체)
+                timer,                    // javax.swing.Timer
+                this::setTitle,           // Consumer<String>
+                () -> colorMode,          // Supplier<Mode>
+                m -> colorMode = m,       // Consumer<Mode>
+                nextPanel::setColorMode   // Consumer<Mode>
+        ));
+
+        SwingUtilities.invokeLater(() -> {
+            // 포커스/초기 상태
+            requestGameFocus();
+        });
+        
     }
+
+    
 
     private JPanel createStatPanel(String label, JLabel valueLabel) {
         JPanel panel = new JPanel();
@@ -272,153 +295,6 @@ public class Board extends JFrame {
             panel.add(Box.createRigidArea(new Dimension(0, 5)));
         }
         return panel;
-    }
-
-    private void setupKeys(JComponent comp) {
-        // 플레이(이동)용 키맵: 포커스 조상 기준
-        InputMap imPlay = comp.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
-        // 전역 키맵: 윈도우 전체 기준
-        InputMap imGlobal = comp.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
-        ActionMap am = comp.getActionMap();
-
-        imPlay.put(KeyStroke.getKeyStroke("LEFT"), ACT_LEFT);
-        imPlay.put(KeyStroke.getKeyStroke("RIGHT"), ACT_RIGHT);
-        imPlay.put(KeyStroke.getKeyStroke("DOWN"), ACT_DOWN);
-        imPlay.put(KeyStroke.getKeyStroke("UP"), ACT_ROTATE);
-        imPlay.put(KeyStroke.getKeyStroke("SPACE"), ACT_DROP);
-
-        am.put(ACT_LEFT, new AbstractAction() {
-            public void actionPerformed(ActionEvent e) {
-                logic.moveLeft();
-                drawBoard();
-            }
-        });
-        am.put(ACT_RIGHT, new AbstractAction() {
-            public void actionPerformed(ActionEvent e) {
-                logic.moveRight();
-                drawBoard();
-            }
-        });
-        am.put(ACT_DOWN, new AbstractAction() {
-            public void actionPerformed(ActionEvent e) {
-                logic.moveDown();
-                drawBoard();
-            }
-        });
-        am.put(ACT_ROTATE, new AbstractAction() {
-            public void actionPerformed(ActionEvent e) {
-                logic.rotateBlock();
-                drawBoard();
-            }
-        });
-        am.put(ACT_DROP, new AbstractAction() {
-            public void actionPerformed(ActionEvent e) {
-                logic.hardDrop();
-                drawBoard();
-            }
-        });
-
-        imGlobal.put(KeyStroke.getKeyStroke("P"), "pause");
-        imGlobal.put(KeyStroke.getKeyStroke(KeyEvent.VK_F11, 0), "fullscreen");
-        imGlobal.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "exit");
-        imGlobal.put(KeyStroke.getKeyStroke("C"), "toggleColorBlind");
-        imGlobal.put(KeyStroke.getKeyStroke("1"), "debugLineClear");
-        imGlobal.put(KeyStroke.getKeyStroke("2"), "debugWeight");
-        imGlobal.put(KeyStroke.getKeyStroke("3"), "debugSpinLock");
-        imGlobal.put(KeyStroke.getKeyStroke("4"), "debugColorBomb");
-        imGlobal.put(KeyStroke.getKeyStroke("5"), "debugLightning");
-
-        am.put("pause", new AbstractAction() {
-            public void actionPerformed(ActionEvent e) {
-                if (pausePanel.isVisible()) {
-                    pausePanel.hidePanel();
-                    timer.start();
-                    setTitle("TETRIS");
-                } else {
-                    timer.stop();
-                    setTitle("TETRIS (PAUSED)");
-                    pausePanel.showPanel();
-                }
-            }
-        });
-
-        am.put("toggleColorBlind", new AbstractAction() {
-            public void actionPerformed(ActionEvent e) {
-                switch (colorMode) {
-                    case NORMAL -> colorMode = ColorBlindPalette.Mode.PROTAN;
-                    case PROTAN -> colorMode = ColorBlindPalette.Mode.DEUTER;
-                    case DEUTER -> colorMode = ColorBlindPalette.Mode.TRITAN;
-                    case TRITAN -> colorMode = ColorBlindPalette.Mode.NORMAL;
-                }
-                setTitle("TETRIS - " + colorMode.name() + " mode");
-                nextPanel.setColorMode(colorMode);
-                drawBoard();
-            }
-        });
-
-        // 디버그 키 동작 ===
-        am.put("debugLineClear", new AbstractAction() {
-            public void actionPerformed(ActionEvent e) {
-                if (!logic.isItemMode())
-                    return; // 일반모드에서는 무시
-                logic.debugSetNextItem(new LineClearItem(logic.getCurr()));
-                System.out.println("🧪 Debug: 다음 블록 = LineClearItem");
-                drawBoard();
-            }
-        });
-
-        am.put("debugWeight", new AbstractAction() {
-            public void actionPerformed(ActionEvent e) {
-                if (!logic.isItemMode())
-                    return;
-                logic.debugSetNextItem(new WeightItem());
-                System.out.println("🧪 Debug: 다음 블록 = WeightItem");
-                drawBoard();
-            }
-        });
-
-        am.put("debugSpinLock", new AbstractAction() {
-            public void actionPerformed(ActionEvent e) {
-                if (!logic.isItemMode())
-                    return;
-                logic.debugSetNextItem(new SpinLockItem(logic.getCurr()));
-                System.out.println("🧪 Debug: 다음 블록 = SpinLockItem (회전금지)");
-                drawBoard();
-            }
-        });
-        am.put("debugColorBomb", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                if (!logic.isItemMode())
-                    return;
-                logic.debugSetNextItem(new ColorBombItem(logic.getCurr()));
-
-                System.out.println("🧪 Debug: 다음 블록 = ColorBombItem (색상 폭탄)");
-                drawBoard();
-            }
-        });
-
-        am.put("debugLightning", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                if (!logic.isItemMode())
-                    return;
-                logic.debugSetNextItem(new LightningItem());
-                System.out.println("🧪 Debug: 다음 블록 = LightningItem (번개)");
-                drawBoard();
-            }
-        });
-
-        am.put("fullscreen", new AbstractAction() {
-            public void actionPerformed(ActionEvent e) {
-                toggleFullScreen();
-            }
-        });
-        am.put("exit", new AbstractAction() {
-            public void actionPerformed(ActionEvent e) {
-                dispose();
-            }
-        });
     }
 
     // === 화면 갱신 ===
@@ -755,27 +631,31 @@ public class Board extends JFrame {
     }
 
     private void rebindKeymap() {
-        if (settings == null)
-            return;
+        if (settings == null) return;
 
-        JComponent comp = gamePanel; // setupKeys를 gamePanel에 했으므로 동일 대상
-        InputMap im = comp.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        JComponent comp = gamePanel;
 
-        // 이전 바인딩 제거
-        for (var e : boundKeys.entrySet()) {
-            Integer code = e.getValue();
-            if (code != null) {
-                im.remove(KeyStroke.getKeyStroke(code, 0));
-            }
+        InputMap imPlay = comp.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
+
+        // 초기 등록했던 기본키 제거)
+        imPlay.remove(KeyStroke.getKeyStroke("LEFT"));
+        imPlay.remove(KeyStroke.getKeyStroke("RIGHT"));
+        imPlay.remove(KeyStroke.getKeyStroke("DOWN"));
+        imPlay.remove(KeyStroke.getKeyStroke("UP"));
+        imPlay.remove(KeyStroke.getKeyStroke("SPACE"));
+
+        // 직전에 settings로 넣어둔 사용자 바인딩 제거
+        for (var code : boundKeys.values()) {
+            if (code != null) imPlay.remove(KeyStroke.getKeyStroke(code, 0));
         }
         boundKeys.clear();
 
-        // 새 바인딩 등록
-        bind(im, Action.Left, settings.keymap.get(Action.Left), ACT_LEFT);
-        bind(im, Action.Right, settings.keymap.get(Action.Right), ACT_RIGHT);
-        bind(im, Action.SoftDrop, settings.keymap.get(Action.SoftDrop), ACT_DOWN);
-        bind(im, Action.HardDrop, settings.keymap.get(Action.HardDrop), ACT_DROP);
-        bind(im, Action.Rotate, settings.keymap.get(Action.Rotate), ACT_ROTATE);
+        // 새 바인딩 등록 (settings 기준으로)
+        bind(imPlay, Action.Left,      settings.keymap.get(Action.Left),      ACT_LEFT);
+        bind(imPlay, Action.Right,     settings.keymap.get(Action.Right),     ACT_RIGHT);
+        bind(imPlay, Action.SoftDrop,  settings.keymap.get(Action.SoftDrop),  ACT_DOWN);
+        bind(imPlay, Action.HardDrop,  settings.keymap.get(Action.HardDrop),  ACT_DROP);
+        bind(imPlay, Action.Rotate,    settings.keymap.get(Action.Rotate),    ACT_ROTATE);
     }
 
     private void bind(InputMap im, Action action, Integer keyCode, String actionName) {
@@ -793,7 +673,6 @@ public class Board extends JFrame {
                 gamePanel.setFocusable(true);
                 boolean ok = gamePanel.requestFocusInWindow();
                 // 포커스 회복 시점에 InputMap도 재적용
-                setupKeys(gamePanel);
             }
         });
     }
