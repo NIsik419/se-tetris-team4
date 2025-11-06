@@ -1,13 +1,12 @@
 package component;
 
-import launcher.GameLauncher;
 import javax.swing.*;
 import java.awt.*;
 
 /**
  * PausePanel
  * - 일시정지 상태에서 중앙에 컬러 버튼 3개 표시 (Continue / Restart / Exit)
- * - 게임 화면 위에 반투명하게 덮이지만 배경은 그대로 보임
+ * - 프레임이 attach되기 전에 만들어져도 정상 표시됨
  */
 public class PausePanel extends JPanel {
 
@@ -20,51 +19,71 @@ public class PausePanel extends JPanel {
         this.onRestart = onRestart;
         this.onExit = onExit;
 
-        // 전체 투명
+        System.out.println("[DEBUG] PausePanel 생성됨. parent=" + parent);
+
+        int width = (parent != null ? parent.getWidth() : 800);
+        int height = (parent != null ? parent.getHeight() : 900);
         setOpaque(false);
         setLayout(new GridBagLayout());
         setVisible(false);
-        setBounds(0, 0, parent.getWidth(), parent.getHeight());
+        setBounds(0, 0, width, height);
 
+        System.out.println("[DEBUG] PausePanel 초기 설정 완료 (" + width + "x" + height + ")");
         // === 버튼 묶음 ===
         JPanel btnPanel = new JPanel();
         btnPanel.setLayout(new BoxLayout(btnPanel, BoxLayout.Y_AXIS));
         btnPanel.setOpaque(false);
 
-        JButton continueBtn = createStitchedButton("▶ CONTINUE", new Color(80, 200, 120));
-        JButton restartBtn = createStitchedButton("🔄 RESTART", new Color(80, 160, 255));
-        JButton exitBtn = createStitchedButton("❌ EXIT", new Color(240, 100, 90));
-
-        continueBtn.addActionListener(e -> onResume.run());
-        restartBtn.addActionListener(e -> onRestart.run());
-        exitBtn.addActionListener(e -> onExit.run());
+        JButton continueBtn = createStitchedButton("▶ CONTINUE", new Color(80, 200, 120), onResume);
+        JButton restartBtn = createStitchedButton("🔄 RESTART", new Color(80, 160, 255), onRestart);
+        JButton exitBtn = createStitchedButton("❌ EXIT", new Color(240, 100, 90), onExit);
 
         btnPanel.add(continueBtn);
         btnPanel.add(Box.createVerticalStrut(20));
         btnPanel.add(restartBtn);
         btnPanel.add(Box.createVerticalStrut(20));
         btnPanel.add(exitBtn);
-
         add(btnPanel, new GridBagConstraints());
 
-        // 크기 변경 대응
-        parent.addComponentListener(new java.awt.event.ComponentAdapter() {
-            @Override
-            public void componentResized(java.awt.event.ComponentEvent e) {
-                setBounds(0, 0, parent.getWidth(), parent.getHeight());
-            }
-        });
-
-        parent.getLayeredPane().add(this, JLayeredPane.POPUP_LAYER);
+        // === attach 시도 ===
+        if (parent != null) {
+            System.out.println("[DEBUG] parent 감지됨 → attachToParent 실행");
+            attachToParent(parent);
+        } else {
+            System.out.println("[DEBUG] parent == null → invokeLater 예약");
+            SwingUtilities.invokeLater(() -> {
+                JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
+                System.out.println("[DEBUG] invokeLater에서 frame=" + frame);
+                if (frame != null)
+                    attachToParent(frame);
+                else
+                    System.out.println("[DEBUG] invokeLater에서도 frame=null ❌");
+            });
+        }
     }
 
-    private JButton createStitchedButton(String text, Color baseColor) {
+    /** parent의 LayeredPane에 안전하게 추가 */
+    private void attachToParent(JFrame frame) {
+        System.out.println("[DEBUG] attachToParent 호출됨: frame=" + frame.getTitle());
+        frame.getLayeredPane().add(this, JLayeredPane.POPUP_LAYER);
+        setBounds(0, 0, frame.getWidth(), frame.getHeight());
+        System.out.println("[DEBUG] PausePanel LayeredPane에 추가됨. isShowing=" + isShowing());
+
+        frame.addComponentListener(new java.awt.event.ComponentAdapter() {
+            @Override
+            public void componentResized(java.awt.event.ComponentEvent e) {
+                setBounds(0, 0, frame.getWidth(), frame.getHeight());
+                System.out.println("[DEBUG] PausePanel 크기 갱신됨 → " + frame.getWidth() + "x" + frame.getHeight());
+            }
+        });
+    }
+
+    private JButton createStitchedButton(String text, Color baseColor, Runnable onClick) {
         JButton btn = new JButton(text) {
             @Override
             protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-
                 int w = getWidth(), h = getHeight();
                 int arc = 20;
 
@@ -76,14 +95,13 @@ public class PausePanel extends JPanel {
                 g2.setColor(getModel().isPressed() ? baseColor.darker() : baseColor);
                 g2.fillRoundRect(0, 0, w - 4, h - 4, arc, arc);
 
-                // 스티치 테두리 (점선)
+                // 점선 테두리
                 g2.setStroke(new BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 1f,
-                        new float[]{8f, 6f}, 0f));
+                        new float[] { 8f, 6f }, 0f));
                 g2.setColor(new Color(255, 255, 255, 180));
                 g2.drawRoundRect(3, 3, w - 10, h - 10, arc - 5, arc - 5);
 
                 // 텍스트
-                g2.setFont(getFont());
                 FontMetrics fm = g2.getFontMetrics();
                 int tx = (w - fm.stringWidth(text)) / 2;
                 int ty = (h + fm.getAscent() - fm.getDescent()) / 2;
@@ -94,34 +112,22 @@ public class PausePanel extends JPanel {
             }
         };
 
-        btn.setForeground(Color.WHITE);
-        btn.setFont(new Font("Arial", Font.BOLD, 18));
         btn.setFocusPainted(false);
         btn.setContentAreaFilled(false);
         btn.setBorderPainted(false);
         btn.setOpaque(false);
         btn.setPreferredSize(new Dimension(220, 60));
         btn.setMaximumSize(new Dimension(220, 60));
-
-        // 마우스 호버 시 색상 밝게
-        btn.addMouseListener(new java.awt.event.MouseAdapter() {
-            @Override
-            public void mouseEntered(java.awt.event.MouseEvent e) {
-                btn.setBackground(baseColor.brighter());
-            }
-
-            @Override
-            public void mouseExited(java.awt.event.MouseEvent e) {
-                btn.setBackground(baseColor);
-            }
-        });
-
+        btn.addActionListener(e -> onClick.run());
         return btn;
     }
 
     public void showPanel() {
+        System.out.println("[DEBUG] showPanel 호출됨");
         setVisible(true);
-        requestFocusInWindow();
+        revalidate();
+        repaint();
+        System.out.println("[DEBUG] showPanel 완료. isShowing=" + isShowing());
     }
 
     public void hidePanel() {

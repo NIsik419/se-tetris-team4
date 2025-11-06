@@ -1,15 +1,12 @@
 package launcher;
 
-import component.Board;
-import component.MenuPanel;
-import component.GameConfig;
+import component.*;
 import component.config.*;
-import component.score.ScoreBoard;
-import component.score.ScoreboardPanel;
-
+import component.score.*;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
+import logic.BoardLogic;
 
 public class GameLauncher {
 
@@ -20,34 +17,30 @@ public class GameLauncher {
     enum Screen {
         MENU, SETTINGS, SCOREBOARD
     }
-    
+
     private final JFrame frame = new JFrame("TETRIS");
     private final CardLayout cards = new CardLayout();
     private final JPanel root = new JPanel(cards);
 
     private final Settings settings = Settings.load();
-
-    // MenuPanel: 두 개의 Consumer 필요
     private final MenuPanel menuPanel = new MenuPanel(this::onGameConfigSelect, this::onMenuSelect);
 
     private final JPanel settingsPanel = createSettingsScreen();
     private final ScoreBoard scoreBoard = ScoreBoard.createDefault();
-    private final ScoreboardPanel scoreboardPanel =
-            new ScoreboardPanel(scoreBoard, () -> showScreen(Screen.MENU));
+    private final ScoreboardPanel scoreboardPanel = new ScoreboardPanel(scoreBoard, () -> showScreen(Screen.MENU));
 
     private JPanel createSettingsScreen() {
         return new SettingsScreen(settings,
-            applied -> {                // Apply 시 즉시 반영하고 싶으면 여기서 처리
-                applyMenuScaleFromSettings();  // 화면 크기 조정 예시
-                root.revalidate();
-                root.repaint();
-            },
-            () -> showScreen(Screen.MENU)      // Back/ESC 시 동작
-        );
+                applied -> {
+                    applyMenuScaleFromSettings();
+                    root.revalidate();
+                    root.repaint();
+                },
+                () -> showScreen(Screen.MENU));
     }
 
     private void show() {
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         frame.setSize(720, 720);
         frame.setLocationRelativeTo(null);
 
@@ -56,10 +49,9 @@ public class GameLauncher {
         root.add(scoreboardPanel, Screen.SCOREBOARD.name());
 
         applyMenuScaleFromSettings();
-        
         frame.setContentPane(root);
         frame.setVisible(true);
-
+        System.out.println("[DEBUG] GameLauncher created");
         showScreen(Screen.MENU);
     }
 
@@ -93,35 +85,44 @@ public class GameLauncher {
     private void onGameConfigSelect(GameConfig config) {
         frame.setVisible(false);
 
-        Board game = new Board(config);
+        // 새 구조로 변경
+        GameFrame game = new GameFrame(config);
 
-        try { game.setSettings(settings); } catch (Exception ignore) {}
+        try {
+            // ✅ BoardPanel의 Settings 반영
+            if (game.getBoardPanel() != null) {
+                game.getBoardPanel().applySettings(settings);
+            }
+        } catch (Exception ignore) {
+        }
 
         game.setTitle("TETRIS – " + config.mode() + " / " + config.difficulty());
         game.setLocationRelativeTo(null);
         game.setVisible(true);
 
-        // 아이템 모드 활성화
-        if (config.mode() == GameConfig.Mode.ITEM && game.getLogic() != null) {
-            game.getLogic().setItemMode(true);
+        // ✅ 아이템 모드 활성화
+        if (config.mode() == GameConfig.Mode.ITEM && game.getBoardPanel() != null) {
+            game.getBoardPanel().getLogic().setItemMode(true);
         }
 
         SwingUtilities.invokeLater(() -> {
             game.requestFocusInWindow();
-            game.requestFocus();
             game.toFront();
         });
 
+        // 기존 리스너 제거
         for (WindowListener wl : frame.getWindowListeners()) {
             frame.removeWindowListener(wl);
         }
 
+        // ✅ 새 창 종료 시 메뉴 복귀
         game.addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosed(WindowEvent e) {
-                //  Restart인 경우엔 메뉴창 안 띄움
-                if (game instanceof Board board && board.isRestarting)
+                // Restart 중이라면 메뉴 복귀 X
+                if (game.getBoardPanel() != null && game.getBoardPanel().isRestarting()) {
                     return;
+                }
                 frame.setVisible(true);
                 showScreen(Screen.MENU);
             }
@@ -144,12 +145,12 @@ public class GameLauncher {
         }
     }
 
-        // 화면 크기 설정 반영(선택)
+    // 화면 크기 설정 반영
     private void applyMenuScaleFromSettings() {
         Dimension d = switch (settings.screenSize) {
-            case SMALL  -> new Dimension(600, 600);
+            case SMALL -> new Dimension(600, 600);
             case MEDIUM -> new Dimension(720, 720);
-            case LARGE  -> new Dimension(840, 840);
+            case LARGE -> new Dimension(840, 840);
         };
         frame.setSize(d);
         frame.setLocationRelativeTo(null);
