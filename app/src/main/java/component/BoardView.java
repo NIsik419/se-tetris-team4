@@ -2,6 +2,12 @@ package component;
 
 import logic.BoardLogic;
 import blocks.Block;
+import component.items.ColorBombItem;
+import component.items.ItemBlock;
+import component.items.LightningItem;
+import component.items.LineClearItem;
+import component.items.SpinLockItem;
+import component.items.WeightItem;
 
 import javax.swing.*;
 import java.awt.*;
@@ -57,7 +63,7 @@ public class BoardView extends JPanel {
         Block curr = logic.getCurr();
         if (curr != null)
             drawCurrentBlock(g2, curr);
-    
+
         drawGhostBlock(g2);
         g2.dispose();
 
@@ -89,12 +95,13 @@ public class BoardView extends JPanel {
         g2.setColor(new Color(0, 0, 0, 40));
         g2.fillRoundRect(px, py + size * 2 / 3, size, size / 3, ARC, ARC);
     }
-    //예측 낙하 위치 그리기
+
+    // 예측 낙하 위치 그리기
     private void drawGhostBlock(Graphics2D g2) {
         Block curr = logic.getCurr();
         if (curr == null)
             return;
-        
+
         int bx = logic.getX();
         int by = logic.getY();
         int ghostY = move.getGhostY(curr); // BoardLogic에 getGhostY() 메서드 추가 필요
@@ -119,11 +126,49 @@ public class BoardView extends JPanel {
 
     private void drawCurrentBlock(Graphics2D g2, Block block) {
         int bx = logic.getX(), by = logic.getY();
-        for (int j = 0; j < block.height(); j++)
-            for (int i = 0; i < block.width(); i++)
-                if (block.getShape(i, j) == 1)
-                    drawCell(g2, bx + i, by + j,
-                            ColorBlindPalette.convert(block.getColor(), colorMode));
+
+        for (int j = 0; j < block.height(); j++) {
+            for (int i = 0; i < block.width(); i++) {
+                if (block.getShape(i, j) == 1) {
+                    int x = bx + i;
+                    int y = by + j;
+                    Color color = ColorBlindPalette.convert(block.getColor(), colorMode);
+                    drawCell(g2, x, y, color);
+
+                    // 🟨 아이템 블록이면 문자/아이콘 표시
+                    if (block instanceof ItemBlock item) {
+                        drawItemSymbol(g2, item, x, y);
+                    }
+                }
+            }
+        }
+    }
+
+    /** 아이템 블록 문자/아이콘 오버레이 */
+    private void drawItemSymbol(Graphics2D g2, ItemBlock item, int gridX, int gridY) {
+        int CELL_SIZE = 35, CELL_GAP = 2;
+        int px = gridX * CELL_SIZE + CELL_GAP;
+        int py = gridY * CELL_SIZE + CELL_GAP;
+        int size = CELL_SIZE - CELL_GAP * 2;
+
+        g2.setFont(new Font("Segoe UI Emoji", Font.BOLD, 18)); // 이모지 폰트 지원
+        FontMetrics fm = g2.getFontMetrics();
+
+        String symbol = switch (item) {
+            case LineClearItem l -> "L";
+            case WeightItem w -> "W";
+            case SpinLockItem s -> SpinLockItem.getSymbol(); // 예: "S" 또는 "🔒"
+            case ColorBombItem b -> "💥";
+            case LightningItem l -> "⚡";
+            default -> null;
+        };
+
+        if (symbol != null) {
+            g2.setColor(Color.BLACK);
+            int tx = px + (size - fm.stringWidth(symbol)) / 2;
+            int ty = py + (size + fm.getAscent() - fm.getDescent()) / 2;
+            g2.drawString(symbol, tx, ty);
+        }
     }
 
     public void setColorMode(ColorBlindPalette.Mode mode) {

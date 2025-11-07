@@ -55,7 +55,7 @@ public class GameFrame extends JFrame {
                 gd.setFullScreenWindow(this);
             }
 
-            // ⚡ 포커스 복구
+            // 포커스 복구
             SwingUtilities.invokeLater(() -> {
                 setVisible(true);
                 if (boardPanel != null) {

@@ -10,6 +10,8 @@ import java.awt.*;
 import java.awt.event.*;
 import component.score.NameInputOverlay;
 import component.score.ScoreboardOverlay;
+import component.sidebar.*;
+import component.board.KeyBindingInstaller;
 
 /**
  * BoardPanel
@@ -20,7 +22,6 @@ public class BoardPanel extends JPanel {
     private final BoardLogic logic;
     private final BoardView boardView;
     private final GameLoop loop;
-    private final GameController controller;
 
     private final JLabel scoreLabel = new JLabel("0");
     private final JLabel levelLabel = new JLabel("1");
@@ -51,12 +52,6 @@ public class BoardPanel extends JPanel {
         // === 로직 초기화 ===
         logic = new BoardLogic(score -> showNameInputOverlay(score));
         boardView = new BoardView(logic);
-        controller = new GameController(
-                logic,
-                boardView,
-                this::togglePause,
-                onExitToMenu // ESC → 메뉴 복귀
-        );
 
         loop = new GameLoop(logic, this::drawBoard);
         logic.setOnFrameUpdate(this::drawBoard);
@@ -78,14 +73,61 @@ public class BoardPanel extends JPanel {
         // === 초기 포커스 및 루프 시작 ===
         boardView.setFocusable(true);
         boardView.requestFocusInWindow();
+        SwingUtilities.invokeLater(() -> {
+            boardView.setFocusable(true);
+            boardView.requestFocusInWindow();
+            boardView.requestFocus();
+            System.out.println("[DEBUG] Focus forced on boardView → " + boardView.isFocusOwner());
+        });
+        System.out.println("[DEBUG] Focus requested on boardView");
         loop.startLoop();
+        // === 키 바인딩 통합 ===
+        KeyBindingInstaller installer = new KeyBindingInstaller();
+        System.out.println("[DEBUG] Installing key bindings for " + boardView.getClass().getSimpleName());
+        System.out.println("[DEBUG] InputMap keys = " + boardView.getInputMap().keys());
+        installer.install(boardView, new KeyBindingInstaller.Deps(
+                logic,
+                this::drawBoard, // 보드 갱신
+                () -> { // 풀스크린 (현재 없음)
+                    JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
+                    if (frame != null)
+                        frame.setExtendedState(JFrame.MAXIMIZED_BOTH);
+                },
+                () -> { // ESC → 메뉴 복귀
+                    onExitToMenu.run();
+                },
+                () -> pausePanel != null && pausePanel.isVisible(), // 현재 일시정지 여부
+                () -> {
+                    if (pausePanel != null)
+                        pausePanel.showPanel();
+                }, // 일시정지 ON
+                () -> {
+                    if (pausePanel != null)
+                        pausePanel.hidePanel();
+                }, // 일시정지 OFF
+                loop::resumeLoop, // 게임 재개
+                loop::pauseLoop, // 게임 정지
+                title -> { // 타이틀 설정
+                    JFrame f = (JFrame) SwingUtilities.getWindowAncestor(this);
+                    if (f != null)
+                        f.setTitle(title);
+                },
+                () -> settings != null ? settings.colorBlindMode : ColorBlindPalette.Mode.NORMAL, // 현재 색맹모드
+                mode -> boardView.setColorMode(mode), // 색맹모드 변경 시
+                mode -> nextPanel.setColorMode(mode) // nextPanel 동기화
+        ));
+
     }
 
     // 중앙에 BoardView를 넣고 비율 유지
     private Component centerBoard(JComponent view) {
         JPanel wrapper = new JPanel(new GridBagLayout());
         wrapper.setBackground(new Color(20, 25, 35));
+        wrapper.setFocusable(false); // 포커스 훔치지 않도록
         wrapper.add(view);
+
+        view.setFocusable(true); // view에만 포커스 허용
+        view.requestFocusInWindow();
         return wrapper;
     }
 
@@ -314,6 +356,6 @@ public class BoardPanel extends JPanel {
             return;
         boardView.setColorMode(s.colorBlindMode);
         nextPanel.setColorMode(s.colorBlindMode);
-        controller.updateKeyBindings(s.keymap);
+
     }
 }
