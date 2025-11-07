@@ -1,6 +1,8 @@
-package component;
+package component.sidebar;
 
 import blocks.Block;
+import component.ColorBlindPalette;
+import component.ColorBlindPalette.Mode;
 
 import javax.swing.*;
 import java.awt.*;

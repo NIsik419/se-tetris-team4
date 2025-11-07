@@ -1,4 +1,4 @@
-package component;
+package component.sidebar;
 
 import java.awt.Color;
 import java.awt.Dimension;
