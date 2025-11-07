@@ -74,6 +74,7 @@ public class MenuPanel extends JPanel {
     private JPanel menuColumn;
     private JPanel individualSub;
     private JPanel individualItemRow;
+    private JPanel individualNormalRow;
     private JPanel multiplayerSub;
     private JPanel multiplayerItemRow;
 
@@ -209,14 +210,19 @@ public class MenuPanel extends JPanel {
 
         individualSub = makeSubPanel();
         individualSub.setAlignmentX(CENTER_ALIGNMENT);
-        individualSub.add(makeSubButton("Normal Game", () ->
-            onStart.accept(new GameConfig(GameConfig.Mode.CLASSIC, GameConfig.Difficulty.NORMAL, false))
-        ));
+
+        individualSub.add(makeSubButton("Normal Game", () -> togglePanel(individualNormalRow)));
         individualSub.add(Box.createVerticalStrut(8));
-        individualSub.add(makeSubButton("Item", () -> togglePanel(individualItemRow)));
-        individualItemRow = makeDifficultyRow();
-        individualItemRow.setVisible(false);
-        individualSub.add(individualItemRow);
+
+        individualNormalRow = makeDifficultyRowFor(GameConfig.Mode.CLASSIC);
+        individualNormalRow.setVisible(false);
+        individualSub.add(individualNormalRow);
+        individualSub.add(Box.createVerticalStrut(8));
+
+        individualSub.add(makeSubButton("Item", () ->
+            onStart.accept(new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.NORMAL, false))
+        ));
+
         individualSub.setVisible(false);
         menuColumn.add(individualSub);
         menuColumn.add(Box.createVerticalStrut(18));
@@ -229,14 +235,21 @@ public class MenuPanel extends JPanel {
 
         multiplayerSub = makeSubPanel();
         multiplayerSub.setAlignmentX(CENTER_ALIGNMENT);
+
         multiplayerSub.add(makeSubButton("Normal Game", () ->
             onStart.accept(new GameConfig(GameConfig.Mode.CLASSIC, GameConfig.Difficulty.NORMAL, false))
         ));
         multiplayerSub.add(Box.createVerticalStrut(8));
-        multiplayerSub.add(makeSubButton("Item", () -> togglePanel(multiplayerItemRow)));
-        multiplayerItemRow = makeDifficultyRow();
-        multiplayerItemRow.setVisible(false);
-        multiplayerSub.add(multiplayerItemRow);
+
+        multiplayerSub.add(makeSubButton("Item", () ->
+            onStart.accept(new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.NORMAL, false))
+        ));
+        multiplayerSub.add(Box.createVerticalStrut(8));
+
+        multiplayerSub.add(makeSubButton("TIME ATTACK", () ->
+            onStart.accept(new GameConfig(GameConfig.Mode.TIME_ATTACK, GameConfig.Difficulty.NORMAL, false))
+        ));
+                
         multiplayerSub.setVisible(false);
         menuColumn.add(multiplayerSub);
         menuColumn.add(Box.createVerticalStrut(22));
@@ -272,15 +285,18 @@ public class MenuPanel extends JPanel {
         repaint();
     }
 
-    // row of E/M/H launches ITEM with that difficulty
-    private JPanel makeDifficultyRow() {
-        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
-        row.setOpaque(false);
-        row.add(makeGlassSmallButton("EASY",   () -> onStart.accept(new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.EASY, false))));
-        row.add(makeGlassSmallButton("MEDIUM", () -> onStart.accept(new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.NORMAL, false))));
-        row.add(makeGlassSmallButton("HARD",   () -> onStart.accept(new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.HARD, false))));
-        return row;
-    }
+    // row of E/M/H launches NORMAL MODE with that difficulty
+    private JPanel makeDifficultyRowFor(GameConfig.Mode mode) {
+    JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+    row.setOpaque(false);
+    row.add(makeGlassSmallButton("EASY",
+        () -> onStart.accept(new GameConfig(mode, GameConfig.Difficulty.EASY, false))));
+    row.add(makeGlassSmallButton("MEDIUM",
+        () -> onStart.accept(new GameConfig(mode, GameConfig.Difficulty.NORMAL, false))));
+    row.add(makeGlassSmallButton("HARD",
+        () -> onStart.accept(new GameConfig(mode, GameConfig.Difficulty.HARD, false))));
+    return row;
+}
 
     // NAV LIST management
     private void rebuildNavOrder() {
