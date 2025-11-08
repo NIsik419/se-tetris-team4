@@ -2,6 +2,9 @@ package logic;
 
 import java.awt.Color;
 import java.util.*;
+
+import javax.swing.SwingUtilities;
+import javax.swing.Timer;
 import java.util.function.Consumer;
 
 import blocks.Block;
@@ -19,6 +22,13 @@ import component.items.ItemBlock;
 public class BoardLogic {
     public static final int WIDTH = GameState.WIDTH;
     public static final int HEIGHT = GameState.HEIGHT;
+    private Runnable pauseCallback;
+    private Runnable resumeCallback;
+
+    public void setLoopControl(Runnable pause, Runnable resume) {
+        this.pauseCallback = pause;
+        this.resumeCallback = resume;
+    }
 
     private int comboCount = 0; // 연속 클리어 카운트
     private long lastClearTime = 0; // 마지막 클리어 시간 (콤보 유지 확인용)
@@ -100,6 +110,9 @@ public class BoardLogic {
 
     // === 이동 / 중력 ===
     public void moveDown() {
+
+        // if (clear.isClearing()) return;
+        
         if (move.canMove(state.getCurr(), state.getX(), state.getY() + 1)) {
             move.moveDown();
             score++;
@@ -113,6 +126,9 @@ public class BoardLogic {
 
     /** 블럭 고정 및 다음 블럭 생성 */
     private void fixBlock() {
+        // if(clear.isClearing()) {
+        //     return; // 클리어 애니메이션 중에는 고정하지 않음
+        // }
         var b = state.getCurr();
         var board = state.getBoard();
 
@@ -138,40 +154,54 @@ public class BoardLogic {
 
     /** 라인 클리어 처리 */
     private void clearLines() {
-        int lines = clear.clearLines(onFrameUpdate, null);
+        // 클리어할 라인이 있는지 먼저 확인
+        int lines = clear.countFullLines(); // 새로운 메서드 필요
+        
+        if (lines == 0) {
+            // 라인이 없으면 pause/resume 없이 바로 진행
+            comboCount = 0;
+            return;
+        }
+        
+        // 라인이 있을 때만 pause
+        if (pauseCallback != null) {
+            pauseCallback.run();
+        }
+
+        // 애니메이션 실행
+        clear.clearLines(() -> {
+            if (onFrameUpdate != null)
+                SwingUtilities.invokeLater(onFrameUpdate);
+        }, () -> {
+            // 애니메이션 완료 후에만 resume
+            if (resumeCallback != null)
+                SwingUtilities.invokeLater(resumeCallback);
+        });
+
         clearedLines += lines;
         deletedLinesTotal += lines;
 
-        if (lines > 0) {
-            addScore(lines * 100); // 기본 점수
+        // 점수 처리
+        addScore(lines * 100);
 
-            // 🔹 콤보 판정: 최근 3초 내에 또 클리어했다면 콤보 유지
-            long now = System.currentTimeMillis();
-            if (now - lastClearTime < 3000)
-                comboCount++;
-            else
-                comboCount = 1;
+        // 콤보 판정
+        long now = System.currentTimeMillis();
+        comboCount = (now - lastClearTime < 3000) ? comboCount + 1 : 1;
+        lastClearTime = now;
 
-            lastClearTime = now;
-
-            // 🔹 콤보 보너스 점수 (2콤보부터 가산)
-            if (comboCount > 1) {
-                int comboBonus = comboCount * 50;
-                addScore(comboBonus);
-                System.out.println("Combo! x" + comboCount + " (+" + comboBonus + ")");
-            }
-
-            // 속도 상승
-            if (clearedLines % 10 == 0)
-                speedManager.increaseLevel();
-
-            // 아이템 등장 주기
-            if (itemMode && deletedLinesTotal > 0 && deletedLinesTotal % 2 == 0)
-                nextIsItem = true;
-        } else {
-            // 🔹 라인 미클리어 시 콤보 리셋
-            comboCount = 0;
+        if (comboCount > 1) {
+            int comboBonus = comboCount * 50;
+            addScore(comboBonus);
+            System.out.println("Combo! x" + comboCount + " (+" + comboBonus + ")");
         }
+
+        // 속도 상승
+        if (clearedLines % 10 == 0)
+            speedManager.increaseLevel();
+
+        // 아이템 등장 주기
+        if (itemMode && deletedLinesTotal > 0 && deletedLinesTotal % 2 == 0)
+            nextIsItem = true;
     }
 
     /** 다음 블럭 스폰 */
@@ -204,7 +234,7 @@ public class BoardLogic {
             System.out.println("[DEBUG] Game Over!");
             onGameOver.accept(score);
         }
-        
+
     }
 
     // === 이동 입력 ===
@@ -335,5 +365,5 @@ public class BoardLogic {
             onNextQueueUpdate.accept(List.copyOf(previewQueue)); // nextQueue는 내부 큐
         }
     }
-    
+
 }

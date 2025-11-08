@@ -3,24 +3,28 @@ package logic;
 import java.awt.Color;
 import javax.swing.Timer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class ClearService {
     private final GameState state;
     private boolean skipDuringItem = false;
     private boolean clearing = false;
+    private boolean animating = false;
 
-    // 클래식 테트리스 효과 색상
     private static final Color FLASH_WHITE = new Color(255, 255, 255, 250);
+    private List<Integer> lastClearedRows = new ArrayList<>();
 
     public ClearService(GameState state) {
         this.state = state;
     }
 
-    /** 메인 라인 클리어 로직 - 동시 처리 방식 */
+    /** 메인 라인 클리어 로직 */
     public int clearLines(Runnable onFrameUpdate, Runnable onComplete) {
-        if (clearing)
-            return 0; // 이미 처리 중이면 무시
+        if (clearing) {
+            System.out.println("[WARN] clearLines() called while already clearing");
+            return 0;
+        }
         clearing = true;
 
         var board = state.getBoard();
@@ -39,25 +43,36 @@ public class ClearService {
                 fullRows.add(y);
         }
 
+        lastClearedRows = new ArrayList<>(fullRows);
+
         if (fullRows.isEmpty()) {
-            clearing = false; // 아무 줄도 없으면 즉시 해제
+            clearing = false;
             if (onComplete != null)
                 onComplete.run();
             return 0;
         }
 
         int linesCleared = fullRows.size();
+        System.out.println("[DEBUG] Clearing " + linesCleared + " lines: " + fullRows);
 
-        animateClassicClear(fullRows, onFrameUpdate, () -> {
-            // 실제 삭제 후 중력 적용
+        // 빠른 애니메이션 실행
+        animateFastClear(fullRows, onFrameUpdate, () -> {
+            // 실제 삭제
+            for (int row : fullRows) {
+                Arrays.fill(board[row], null);
+            }
+            
+            // 중력 적용
             applyGravityInstantly();
+            
+            // 화면 갱신
             if (onFrameUpdate != null)
                 onFrameUpdate.run();
 
-            // 모든 후처리 완료 후 clear 허용
             clearing = false;
+            System.out.println("[DEBUG] Clear animation completed");
 
-            // 콜백 실행
+            // 완료 콜백
             if (onComplete != null)
                 onComplete.run();
         });
@@ -65,142 +80,123 @@ public class ClearService {
         return linesCleared;
     }
 
-    /** 클래식 테트리스 라인 클리어 애니메이션 */
-    private void animateClassicClear(List<Integer> rows, Runnable onFrameUpdate, Runnable onComplete) {
-        var board = state.getBoard();
-        var fade = state.getFadeLayer();
-
-        // 흰색으로 번쩍 (100ms 유지)
-        for (int row : rows)
-            for (int x = 0; x < GameState.WIDTH; x++)
-                fade[row][x] = FLASH_WHITE;
-
-        if (onFrameUpdate != null)
-            onFrameUpdate.run();
-
-        // 100ms 후 좌우에서 중앙으로 사라지는 효과 시작
-        Timer flashTimer = new Timer(100, e -> {
-            ((Timer) e.getSource()).stop();
-            animateWipeFromSides(rows, 0, onFrameUpdate, () -> {
-                // 🧹 모든 애니메이션 완료 후 실제 삭제
-                for (int row : rows)
-                    for (int x = 0; x < GameState.WIDTH; x++) {
-                        fade[row][x] = null;
-                        board[row][x] = null;
-                    }
-
-                if (onFrameUpdate != null)
-                    onFrameUpdate.run();
-
-                // 약간의 딜레이 후 완료 콜백 호출
-                Timer completeTimer = new Timer(60, ev -> {
-                    ((Timer) ev.getSource()).stop();
-                    if (onComplete != null)
-                        onComplete.run();
-                });
-                completeTimer.setRepeats(false);
-                completeTimer.start();
-            });
-        });
-        flashTimer.setRepeats(false);
-        flashTimer.start();
-    }
-
-    /** 좌우에서 중앙으로 지워지는 효과 */
-    private void animateWipeFromSides(List<Integer> rows, int step, Runnable onFrameUpdate, Runnable onComplete) {
-        var fade = state.getFadeLayer();
-        int maxSteps = GameState.WIDTH / 2 + 1;
-
-        if (step >= maxSteps) {
-            if (onComplete != null)
-                onComplete.run();
+    /** 빠른 클리어 애니메이션 (200ms 이내) */
+    private void animateFastClear(List<Integer> rows, Runnable onFrameUpdate, Runnable onComplete) {
+        if (animating) {
+            System.out.println("[WARN] Animation already running");
             return;
         }
+        animating = true;
 
-        // 좌우 양쪽에서 한 칸씩 제거
+        var fade = state.getFadeLayer();
+        System.out.println("[DEBUG] Animation started on EDT: " + javax.swing.SwingUtilities.isEventDispatchThread());
+
+        // 1단계: 화이트 플래시 (즉시)
         for (int row : rows) {
-            int leftX = step;
-            int rightX = GameState.WIDTH - 1 - step;
-            if (leftX < GameState.WIDTH)
-                fade[row][leftX] = null;
-            if (rightX >= 0 && rightX != leftX)
-                fade[row][rightX] = null;
+            for (int x = 0; x < GameState.WIDTH; x++) {
+                fade[row][x] = FLASH_WHITE;
+            }
         }
-
-        if (onFrameUpdate != null)
+        
+        // 디버그: fadeLayer 설정 확인
+        System.out.println("[DEBUG] fadeLayer[" + rows.get(0) + "][0] = " + fade[rows.get(0)][0]);
+        
+        if (onFrameUpdate != null) {
             onFrameUpdate.run();
-
-        // 다음 단계 재귀 호출 (30ms 간격)
-        Timer stepTimer = new Timer(30, e -> {
-            ((Timer) e.getSource()).stop();
-            animateWipeFromSides(rows, step + 1, onFrameUpdate, onComplete);
+            System.out.println("[DEBUG] Frame update called (flash)");
+        }
+        
+       
+        Timer fadeTimer = new Timer(10, null);
+        final int[] frame = { 0 };
+        final int TOTAL_FRAMES = 1;
+        
+        fadeTimer.addActionListener(e -> {
+            frame[0]++;
+            
+            // 알파값 점진적 감소
+            int alpha = 250 - (frame[0] * 250 / TOTAL_FRAMES);
+            alpha = Math.max(0, alpha);
+            
+            for (int row : rows) {
+                for (int x = 0; x < GameState.WIDTH; x++) {
+                    if (alpha > 0) {
+                        fade[row][x] = new Color(255, 255, 255, alpha);
+                    } else {
+                        fade[row][x] = null;
+                    }
+                }
+            }
+            
+            if (onFrameUpdate != null) {
+                onFrameUpdate.run();
+            }
+            
+            // 애니메이션 완료
+            if (frame[0] >= TOTAL_FRAMES) {
+                ((Timer) e.getSource()).stop();
+                
+                // fadeLayer 완전 클리어
+                for (int row : rows) {
+                    Arrays.fill(fade[row], null);
+                }
+                
+                animating = false;
+                System.out.println("[DEBUG] Fade animation completed");
+                
+                if (onComplete != null) {
+                    onComplete.run();
+                }
+            }
         });
-        stepTimer.setRepeats(false);
-        stepTimer.start();
+        
+        fadeTimer.setRepeats(true);
+        fadeTimer.start();
     }
 
-    /** 단일 줄 클래식 효과 (아이템용) */
+
+    /** 단일 줄 클리어 (아이템용) */
     public void animateSingleLineClear(int targetY, Runnable onFrameUpdate, Runnable onComplete) {
         List<Integer> singleRow = List.of(targetY);
-        animateClassicClear(singleRow, onFrameUpdate, onComplete);
+        animateFastClear(singleRow, onFrameUpdate, onComplete);
     }
 
-    /** 중력 적용 - 모든 빈 공간을 채우도록 블록 낙하 */
+    /** 즉시 중력 적용 */
     public void applyGravityInstantly() {
         if (skipDuringItem)
             return;
 
         Color[][] board = state.getBoard();
-        boolean moved;
 
-        do {
-            moved = false;
-            for (int y = GameState.HEIGHT - 2; y >= 0; y--) {
-                for (int x = 0; x < GameState.WIDTH; x++) {
-                    if (board[y][x] != null && board[y + 1][x] == null) {
-                        board[y + 1][x] = board[y][x];
-                        board[y][x] = null;
-                        moved = true;
-                    }
-                }
-            }
-        } while (moved);
-    }
-
-    /**
-     * Line-based 중력 적용 (깊은 복사 방식)
-     * - 줄 단위로 위의 블록들을 아래로 이동
-     * - null 초기화 없이 안전하게 중력만 적용
-     */
-    public void applyLineGravity() {
-        if (skipDuringItem)
-            return;
-
-        Color[][] board = state.getBoard();
-
+        // 아래부터 위로 스캔하며 빈 줄 채우기
         for (int y = GameState.HEIGHT - 1; y > 0; y--) {
             if (isRowEmpty(board[y])) {
-                // 위쪽에서 채워줄 줄 찾기
+                // 위에서 비어있지 않은 줄 찾기
                 int above = y - 1;
                 while (above >= 0 && isRowEmpty(board[above])) {
                     above--;
                 }
 
                 if (above >= 0) {
-                    // 깊은 복사로 한 줄씩 아래로 내림
+                    // 한 줄씩 내리기
                     for (int x = 0; x < GameState.WIDTH; x++) {
                         board[y][x] = board[above][x];
-                        board[above][x] = null; // 위는 비움
+                        board[above][x] = null;
                     }
+                    y++; // 같은 y를 다시 체크
                 }
             }
         }
     }
 
-    /**
-     * 셀 단위 낙하 중력 애니메이션
-     * - 한 줄씩 아래로 내리며 자연스러운 중력 연출
-     */
+    /** 라인별 중력 */
+    public void applyLineGravity() {
+        if (skipDuringItem)
+            return;
+        applyGravityInstantly();
+    }
+
+    /** 단계별 중력 애니메이션 */
     public void applyGravityStepwise(Runnable onFrameUpdate, Runnable onComplete) {
         new Thread(() -> {
             try {
@@ -211,20 +207,18 @@ public class ClearService {
                 while (moved) {
                     moved = false;
 
-                    // 기존 fadeLayer 클리어
                     for (int y = 0; y < GameState.HEIGHT; y++)
-                        for (int x = 0; x < GameState.WIDTH; x++)
-                            fade[y][x] = null;
+                        Arrays.fill(fade[y], null);
 
                     for (int y = GameState.HEIGHT - 2; y >= 0; y--) {
                         for (int x = 0; x < GameState.WIDTH; x++) {
                             if (board[y][x] != null && board[y + 1][x] == null) {
-                                // fadeLayer에 흔적 남기기
-                                fade[y + 1][x] = new Color(board[y][x].getRed(),
-                                        board[y][x].getGreen(),
-                                        board[y][x].getBlue(), 150);
+                                fade[y + 1][x] = new Color(
+                                    board[y][x].getRed(),
+                                    board[y][x].getGreen(),
+                                    board[y][x].getBlue(), 150
+                                );
 
-                                // 실제 이동
                                 board[y + 1][x] = board[y][x];
                                 board[y][x] = null;
                                 moved = true;
@@ -235,13 +229,11 @@ public class ClearService {
                     if (onFrameUpdate != null)
                         onFrameUpdate.run();
 
-                    Thread.sleep(40); // 한 칸당 프레임 속도
+                    Thread.sleep(40);
                 }
 
-                // 마지막에 fadeLayer 클리어
                 for (int y = 0; y < GameState.HEIGHT; y++)
-                    for (int x = 0; x < GameState.WIDTH; x++)
-                        fade[y][x] = null;
+                    Arrays.fill(fade[y], null);
 
                 if (onFrameUpdate != null)
                     onFrameUpdate.run();
@@ -254,6 +246,30 @@ public class ClearService {
         }).start();
     }
 
+    /** 꽉 찬 줄 찾기 */
+    public List<Integer> findFullRows() {
+        var board = state.getBoard();
+        List<Integer> fullRows = new ArrayList<>();
+
+        for (int y = 0; y < GameState.HEIGHT; y++) {
+            boolean full = true;
+            for (int x = 0; x < GameState.WIDTH; x++) {
+                if (board[y][x] == null) {
+                    full = false;
+                    break;
+                }
+            }
+            if (full)
+                fullRows.add(y);
+        }
+        return fullRows;
+    }
+
+    /** 꽉 찬 줄 개수 세기 */
+    public int countFullLines() {
+        return findFullRows().size();
+    }
+
     /** 한 줄이 비어있는지 검사 */
     private boolean isRowEmpty(Color[] row) {
         for (Color c : row)
@@ -262,12 +278,13 @@ public class ClearService {
         return true;
     }
 
-    /** @deprecated Use applyLineGravity() instead */
-    @Deprecated
-    public void applyGravityFromRow(int deletedRow) {
-        applyLineGravity();
+    /** 폭발 효과 (ColorBomb 등) */
+    public void playExplosionEffect(List<Integer> rows, Runnable onFrameUpdate, Runnable onComplete) {
+        animateFastClear(rows, onFrameUpdate, onComplete);
     }
 
+    // === Getters & Setters ===
+    
     public void setSkipDuringItem(boolean skip) {
         this.skipDuringItem = skip;
     }
@@ -276,9 +293,16 @@ public class ClearService {
         return skipDuringItem;
     }
 
-    // colorbomb 전용 폭발 효과 재활용
-    public void playExplosionEffect(List<Integer> rows, Runnable onFrameUpdate, Runnable onComplete) {
-        animateClassicClear(rows, onFrameUpdate, onComplete);
+    public List<Integer> getLastClearedRows() {
+        return lastClearedRows;
     }
 
+    public boolean isClearing() {
+        return clearing;
+    }
+
+    @Deprecated
+    public void applyGravityFromRow(int deletedRow) {
+        applyLineGravity();
+    }
 }

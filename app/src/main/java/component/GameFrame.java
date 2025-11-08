@@ -3,6 +3,7 @@ package component;
 import javax.swing.*;
 import java.awt.*;
 
+
 public class GameFrame extends JFrame {
 
     // 필드로 올리기
@@ -24,6 +25,7 @@ public class GameFrame extends JFrame {
         SwingUtilities.invokeLater(boardPanel::revalidate);
         boardPanel.setFocusable(true);
         boardPanel.requestFocusInWindow();
+
     }
 
     // 메뉴로 돌아가기 콜백

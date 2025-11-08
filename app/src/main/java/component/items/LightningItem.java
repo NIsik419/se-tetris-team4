@@ -14,13 +14,7 @@ import logic.ClearService;
 import logic.GameState;
 
 /**
- * ⚡ LightningItem (곡선 전류 버전)
- * --------------------------------
- * - 랜덤 블록 10개를 선택하여 전류처럼 이어지며 번쩍 제거
- * - 경로는 약간의 곡선을 따라 흐르며 "쫘자작⚡" 느낌
- * - fadeLayer에 잔상 곡선 표현
- * - 흔들림은 게임판에만 적용
- * - ✅ testMode: 테스트 시 즉시 효과 및 중력 적용 + lambda 내부 로직 직접 실행
+ * ⚡ LightningItem (곡선 전류 버전) - NPE 수정
  */
 public class LightningItem extends ItemBlock {
 
@@ -42,7 +36,6 @@ public class LightningItem extends ItemBlock {
 
         clear.setSkipDuringItem(true);
 
-        // [TEST MODE] 즉시 처리: 중력·점수·잔상 바로 반영
         // === [TEST MODE] Thread 없이 즉시 실행 ===
         if (testMode) {
             List<Point> filled = new ArrayList<>();
@@ -67,26 +60,23 @@ public class LightningItem extends ItemBlock {
                 fade[p.y][p.x] = new Color(200, 240, 255, 200);
             }
 
-            // 중력, 점수, 클리어, 람다 내부 로직 모두 즉시 실행
             clear.applyGravityInstantly();
             logic.addScore(removeCount * 30);
 
-            // lambda$activate$2 내부와 동일한 동기 로직
-            logic.addScore(removeCount * 30);
+            // lambda 내부 로직
             clear.setSkipDuringItem(false);
-            int combo = clear.clearLines(logic.getOnFrameUpdate(), null);
+            int combo = clear.clearLines(safeGetFrameUpdate(logic), null);
             if (combo > 0)
                 logic.addScore(combo * 100);
 
-            if (logic.getOnFrameUpdate() != null)
-                logic.getOnFrameUpdate().run();
+            safeCallFrameUpdate(logic);
             if (onComplete != null)
                 onComplete.run();
 
             return;
         }
 
-        // 실제모드
+        // === 실제 모드 ===
         List<Point> filled = new ArrayList<>();
         for (int y = 0; y < GameState.HEIGHT; y++) {
             for (int x = 0; x < GameState.WIDTH; x++) {
@@ -130,8 +120,8 @@ public class LightningItem extends ItemBlock {
 
                 for (int i = 0; i < ordered.size(); i++) {
                     Point p = ordered.get(i);
-                    board[p.y][p.x] = null; // 제거
-                    fadeLayer[p.y][p.x] = new Color(200, 240, 255, 255); // 중심 전류색
+                    board[p.y][p.x] = null;
+                    fadeLayer[p.y][p.x] = new Color(200, 240, 255, 255);
 
                     // ⚡ 곡선 연결 (중간 흔들림)
                     if (i > 0) {
@@ -155,7 +145,7 @@ public class LightningItem extends ItemBlock {
                         }
                     }
 
-                    logic.getOnFrameUpdate().run();
+                    safeCallFrameUpdate(logic);
                     Thread.sleep(40);
                 }
 
@@ -164,7 +154,7 @@ public class LightningItem extends ItemBlock {
                     for (Point p : ordered) {
                         fade[p.y][p.x] = new Color(150, 220, 255, Math.max(alpha, 0));
                     }
-                    logic.getOnFrameUpdate().run();
+                    safeCallFrameUpdate(logic);
                     Thread.sleep(50);
                 }
 
@@ -173,22 +163,21 @@ public class LightningItem extends ItemBlock {
                     for (int x = 0; x < GameState.WIDTH; x++)
                         fade[y][x] = null;
 
-                logic.getOnFrameUpdate().run();
+                safeCallFrameUpdate(logic);
 
                 // 약한 흔들림 (게임판만)
                 shakeGamePanel(logic);
 
                 // 중력 및 라인 클리어
-                clear.applyGravityStepwise(logic.getOnFrameUpdate(), () -> {
+                clear.applyGravityStepwise(safeGetFrameUpdate(logic), () -> {
                     logic.addScore(removeCount * 30);
                     clear.setSkipDuringItem(false);
 
-                    int combo = clear.clearLines(logic.getOnFrameUpdate(), null);
+                    int combo = clear.clearLines(safeGetFrameUpdate(logic), null);
                     if (combo > 0)
                         logic.addScore(combo * 100);
 
-                    if (logic.getOnFrameUpdate() != null)
-                        logic.getOnFrameUpdate().run();
+                    safeCallFrameUpdate(logic);
                     if (onComplete != null)
                         onComplete.run();
                 });
@@ -204,14 +193,32 @@ public class LightningItem extends ItemBlock {
             try {
                 for (int i = 0; i < 5; i++) {
                     logic.setShakeOffset((i % 2 == 0) ? 2 : -2);
-                    logic.getOnFrameUpdate().run();
+                    safeCallFrameUpdate(logic);
                     Thread.sleep(25);
                 }
                 logic.setShakeOffset(0);
-                logic.getOnFrameUpdate().run();
+                safeCallFrameUpdate(logic);
             } catch (InterruptedException ignored) {
             }
         }).start();
+    }
+
+    /** ✅ 안전하게 frameUpdate 호출 */
+    private void safeCallFrameUpdate(BoardLogic logic) {
+        Runnable update = logic.getOnFrameUpdate();
+        if (update != null) {
+            update.run();
+        }
+    }
+
+    /** ✅ 안전하게 frameUpdate Runnable 반환 */
+    private Runnable safeGetFrameUpdate(BoardLogic logic) {
+        return () -> {
+            Runnable update = logic.getOnFrameUpdate();
+            if (update != null) {
+                update.run();
+            }
+        };
     }
 
     /** 테스트용 lambda 내부 로직 직접 실행 (JaCoCo용) */
@@ -219,12 +226,11 @@ public class LightningItem extends ItemBlock {
         logic.addScore(removeCount * 30);
         clear.setSkipDuringItem(false);
 
-        int combo = clear.clearLines(logic.getOnFrameUpdate(), null);
+        int combo = clear.clearLines(safeGetFrameUpdate(logic), null);
         if (combo > 0)
             logic.addScore(combo * 100);
 
-        if (logic.getOnFrameUpdate() != null)
-            logic.getOnFrameUpdate().run();
+        safeCallFrameUpdate(logic);
         if (onComplete != null)
             onComplete.run();
     }

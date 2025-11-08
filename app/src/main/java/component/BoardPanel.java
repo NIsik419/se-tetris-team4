@@ -54,7 +54,13 @@ public class BoardPanel extends JPanel {
         boardView = new BoardView(logic);
 
         loop = new GameLoop(logic, this::drawBoard);
-        logic.setOnFrameUpdate(this::drawBoard);
+        logic.setLoopControl(loop::pauseLoop, loop::resumeLoop);
+
+        // === 블록 큐 업데이트 콜백 등록 ===
+        logic.setOnNextQueueUpdate(blocks -> SwingUtilities.invokeLater(() -> nextPanel.setBlocks(blocks)));
+
+        // 첫 NEXT 표시 보장
+        SwingUtilities.invokeLater(() -> nextPanel.setBlocks(logic.getNextBlocks()));
 
         // === 레이아웃 구성 ===
         add(centerBoard(boardView), BorderLayout.CENTER);
@@ -66,9 +72,6 @@ public class BoardPanel extends JPanel {
 
         // === 디버그 아이템 바인딩 ===
         bindDebugKeys();
-
-        // === 블록 큐 업데이트 콜백 등록 ===
-        logic.setOnNextQueueUpdate(blocks -> SwingUtilities.invokeLater(() -> nextPanel.setBlocks(blocks)));
 
         // === 초기 포커스 및 루프 시작 ===
         boardView.setFocusable(true);
@@ -286,6 +289,7 @@ public class BoardPanel extends JPanel {
     private void showNameInputOverlay(int score) {
         loop.stopLoop();
         overlay.setVisible(true);
+        boardView.repaint();
         nameInputOverlay.show(score, config.mode(), config.difficulty());
     }
 
@@ -300,10 +304,14 @@ public class BoardPanel extends JPanel {
 
     // === 보드 갱신 ===
     private void drawBoard() {
-        scoreLabel.setText(String.valueOf(logic.getScore()));
-        levelLabel.setText(String.valueOf(logic.getLevel()));
-        linesLabel.setText(String.valueOf(logic.getLinesCleared()));
-        boardView.repaint();
+        SwingUtilities.invokeLater(() -> {
+            System.out.println("[DEBUG] drawBoard() called - repainting BoardView");
+            scoreLabel.setText(String.valueOf(logic.getScore()));
+            levelLabel.setText(String.valueOf(logic.getLevel()));
+            linesLabel.setText(String.valueOf(logic.getLinesCleared()));
+            boardView.repaint();
+        });
+
     }
 
     // === 디버그 키 ===
@@ -330,8 +338,11 @@ public class BoardPanel extends JPanel {
 
     // === Pause 토글 ===
     private void togglePause() {
-        if (pausePanel == null)
+        if (pausePanel == null) {
+            loop.pauseLoop(); // 최소한 루프는 멈추게
+            System.out.println("[WARN] togglePause() called before PausePanel init");
             return;
+        }
         if (pausePanel.isVisible()) {
             loop.resumeLoop();
             pausePanel.hidePanel();
