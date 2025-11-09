@@ -13,11 +13,12 @@ import component.GameConfig.Difficulty;
 import component.items.ItemBlock;
 
 /**
- * BoardLogic
+ * BoardLogic (AnimationManager 통합)
  * ------------
  * - 게임 전체 로직 관리
  * - 블럭 생성: RWS 기반 BlockBag 사용
  * - 속도 관리: SpeedManager로 위임
+ * - 애니메이션 충돌 방지: AnimationManager 중앙 관리
  */
 public class BoardLogic {
     public static final int WIDTH = GameState.WIDTH;
@@ -30,8 +31,8 @@ public class BoardLogic {
         this.resumeCallback = resume;
     }
 
-    private int comboCount = 0; // 연속 클리어 카운트
-    private long lastClearTime = 0; // 마지막 클리어 시간 (콤보 유지 확인용)
+    private int comboCount = 0;
+    private long lastClearTime = 0;
     private int shakeOffset = 0;
 
     public int getShakeOffset() {
@@ -50,8 +51,8 @@ public class BoardLogic {
     private final MovementService move = new MovementService(state);
     private final ClearService clear = new ClearService(state);
     private final BuffManager buff = new BuffManager();
-
-    private ItemManager item; // ItemManager는 bag 초기화 이후 생성
+    private final AnimationManager animMgr = new AnimationManager(); 
+    private ItemManager item;
 
     private final Consumer<Integer> onGameOver;
     private Runnable onFrameUpdate;
@@ -83,6 +84,9 @@ public class BoardLogic {
         // SpeedManager 난이도 적용
         speedManager.setDifficulty(diff);
 
+        // ClearService에 AnimationManager 주입
+        clear.setAnimationManager(animMgr);
+
         // 초기 블럭 준비
         refillPreview();
         state.setCurr(previewQueue.removeFirst());
@@ -110,25 +114,19 @@ public class BoardLogic {
 
     // === 이동 / 중력 ===
     public void moveDown() {
-
-        // if (clear.isClearing()) return;
-        
         if (move.canMove(state.getCurr(), state.getX(), state.getY() + 1)) {
             move.moveDown();
             score++;
         } else {
             fixBlock();
             if (gameOver) {
-                return; // 바로 탈출
+                return;
             }
         }
     }
 
     /** 블럭 고정 및 다음 블럭 생성 */
     private void fixBlock() {
-        // if(clear.isClearing()) {
-        //     return; // 클리어 애니메이션 중에는 고정하지 않음
-        // }
         var b = state.getCurr();
         var board = state.getBoard();
 
@@ -155,10 +153,9 @@ public class BoardLogic {
     /** 라인 클리어 처리 */
     private void clearLines() {
         // 클리어할 라인이 있는지 먼저 확인
-        int lines = clear.countFullLines(); // 새로운 메서드 필요
+        int lines = clear.countFullLines();
         
         if (lines == 0) {
-            // 라인이 없으면 pause/resume 없이 바로 진행
             comboCount = 0;
             return;
         }
@@ -206,35 +203,27 @@ public class BoardLogic {
 
     /** 다음 블럭 스폰 */
     private void spawnNext() {
-        // 현재 큐에 블럭이 부족하면 채워 넣기
         refillPreview();
 
-        // 다음 블럭을 꺼냄
         Block next;
         if (itemMode && nextIsItem) {
             next = item.generateItemBlock();
             nextIsItem = false;
         } else {
-            next = previewQueue.removeFirst(); // bag.next() 대신 previewQueue에서 꺼내기
+            next = previewQueue.removeFirst();
         }
 
-        // 현재 블럭으로 설정
         state.setCurr(next);
         state.setPosition(3, 0);
 
-        // 다시 부족하면 채워 넣기
         refillPreview();
-
-        // NEXT 큐 변경 알림 (여기서 3개 고정)
         fireNextQueueChanged();
 
-        // 스폰 즉시 충돌 여부 확인 (게임오버 감지)
         if (!move.canMove(next, state.getX(), state.getY())) {
             gameOver = true;
             System.out.println("[DEBUG] Game Over!");
             onGameOver.accept(score);
         }
-
     }
 
     // === 이동 입력 ===
@@ -348,6 +337,11 @@ public class BoardLogic {
         return state.getFadeLayer();
     }
 
+    /** AnimationManager Getter */
+    public AnimationManager getAnimationManager() {
+        return animMgr;
+    }
+
     /** HUD용 NEXT 블록 미리보기 */
     public List<Block> getNextBlocks() {
         return previewQueue.size() > 1
@@ -359,11 +353,9 @@ public class BoardLogic {
         this.onNextQueueUpdate = cb;
     }
 
-    // nextQueue가 바뀔 때마다 호출하는 유틸
     private void fireNextQueueChanged() {
         if (onNextQueueUpdate != null) {
-            onNextQueueUpdate.accept(List.copyOf(previewQueue)); // nextQueue는 내부 큐
+            onNextQueueUpdate.accept(List.copyOf(previewQueue));
         }
     }
-
 }
