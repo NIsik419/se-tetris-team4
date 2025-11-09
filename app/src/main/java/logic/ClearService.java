@@ -11,12 +11,19 @@ public class ClearService {
     private boolean skipDuringItem = false;
     private boolean clearing = false;
     private boolean animating = false;
+    
+    private AnimationManager animMgr; 
 
     private static final Color FLASH_WHITE = new Color(255, 255, 255, 250);
     private List<Integer> lastClearedRows = new ArrayList<>();
 
     public ClearService(GameState state) {
         this.state = state;
+    }
+    
+    /** AnimationManager 설정 */
+    public void setAnimationManager(AnimationManager mgr) {
+        this.animMgr = mgr;
     }
 
     /** 메인 라인 클리어 로직 */
@@ -25,6 +32,12 @@ public class ClearService {
             System.out.println("[WARN] clearLines() called while already clearing");
             return 0;
         }
+        
+        // 애니메이션 매니저 등록만 (대기 없음)
+        if (animMgr != null) {
+            animMgr.tryStart(AnimationManager.AnimationType.LINE_CLEAR);
+        }
+        
         clearing = true;
 
         var board = state.getBoard();
@@ -55,14 +68,9 @@ public class ClearService {
         int linesCleared = fullRows.size();
         System.out.println("[DEBUG] Clearing " + linesCleared + " lines: " + fullRows);
 
-        // 빠른 애니메이션 실행
+        // 빠른 애니메이션 실행 (내부에서 즉시 삭제)
         animateFastClear(fullRows, onFrameUpdate, () -> {
-            // 실제 삭제
-            for (int row : fullRows) {
-                Arrays.fill(board[row], null);
-            }
-            
-            // 중력 적용
+            // 중력 즉시 적용 (애니메이션 없음)
             applyGravityInstantly();
             
             // 화면 갱신
@@ -70,7 +78,13 @@ public class ClearService {
                 onFrameUpdate.run();
 
             clearing = false;
-            System.out.println("[DEBUG] Clear animation completed");
+            
+            // 애니메이션 종료 알림
+            if (animMgr != null) {
+                animMgr.finish(AnimationManager.AnimationType.LINE_CLEAR);
+            }
+            
+            System.out.println("[DEBUG] Clear + Gravity completed instantly");
 
             // 완료 콜백
             if (onComplete != null)
@@ -80,7 +94,7 @@ public class ClearService {
         return linesCleared;
     }
 
-    /** 빠른 클리어 애니메이션 (200ms 이내) */
+    /** 초고속 클리어 애니메이션 */
     private void animateFastClear(List<Integer> rows, Runnable onFrameUpdate, Runnable onComplete) {
         if (animating) {
             System.out.println("[WARN] Animation already running");
@@ -88,8 +102,14 @@ public class ClearService {
         }
         animating = true;
 
+        var board = state.getBoard();
         var fade = state.getFadeLayer();
         System.out.println("[DEBUG] Animation started on EDT: " + javax.swing.SwingUtilities.isEventDispatchThread());
+
+        // 라인을 즉시 삭제하고 애니메이션만 남김
+        for (int row : rows) {
+            Arrays.fill(board[row], null); // 즉시 삭제!
+        }
 
         // 1단계: 화이트 플래시 (즉시)
         for (int row : rows) {
@@ -98,18 +118,14 @@ public class ClearService {
             }
         }
         
-        // 디버그: fadeLayer 설정 확인
-        System.out.println("[DEBUG] fadeLayer[" + rows.get(0) + "][0] = " + fade[rows.get(0)][0]);
-        
         if (onFrameUpdate != null) {
             onFrameUpdate.run();
-            System.out.println("[DEBUG] Frame update called (flash)");
         }
-        
-       
-        Timer fadeTimer = new Timer(10, null);
+
+        // 2단계: 초고속 페이드 아웃 (5ms * 2프레임 = 10ms)
+        Timer fadeTimer = new Timer(5, null);
         final int[] frame = { 0 };
-        final int TOTAL_FRAMES = 1;
+        final int TOTAL_FRAMES = 2;
         
         fadeTimer.addActionListener(e -> {
             frame[0]++;
@@ -144,6 +160,7 @@ public class ClearService {
                 animating = false;
                 System.out.println("[DEBUG] Fade animation completed");
                 
+                // 중력 적용 후 완료
                 if (onComplete != null) {
                     onComplete.run();
                 }
@@ -163,6 +180,7 @@ public class ClearService {
 
     /** 즉시 중력 적용 */
     public void applyGravityInstantly() {
+        System.out.println("[DEBUG] applyGravityInstantly() called");
         if (skipDuringItem)
             return;
 
@@ -196,54 +214,14 @@ public class ClearService {
         applyGravityInstantly();
     }
 
-    /** 단계별 중력 애니메이션 */
+    /** 단계별 중력 애니메이션 (더 이상 사용 안 함 - 레거시) */
+    @Deprecated
     public void applyGravityStepwise(Runnable onFrameUpdate, Runnable onComplete) {
-        new Thread(() -> {
-            try {
-                Color[][] board = state.getBoard();
-                Color[][] fade = state.getFadeLayer();
-                boolean moved = true;
-
-                while (moved) {
-                    moved = false;
-
-                    for (int y = 0; y < GameState.HEIGHT; y++)
-                        Arrays.fill(fade[y], null);
-
-                    for (int y = GameState.HEIGHT - 2; y >= 0; y--) {
-                        for (int x = 0; x < GameState.WIDTH; x++) {
-                            if (board[y][x] != null && board[y + 1][x] == null) {
-                                fade[y + 1][x] = new Color(
-                                    board[y][x].getRed(),
-                                    board[y][x].getGreen(),
-                                    board[y][x].getBlue(), 150
-                                );
-
-                                board[y + 1][x] = board[y][x];
-                                board[y][x] = null;
-                                moved = true;
-                            }
-                        }
-                    }
-
-                    if (onFrameUpdate != null)
-                        onFrameUpdate.run();
-
-                    Thread.sleep(40);
-                }
-
-                for (int y = 0; y < GameState.HEIGHT; y++)
-                    Arrays.fill(fade[y], null);
-
-                if (onFrameUpdate != null)
-                    onFrameUpdate.run();
-
-                if (onComplete != null)
-                    onComplete.run();
-
-            } catch (InterruptedException ignored) {
-            }
-        }).start();
+        System.out.println("[WARN] applyGravityStepwise() is deprecated! Use instant gravity.");
+        // 즉시 중력으로 대체
+        applyGravityInstantly();
+        if (onFrameUpdate != null) onFrameUpdate.run();
+        if (onComplete != null) onComplete.run();
     }
 
     /** 꽉 찬 줄 찾기 */

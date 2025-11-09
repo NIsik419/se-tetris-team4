@@ -12,6 +12,7 @@ import blocks.Block;
 import logic.BoardLogic;
 import logic.ClearService;
 import logic.GameState;
+import logic.AnimationManager;
 
 /**
  * ⚡ LightningItem (곡선 전류 버전) - NPE 수정
@@ -33,6 +34,12 @@ public class LightningItem extends ItemBlock {
         var board = logic.getBoard();
         var fade = logic.getFadeLayer();
         var clear = logic.getClearService();
+        var animMgr = logic.getAnimationManager();
+
+        // ✅ 애니메이션 등록만 (대기 없음)
+        if (animMgr != null) {
+            animMgr.tryStart(AnimationManager.AnimationType.ITEM_EFFECT);
+        }
 
         clear.setSkipDuringItem(true);
 
@@ -146,16 +153,18 @@ public class LightningItem extends ItemBlock {
                     }
 
                     safeCallFrameUpdate(logic);
-                    Thread.sleep(40);
+                    Thread.sleep(10); // ✅ 15ms → 10ms (더 빠름!)
                 }
 
-                // 페이드아웃 잔광
-                for (int alpha = 180; alpha >= 0; alpha -= 40) {
+                // ✅ 페이드아웃 초고속 (1단계만)
+                for (int alpha = 180; alpha >= 0; alpha -= 180) {
                     for (Point p : ordered) {
-                        fade[p.y][p.x] = new Color(150, 220, 255, Math.max(alpha, 0));
+                        fade[p.y][p.x] = alpha > 0 
+                            ? new Color(150, 220, 255, Math.max(alpha, 0))
+                            : null;
                     }
                     safeCallFrameUpdate(logic);
-                    Thread.sleep(50);
+                    Thread.sleep(15); // ✅ 20ms → 15ms
                 }
 
                 // fadeLayer 클리어
@@ -168,8 +177,9 @@ public class LightningItem extends ItemBlock {
                 // 약한 흔들림 (게임판만)
                 shakeGamePanel(logic);
 
-                // 중력 및 라인 클리어
-                clear.applyGravityStepwise(safeGetFrameUpdate(logic), () -> {
+                // ✅ 셀 단위 중력 애니메이션 (빠르게)
+                applyCellGravityFast(logic, clear, () -> {
+                    // 중력 완료 후 점수 및 라인 클리어
                     logic.addScore(removeCount * 30);
                     clear.setSkipDuringItem(false);
 
@@ -178,9 +188,69 @@ public class LightningItem extends ItemBlock {
                         logic.addScore(combo * 100);
 
                     safeCallFrameUpdate(logic);
+                    
+                    // ✅ 애니메이션 종료 알림
+                    if (animMgr != null) {
+                        animMgr.finish(AnimationManager.AnimationType.ITEM_EFFECT);
+                    }
+                    
                     if (onComplete != null)
                         onComplete.run();
                 });
+
+            } catch (InterruptedException ignored) {
+            }
+        }).start();
+    }
+
+    /** ⚡ 빠른 셀 단위 중력 */
+    private void applyCellGravityFast(BoardLogic logic, ClearService clear, Runnable onComplete) {
+        new Thread(() -> {
+            try {
+                Color[][] board = logic.getBoard();
+                Color[][] fade = logic.getFadeLayer();
+                boolean moved = true;
+
+                while (moved) {
+                    moved = false;
+
+                    // fadeLayer 클리어
+                    for (int y = 0; y < GameState.HEIGHT; y++)
+                        for (int x = 0; x < GameState.WIDTH; x++)
+                            fade[y][x] = null;
+
+                    // 한 칸씩 아래로 이동
+                    for (int y = GameState.HEIGHT - 2; y >= 0; y--) {
+                        for (int x = 0; x < GameState.WIDTH; x++) {
+                            if (board[y][x] != null && board[y + 1][x] == null) {
+                                // 잔상 효과
+                                fade[y + 1][x] = new Color(
+                                    board[y][x].getRed(),
+                                    board[y][x].getGreen(),
+                                    board[y][x].getBlue(), 100
+                                );
+
+                                // 이동
+                                board[y + 1][x] = board[y][x];
+                                board[y][x] = null;
+                                moved = true;
+                            }
+                        }
+                    }
+
+                    safeCallFrameUpdate(logic);
+                    Thread.sleep(20); // ✅ 40ms → 20ms (2배 빠름)
+                }
+
+                // fadeLayer 완전 클리어
+                for (int y = 0; y < GameState.HEIGHT; y++)
+                    for (int x = 0; x < GameState.WIDTH; x++)
+                        fade[y][x] = null;
+
+                safeCallFrameUpdate(logic);
+
+                if (onComplete != null)
+                    onComplete.run();
 
             } catch (InterruptedException ignored) {
             }
@@ -191,10 +261,10 @@ public class LightningItem extends ItemBlock {
     private void shakeGamePanel(BoardLogic logic) {
         new Thread(() -> {
             try {
-                for (int i = 0; i < 5; i++) {
+                for (int i = 0; i < 2; i++) { // ✅ 3회 → 2회
                     logic.setShakeOffset((i % 2 == 0) ? 2 : -2);
                     safeCallFrameUpdate(logic);
-                    Thread.sleep(25);
+                    Thread.sleep(10); // ✅ 15ms → 10ms
                 }
                 logic.setShakeOffset(0);
                 safeCallFrameUpdate(logic);
