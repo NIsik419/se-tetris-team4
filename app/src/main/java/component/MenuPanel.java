@@ -38,12 +38,16 @@ import javax.swing.BoxLayout;
 import javax.swing.InputMap;
 import javax.swing.JButton;
 import javax.swing.JComponent;
+import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
 import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
 import javax.swing.Timer;                  // ADDED
+
+import versus.VersusFrame;
 
 public class MenuPanel extends JPanel {
 
@@ -235,10 +239,12 @@ public class MenuPanel extends JPanel {
 
         multiplayerSub = makeSubPanel();
         multiplayerSub.setAlignmentX(CENTER_ALIGNMENT);
-
-        multiplayerSub.add(makeSubButton("Normal Game", () ->
-            onStart.accept(new GameConfig(GameConfig.Mode.CLASSIC, GameConfig.Difficulty.NORMAL, false))
-        ));
+        multiplayerSub.add(makeSubButton("Normal Game", () -> {
+            // 현재 메뉴 창 닫고 대전 프레임 열기
+            JFrame f = (JFrame) SwingUtilities.getWindowAncestor(MenuPanel.this);
+            new VersusFrame();
+            if (f != null) f.dispose();
+        }));
         multiplayerSub.add(Box.createVerticalStrut(8));
 
         multiplayerSub.add(makeSubButton("Item", () ->
