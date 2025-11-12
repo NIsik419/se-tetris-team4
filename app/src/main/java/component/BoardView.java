@@ -13,10 +13,10 @@ public class BoardView extends JPanel {
     private ColorBlindPalette.Mode colorMode = ColorBlindPalette.Mode.NORMAL;
 
     // === 상수 통일 (Board 기준) ===
-    private static final int CELL_SIZE = 35;
+    private static final int CELL_SIZE = 25;
     private static final int CELL_GAP = 2;
-    private static final int ARC = 8;
-    private static final int MAX_HEIGHT = 700;
+    private static final int ARC = 6;
+    private static final int MAX_HEIGHT = 500;
     public static final int WIDTH = BoardLogic.WIDTH;
     public static final int HEIGHT = BoardLogic.HEIGHT;
     private static final Color GRID_LINE = new Color(50, 55, 70);
