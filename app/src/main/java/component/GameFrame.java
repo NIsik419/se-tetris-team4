@@ -3,29 +3,42 @@ package component;
 import javax.swing.*;
 import java.awt.*;
 
-
 public class GameFrame extends JFrame {
 
-    // 필드로 올리기
-    private final BoardPanel boardPanel;
+    // 단일 필드로 통합 (BoardPanel 또는 OnlineVersusPanel)
+    private final JPanel activePanel;
 
-    public GameFrame(GameConfig config) {
+    /**
+     * @param config  게임 설정
+     * @param p2pMode true면 온라인 대전 모드, false면 싱글 모드
+     * @param isServer true면 서버로 실행, false면 클라이언트
+     */
+    public GameFrame(GameConfig config, boolean p2pMode, boolean isServer) {
         super("SeoulTech SE Tetris");
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setLayout(new BorderLayout());
 
-        // 필드 초기화
-        this.boardPanel = new BoardPanel(config, this::returnToMenu);
-        add(boardPanel, BorderLayout.CENTER);
+        // 모드 분기
+        if (p2pMode) {
+            // 🧩 온라인 대전 모드
+            this.activePanel = new component.network.websocket.OnlineVersusPanel(isServer);
+        } else {
+            // 🎮 싱글 모드
+            this.activePanel = new BoardPanel(config, this::returnToMenu);
+        }
+
+        add(activePanel, BorderLayout.CENTER);
 
         pack();
         setSize(720, 800);
         setLocationRelativeTo(null);
         setVisible(true);
-        SwingUtilities.invokeLater(boardPanel::revalidate);
-        boardPanel.setFocusable(true);
-        boardPanel.requestFocusInWindow();
 
+        SwingUtilities.invokeLater(() -> {
+            activePanel.revalidate();
+            activePanel.setFocusable(true);
+            activePanel.requestFocusInWindow();
+        });
     }
 
     // 메뉴로 돌아가기 콜백
@@ -34,9 +47,9 @@ public class GameFrame extends JFrame {
         SwingUtilities.invokeLater(() -> new launcher.GameLauncher());
     }
 
-    // 외부에서 BoardPanel 접근할 수 있도록 getter
-    public BoardPanel getBoardPanel() {
-        return boardPanel;
+    // BoardPanel 접근자 (싱글모드일 때만 유효)
+    public JPanel getActivePanel() {
+        return activePanel;
     }
 
     public void updateTitle(String state) {
@@ -60,14 +73,11 @@ public class GameFrame extends JFrame {
             // 포커스 복구
             SwingUtilities.invokeLater(() -> {
                 setVisible(true);
-                if (boardPanel != null) {
-                    boardPanel.requestFocusInWindow();
-                }
+                activePanel.requestFocusInWindow();
             });
 
         } catch (Exception e) {
             System.err.println("[ERROR] Fullscreen toggle failed: " + e.getMessage());
         }
     }
-
 }
