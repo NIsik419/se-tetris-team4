@@ -1,12 +1,32 @@
 package launcher;
 
-import component.*;
-import component.config.*;
-import component.score.*;
-import javax.swing.*;
-import java.awt.*;
-import java.awt.event.*;
-import logic.BoardLogic;
+import java.awt.BorderLayout;
+import java.awt.CardLayout;
+import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.event.ActionEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+import java.awt.event.WindowListener;
+
+import javax.swing.AbstractAction;
+import javax.swing.ActionMap;
+import javax.swing.InputMap;
+import javax.swing.JComponent;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.KeyStroke;
+import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
+
+import component.GameConfig;
+import component.GameFrame;
+import component.MenuPanel;
+import component.config.Settings;
+import component.config.SettingsScreen;
+import component.score.ScoreBoard;
+import component.score.ScoreboardPanel;
 
 public class GameLauncher {
 

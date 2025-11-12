@@ -1,18 +1,43 @@
 package component;
 
-import logic.BoardLogic;
-import component.config.Settings;
-import component.score.ScoreBoard;
-import component.items.*;
-import component.ColorBlindPalette;             
-import javax.swing.*;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.GridBagLayout;
+import java.awt.event.ActionEvent;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
+import java.awt.event.HierarchyEvent;
+import java.awt.event.HierarchyListener;
+import java.util.function.BiConsumer;
+
+import javax.swing.AbstractAction;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.JComponent;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JLayeredPane;
+import javax.swing.JPanel;
+import javax.swing.KeyStroke;
+import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
-import java.awt.*;
-import java.awt.event.*;
-import component.score.NameInputOverlay;
-import component.score.ScoreboardOverlay;
-import component.sidebar.*;
+
+import component.MenuPanel.NavInput;
 import component.board.KeyBindingInstaller;
+import component.config.Settings;
+import component.items.ColorBombItem;
+import component.items.LightningItem;
+import component.items.LineClearItem;
+import component.items.SpinLockItem;
+import component.items.WeightItem;
+import component.score.NameInputOverlay;
+import component.score.ScoreBoard;
+import component.score.ScoreboardOverlay;
+import component.sidebar.NextPreviewPanel;
+import logic.BoardLogic;
 
 /**
  * BoardPanel
@@ -42,6 +67,9 @@ public class BoardPanel extends JPanel {
     private final Runnable onExitToMenu;
     private java.util.function.Consumer<Integer> onGameOver;
 
+    private BoardLogic.Context context = BoardLogic.Context.SINGLE;
+    private int playerId = 1;
+    private BiConsumer<Integer, int[]> attackRelay; // relay: (linesToSend, masks)
 
     /** 기본 생성자: 키맵(화살표/Space/P) 사용 */
     public BoardPanel(GameConfig config, Runnable onExitToMenu) {
@@ -49,7 +77,7 @@ public class BoardPanel extends JPanel {
     }
 
     /** 오버로드: wasMode=true면 키맵(WASD/F/R) 사용 */
-    public BoardPanel(GameConfig config, Runnable onExitToMenu, boolean wasMode, java.util.function.Consumer<Integer> onGameOver) {
+     public BoardPanel(GameConfig config, Runnable onExitToMenu, boolean wasMode, java.util.function.Consumer<Integer> onGameOver) {
         this.config = config;
         this.onExitToMenu = onExitToMenu;
         this.onGameOver = onGameOver;
@@ -69,6 +97,8 @@ public class BoardPanel extends JPanel {
                 showNameInputOverlay(score);
             }
         });
+          // default context SINGLE; external caller can switch to VERSUS via configureVersus(...)
+        this.logic.configureFor(this.context, this.playerId);
 
         this.boardView = new BoardView(logic);
         this.loop      = new GameLoop(logic, this::drawBoard);
@@ -145,7 +175,49 @@ public class BoardPanel extends JPanel {
             installer.install(boardView, deps, KeyBindingInstaller.KeySet.ARROWS, true); // P2 (방향키)
         }
     }
+     public BoardPanel(GameConfig config,
+                      Runnable onExitToMenu,
+                      boolean wasMode,
+                      java.util.function.Consumer<Integer> onGameOver,
+                      BoardLogic.Context context,
+                      int playerId) {
+        this(config, onExitToMenu, wasMode, onGameOver);
+        configureVersus(context, playerId);
+    }
+  // Expose a simple way for VersusFrame to put this panel in battle mode 
+    public void configureVersus(BoardLogic.Context context, int playerId) {
+        this.context = context;
+        this.playerId = playerId;
+        this.logic.configureFor(context, playerId);
+    }
+     // Relay my attack to opponent. VersusFrame should call setAttackRelay on both sides.
+    public void setAttackRelay(BiConsumer<Integer, int[]> relay) {
+        this.attackRelay = relay;
+        // Connect logic -> relay
+        logic.setAttackListener((fromPlayerId, linesToSend, masks) -> {
+            if (this.attackRelay != null) {
+                this.attackRelay.accept(linesToSend, masks);
+            }
+        });
+    }
 
+    /** Receive attack from opponent (VersusFrame calls this). */
+    public void receiveAttack(int lines, int[] masks) {
+        if (masks != null && masks.length > 0) {
+            logic.queueGarbageMasks(masks);
+        }
+        if (lines > 0) {
+            logic.queueGarbage(lines, true);
+        }
+        // BoardLogic will apply pending garbage safely after the current piece completes.
+    }
+    public void handleMenuInput(NavInput input) { }
+
+    public void switchMenu(int delta) { }
+    public void setSelectedMode(GameConfig.Mode mode) {  }
+    public GameConfig.Mode getSelectedMode() { return GameConfig.Mode.CLASSIC; }
+    public GameConfig.Difficulty getSelectedDifficulty() { return GameConfig.Difficulty.NORMAL; }
+    public GameConfig getCurrentConfig() { return new GameConfig(GameConfig.Mode.CLASSIC, GameConfig.Difficulty.NORMAL, false); }
     // 중앙에 BoardView를 넣고 비율 유지
     private Component centerBoard(JComponent view) {
         JPanel wrapper = new JPanel(new GridBagLayout());
