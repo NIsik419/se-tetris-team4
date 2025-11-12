@@ -237,7 +237,7 @@ public class BoardPanel extends JPanel {
                                     isRestarting = true;
                                     loop.stopLoop();
                                     frame.dispose();
-                                    new GameFrame(config);
+                                    new GameFrame(config,false,false);
                                 },
                                 onExitToMenu);
                         removeHierarchyListener(this);
@@ -291,7 +291,7 @@ public class BoardPanel extends JPanel {
                     JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
                     if (frame != null)
                         frame.dispose();
-                    new GameFrame(config);
+                    new GameFrame(config,false,false);
                 },
                 onExitToMenu);
 

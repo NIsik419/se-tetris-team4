@@ -168,8 +168,14 @@ public class BoardView extends JPanel {
                     Color color = ColorBlindPalette.convert(block.getColor(), colorMode);
                     drawCell(g2, x, y, color);
 
-                    if (block instanceof ItemBlock item)
+                    if (block instanceof LineClearItem lci) {
+                        if (i == lci.getLX() && j == lci.getLY()) {
+                            drawItemSymbol(g2, lci, x, y);
+                        }
+                    } else if (block instanceof ItemBlock item) {
+                        // 다른 아이템은 모든 칸에 표시
                         drawItemSymbol(g2, item, x, y);
+                    }
                 }
             }
         }
