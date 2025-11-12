@@ -139,7 +139,7 @@ public class OnlineVersusPanel extends JPanel {
         SwingUtilities.invokeLater(myView::requestFocusInWindow);
 
         /* 🔁 주기적 보드 동기화 (게임 시작 후에만) */
-        syncTimer = new Timer(300, e -> {
+        syncTimer = new Timer(200, e -> {
             if (gameStarted) {
                 adapter.sendBoardState();
             }
