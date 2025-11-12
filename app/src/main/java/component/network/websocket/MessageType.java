@@ -8,4 +8,5 @@ public enum MessageType {
     PING, PONG ,      // 지연 측정용
     PLAYER_READY ,   // 플레이어 준비 신호
     GAME_START ,     // 게임 시작 신호
+    MODE_SELECT    // 게임 모드 선택 신호
 }
