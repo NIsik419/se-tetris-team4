@@ -108,7 +108,6 @@ public class MenuPanel extends JPanel {
     private final List<JButton> navOrder = new ArrayList<>(); 
     private int navIndex = 0;
 
-  
     public MenuPanel(Consumer<GameConfig> onStart, Consumer<MenuItem> onSelect) {
         this.onStart = onStart;
         this.onSelect = onSelect;
