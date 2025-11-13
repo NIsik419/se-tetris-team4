@@ -53,10 +53,6 @@ public class Player {
         );
         this.logic = panel.getLogic();
 
-        // 이벤트 배선
-        logic.setOnNextQueueUpdate(nextAll -> {
-            if (this.events.onNext != null) this.events.onNext.accept(logic.getNextBlocks());
-        });
         logic.setOnLineCleared(lines -> {
             System.out.printf("[DEBUG %s] cleared %d lines%n", id, lines);
             if (this.events.onLineCleared != null) this.events.onLineCleared.accept(lines);

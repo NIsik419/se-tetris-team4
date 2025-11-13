@@ -70,6 +70,10 @@ public class BoardPanel extends JPanel {
             }
         });
 
+        if (config.mode() == GameConfig.Mode.ITEM) {
+            logic.setItemMode(true);
+        }
+
         this.boardView = new BoardView(logic);
         this.loop      = new GameLoop(logic, this::drawBoard);
 
@@ -80,9 +84,13 @@ public class BoardPanel extends JPanel {
         logic.setOnFrameUpdate(this::drawBoard);
 
         // NEXT 큐 변경 시 HUD 갱신
-        logic.setOnNextQueueUpdate(blocks ->
-                SwingUtilities.invokeLater(() -> nextPanel.setBlocks(blocks))
-        );
+        logic.setOnNextQueueUpdate(blocks -> {
+            System.out.println("[DEBUG] onNextQueueUpdate fired, blocks=" + blocks.size());
+            SwingUtilities.invokeLater(() -> {
+                nextPanel.setBlocks(blocks);
+                nextPanel.repaint();
+            });
+        });
 
         // 첫 렌더에서도 NEXT 보장
         SwingUtilities.invokeLater(() -> nextPanel.setBlocks(logic.getNextBlocks()));

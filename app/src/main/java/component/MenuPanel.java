@@ -328,14 +328,17 @@ public class MenuPanel extends JPanel {
         // 로컬 2P 대전 (옵션)
         multiplayerSub.add(makeSubButton("Local 2P (Same PC)", () -> {
             JFrame f = (JFrame) SwingUtilities.getWindowAncestor(MenuPanel.this);
-            new VersusFrame(); // ← 오프라인 2인용 대전
+            new VersusFrame(false); // ← 오프라인 2인용 대전
             if (f != null)
                 f.dispose();
         }));
         multiplayerSub.add(Box.createVerticalStrut(8));
 
-        multiplayerSub.add(makeSubButton("Item",
-                () -> onStart.accept(new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.NORMAL, false))));
+        multiplayerSub.add(makeSubButton("Item", () -> {
+            JFrame f = (JFrame) SwingUtilities.getWindowAncestor(MenuPanel.this);
+            new VersusFrame(true); // 아이템 모드 대전
+            if (f != null) f.dispose();
+        }));
         multiplayerSub.add(Box.createVerticalStrut(8));
 
         multiplayerSub.add(makeSubButton("TIME ATTACK", () -> onStart

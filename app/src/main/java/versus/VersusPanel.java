@@ -17,7 +17,7 @@ public class VersusPanel extends JPanel {
     private final JLabel p1Queue = new JLabel("0");
     private final JLabel p2Queue = new JLabel("0");
 
-    public VersusPanel() {
+    public VersusPanel(boolean itemMode) {
         setLayout(new BorderLayout(12, 0));
         setBackground(new Color(18, 22, 30));
 
@@ -28,12 +28,14 @@ public class VersusPanel extends JPanel {
         top.add(buildSmallHud("P2 Incoming", p2Queue));
         add(top, BorderLayout.NORTH);
 
+        var mode = itemMode ? GameConfig.Mode.ITEM : GameConfig.Mode.CLASSIC;
+
         // 매니저 생성(이벤트 배선 + HUD 콜백)
         Runnable backToMenu = () -> SwingUtilities.getWindowAncestor(this).dispose();
 
         manager = new VersusGameManager(
-                new GameConfig(GameConfig.Mode.CLASSIC, GameConfig.Difficulty.NORMAL, false),
-                new GameConfig(GameConfig.Mode.CLASSIC, GameConfig.Difficulty.NORMAL, false),
+                new GameConfig(mode, GameConfig.Difficulty.NORMAL, false),
+                new GameConfig(mode, GameConfig.Difficulty.NORMAL, false),
                 backToMenu,
                 pending -> p1Queue.setText(String.valueOf(pending)), // P1 라벨 갱신
                 pending -> p2Queue.setText(String.valueOf(pending))  // P2 라벨 갱신
@@ -74,9 +76,10 @@ public class VersusPanel extends JPanel {
     // 실행용
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
-            JFrame f = new JFrame("Versus Test");
+            boolean itemMode = false;
+            JFrame f = new JFrame(itemMode ? "Versus Test (Item)" : "Versus Test");
             f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-            f.setContentPane(new VersusPanel());
+            f.setContentPane(new VersusPanel(itemMode));
             f.setSize(1100, 800);
             f.setLocationRelativeTo(null);
             f.setVisible(true);
