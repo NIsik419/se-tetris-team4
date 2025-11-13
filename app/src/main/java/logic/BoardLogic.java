@@ -25,8 +25,8 @@ import component.network.websocket.*;
 public class BoardLogic {
     public static final int WIDTH = GameState.WIDTH;
     public static final int HEIGHT = GameState.HEIGHT;
-    private static final int MAX_INCOMING = 10;  // 최대 대기 줄 수
-    
+    private static final int MAX_INCOMING = 10; // 최대 대기 줄 수
+
     private Runnable pauseCallback;
     private Runnable resumeCallback;
     private Runnable onGameOverCallback;
@@ -45,11 +45,11 @@ public class BoardLogic {
     private java.util.function.IntConsumer onLineCleared;
     private Runnable beforeSpawnHook;
     private java.util.function.Consumer<int[]> onLinesClearedWithMasks;
-    private java.util.function.IntConsumer onIncomingChanged;  // ✅ Incoming 변경 알림
+    private java.util.function.IntConsumer onIncomingChanged; // ✅ Incoming 변경 알림
 
     // 방금 고정된 블록 칸 표시 (마스크 전송 시 제외 용도)
     private final boolean[][] recentPlaced = new boolean[HEIGHT][WIDTH];
-    
+
     // ✅ 대기 중인 가비지 라인 큐 (각 원소는 int 마스크)
     private final Queue<Integer> incomingGarbageQueue = new LinkedList<>();
     private int incomingCount = 0;
@@ -112,7 +112,7 @@ public class BoardLogic {
     public void setOnLinesClearedWithMasks(java.util.function.Consumer<int[]> cb) {
         this.onLinesClearedWithMasks = cb;
     }
-    
+
     public void setOnIncomingChanged(java.util.function.IntConsumer cb) {
         this.onIncomingChanged = cb;
     }
@@ -152,6 +152,8 @@ public class BoardLogic {
         var b = state.getCurr();
         var board = state.getBoard();
 
+        boolean blockOutOfBounds = false;
+
         // recentPlaced 초기화
         for (int yy = 0; yy < HEIGHT; yy++)
             Arrays.fill(recentPlaced[yy], false);
@@ -161,12 +163,23 @@ public class BoardLogic {
                 if (b.getShape(i, j) == 1) {
                     int bx = state.getX() + i;
                     int by = state.getY() + j;
+
+                    // 상단 넘으면 즉시 game over
+                    if (by < 0) {
+                        blockOutOfBounds = true;
+                        continue;
+                    }
+
                     if (bx >= 0 && bx < WIDTH && by >= 0 && by < HEIGHT) {
                         board[by][bx] = b.getColor();
                         recentPlaced[by][bx] = true;
                     }
                 }
             }
+        }
+        if(blockOutOfBounds) {
+            gameOver();
+            return;
         }
 
         if (itemMode && b instanceof ItemBlock ib) {
@@ -200,7 +213,7 @@ public class BoardLogic {
             return;
         }
 
-        // ✅ 2줄 이상 클리어 시에만 공격
+        // 2줄 이상 클리어 시에만 공격
         if (lines >= 2 && onLinesClearedWithMasks != null) {
             int[] masks = new int[lines];
             for (int i = 0; i < lines; i++) {
@@ -262,9 +275,9 @@ public class BoardLogic {
 
     /** 다음 블럭 스폰 (가비지 라인 먼저 추가) */
     private void spawnNext() {
-        // ✅ 대기 중인 가비지 라인 추가
+        // 대기 중인 가비지 라인 추가
         applyIncomingGarbage();
-        
+
         if (beforeSpawnHook != null)
             beforeSpawnHook.run();
 
@@ -289,21 +302,22 @@ public class BoardLogic {
         }
     }
 
-    /** ✅ 대기 중인 가비지 라인을 보드 하단에 추가 */
+    /** 대기 중인 가비지 라인을 보드 하단에 추가 */
     private void applyIncomingGarbage() {
-        if (incomingGarbageQueue.isEmpty()) return;
-        
+        if (incomingGarbageQueue.isEmpty())
+            return;
+
         var board = state.getBoard();
         int addedLines = 0;
-        
+
         while (!incomingGarbageQueue.isEmpty() && addedLines < incomingCount) {
-            int mask = incomingGarbageQueue.poll();  // ✅ int로 수정
-            
+            int mask = incomingGarbageQueue.poll(); // int로 수정
+
             // 한 줄 위로 밀기
             for (int y = 0; y < HEIGHT - 1; y++) {
                 board[y] = java.util.Arrays.copyOf(board[y + 1], WIDTH);
             }
-            
+
             // 맨 아래에 가비지 라인 추가
             Color[] last = new Color[WIDTH];
             for (int x = 0; x < WIDTH; x++) {
@@ -313,40 +327,41 @@ public class BoardLogic {
             board[HEIGHT - 1] = last;
             addedLines++;
         }
-        
+
         incomingCount = 0;
         fireIncomingChanged();
         System.out.println("[GARBAGE] " + addedLines + "줄 추가됨");
     }
 
-    /** ✅ 상대에게서 가비지 라인 수신 (큐에 추가) */
+    /** 상대에게서 가비지 라인 수신 (큐에 추가) */
     public void addGarbageMasks(int[] masks) {
-        if (masks == null || masks.length == 0) return;
-        
+        if (masks == null || masks.length == 0)
+            return;
+
         // 최대 10줄까지만 저장
         int toAdd = Math.min(masks.length, MAX_INCOMING - incomingCount);
-        
+
         if (toAdd < masks.length) {
             System.out.println("[GARBAGE] 큐 초과! " + masks.length + "줄 중 " + toAdd + "줄만 추가");
         }
-        
+
         for (int i = 0; i < toAdd; i++) {
-            incomingGarbageQueue.offer(masks[i]);  // ✅ int 하나씩 추가
+            incomingGarbageQueue.offer(masks[i]); 
             incomingCount++;
         }
-        
+
         fireIncomingChanged();
         System.out.println("[GARBAGE] 대기열에 " + toAdd + "줄 추가 (총 " + incomingCount + "줄)");
     }
 
-    /** ✅ Incoming 변경 알림 */
+    /** Incoming 변경 알림 */
     private void fireIncomingChanged() {
         if (onIncomingChanged != null) {
             onIncomingChanged.accept(incomingCount);
         }
     }
 
-    /** ✅ Incoming 카운트 조회 */
+    /** Incoming 카운트 조회 */
     public int getIncomingCount() {
         return incomingCount;
     }
@@ -522,4 +537,73 @@ public class BoardLogic {
             ex.printStackTrace();
         }
     }
+
+    /**
+     * 게임 상태 초기화 (대전 재시작용)
+     * -----------------------------------------
+     * - 보드, 점수, 라인 카운트, 블록 큐, 속도 모두 초기화
+     */
+    public void reset() {
+        //  보드 전체 비우기
+        Color[][] board = state.getBoard();
+        for (int y = 0; y < HEIGHT; y++) {
+            Arrays.fill(board[y], null);
+        }
+
+        //  Fade 레이어 초기화
+        Color[][] fade = state.getFadeLayer();
+        if (fade != null) {
+            for (int y = 0; y < HEIGHT; y++) {
+                Arrays.fill(fade[y], null);
+            }
+        }
+
+        //  상태 및 변수 초기화
+        state.reset(); // GameState 내부 블록, 위치 초기화
+        state.setCurr(null); //  현재 블록 제거
+        state.setPosition(3, 0);
+        score = 0;
+        clearedLines = 0;
+        deletedLinesTotal = 0;
+        incomingCount = 0;
+        comboCount = 0;
+        gameOver = false;
+        nextIsItem = false;
+
+        // 공격/가비지 큐 초기화
+        incomingGarbageQueue.clear();
+        recentPlacedInitialize();
+
+        //  블록 백 및 프리뷰 재설정
+        previewQueue.clear();
+        bag.reset(); // BlockBag 내부 nextBlocks 초기화 (직접 구현 필요)
+        refillPreview();
+        state.setCurr(previewQueue.removeFirst());
+        fireNextQueueChanged();
+
+        //  속도 리셋
+        speedManager.resetLevel();
+
+        //HUD/UI 초기화
+        SwingUtilities.invokeLater(() -> {
+            if (onFrameUpdate != null)
+                onFrameUpdate.run(); // 즉시 화면 갱신 요청
+        });
+
+        if (state.getCurr() == null && !previewQueue.isEmpty()) {
+            Block next = previewQueue.removeFirst();
+            state.setCurr(next);
+            state.setPosition(3, 0);
+        }
+
+        System.out.println("[RESET] BoardLogic reset complete.");
+    }
+
+    /** recentPlaced 배열 초기화 */
+    private void recentPlacedInitialize() {
+        for (int y = 0; y < HEIGHT; y++) {
+            Arrays.fill(recentPlaced[y], false);
+        }
+    }
+
 }

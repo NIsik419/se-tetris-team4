@@ -62,4 +62,20 @@ public class SpeedManager {
                 ", factor=" + increaseFactor +
                 '}';
     }
+
+    public void resetLevel() {
+    this.level = 1;
+    switch ((int) increaseFactor) {
+        case 1:  // NORMAL
+            this.dropInterval = 1000;
+            break;
+        case 0:  // EASY
+            this.dropInterval = 1200; 
+            break;
+        case 2:  // HARD
+            this.dropInterval = 800; 
+            break;
+    }
+}
+
 }

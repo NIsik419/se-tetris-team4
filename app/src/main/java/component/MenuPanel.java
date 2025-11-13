@@ -308,7 +308,7 @@ public class MenuPanel extends JPanel {
 
         multiplayerSub = makeSubPanel();
         multiplayerSub.setAlignmentX(CENTER_ALIGNMENT);
-        //  P2P 대전 모드
+        // P2P 대전 모드
         multiplayerSub.add(makeSubButton("Online P2P Battle", () -> {
             int choice = JOptionPane.showConfirmDialog(
                     MenuPanel.this,
@@ -733,4 +733,30 @@ public class MenuPanel extends JPanel {
                 ss[i] = 1.0f;
         }
     }
+
+    public void stopAllTimers() {
+        // 메인 배경 애니메이션 Timer
+        if (anim != null && anim.isRunning()) {
+            anim.stop();
+        }
+
+        // 모든 버튼에 있는 hover 타이머 제거
+        stopTimersRecursive(this);
+    }
+
+    private void stopTimersRecursive(Container container) {
+        for (var comp : container.getComponents()) {
+            if (comp instanceof JButton b) {
+                Object timerObj = b.getClientProperty("hoverTimer");
+                if (timerObj instanceof Timer t) {
+                    if (t.isRunning())
+                        t.stop();
+                }
+            }
+            if (comp instanceof Container c) {
+                stopTimersRecursive(c);
+            }
+        }
+    }
+
 }
