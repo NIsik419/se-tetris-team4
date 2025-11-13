@@ -87,13 +87,14 @@ public class OnlineVersusPanel extends JPanel {
 
         /* 보드 패널 */
         myLogic = new BoardLogic(score -> adapter.sendGameOver());
-        oppLogic = new BoardLogic(score -> {});
+        oppLogic = new BoardLogic(score -> {
+        });
         oppLogic.getState().setCurr(null);
 
         // 수정: 내 보드와 상대 보드 모두 Incoming 업데이트
         myLogic.setOnIncomingChanged(
                 count -> SwingUtilities.invokeLater(() -> myIncoming.setText(String.valueOf(count))));
-        
+
         oppLogic.setOnIncomingChanged(
                 count -> SwingUtilities.invokeLater(() -> oppIncoming.setText(String.valueOf(count))));
 
@@ -144,11 +145,18 @@ public class OnlineVersusPanel extends JPanel {
         /* 키 입력 */
         KeyBindingInstaller.Deps deps = new KeyBindingInstaller.Deps(
                 myLogic, myView::repaint,
-                () -> {}, () -> {}, () -> false,
-                () -> {}, () -> {},
-                loop::startLoop, loop::stopLoop, t -> {},
+                () -> {
+                }, () -> {
+                }, () -> false,
+                () -> {
+                }, () -> {
+                },
+                loop::startLoop, loop::stopLoop, t -> {
+                },
                 () -> ColorBlindPalette.Mode.NORMAL,
-                m -> {}, m -> {});
+                m -> {
+                }, m -> {
+                });
         new KeyBindingInstaller().install(myView, deps, KeyBindingInstaller.KeySet.ARROWS, false);
 
         myView.setFocusable(true);
@@ -263,7 +271,8 @@ public class OnlineVersusPanel extends JPanel {
 
         SwingUtilities.invokeLater(() -> {
             JRootPane root = SwingUtilities.getRootPane(OnlineVersusPanel.this);
-            if (root == null) return;
+            if (root == null)
+                return;
 
             JPanel glass = new JPanel(null);
             glass.setOpaque(false);
@@ -359,14 +368,15 @@ public class OnlineVersusPanel extends JPanel {
     // 수정: Game Over 오버레이 - gameOverPanel 참조 저장
     private void showGameOverOverlay(boolean iLost) {
         JRootPane root = SwingUtilities.getRootPane(this);
-        if (root == null) return;
+        if (root == null)
+            return;
 
         JPanel glass = (JPanel) root.getGlassPane();
         glass.removeAll();
         glass.setLayout(null);
         glass.setVisible(true);
 
-        gameOverPanel = new JPanel(); 
+        gameOverPanel = new JPanel(); // 참조 저장
         gameOverPanel.setLayout(new BoxLayout(gameOverPanel, BoxLayout.Y_AXIS));
         gameOverPanel.setBackground(new Color(20, 20, 25, 230));
         gameOverPanel.setBorder(BorderFactory.createEmptyBorder(40, 40, 40, 40));
@@ -395,9 +405,10 @@ public class OnlineVersusPanel extends JPanel {
         exitBtn.setFont(new Font("Arial", Font.BOLD, 16));
         exitBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
         exitBtn.addActionListener(e -> {
-            cleanup(); // 리소스 정리 추가
+            cleanupAll(); // 리소스 정리 추가
             Window w = SwingUtilities.getWindowAncestor(this);
-            if (w != null) w.dispose();
+            if (w != null)
+                w.dispose();
         });
         gameOverPanel.add(exitBtn);
 
@@ -452,7 +463,8 @@ public class OnlineVersusPanel extends JPanel {
     }
 
     private void startGame() {
-        if (gameStarted) return;
+        if (gameStarted)
+            return;
         gameStarted = true;
 
         lastPongTime = System.currentTimeMillis();
@@ -475,7 +487,8 @@ public class OnlineVersusPanel extends JPanel {
     /* ===== 네트워크 안정성 메서드 ===== */
 
     private void sendPing() {
-        if (!gameStarted) return;
+        if (!gameStarted)
+            return;
 
         lastPingTime = System.currentTimeMillis();
         client.send(new Message(MessageType.PING, lastPingTime));
@@ -502,7 +515,8 @@ public class OnlineVersusPanel extends JPanel {
     }
 
     private void checkConnection() {
-        if (!oppReady || !gameStarted) return;
+        if (!oppReady || !gameStarted)
+            return;
 
         long now = System.currentTimeMillis();
         long timeSinceLastPong = now - lastPongTime;
@@ -569,28 +583,27 @@ public class OnlineVersusPanel extends JPanel {
             if (root != null) {
                 root.getGlassPane().setVisible(false);
             }
-
             // 게임 루프 정지 후 리셋
             loop.stopLoop();
-            
+
             myLogic.reset();
             oppLogic.reset();
-            
+
             // 상대방 보드는 curr를 null로 유지 (초기화 때와 동일)
             oppLogic.getState().setCurr(null);
-            
+
             // Incoming 카운트 초기화
             myIncoming.setText("0");
             oppIncoming.setText("0");
-            
+
             // 화면 갱신
             myView.repaint();
             oppView.repaint();
-            
+
             gameStarted = true; // 게임 재시작
             loop.startLoop();
             myView.requestFocusInWindow();
-            
+
             System.out.println("[GAME] Restarted");
         });
     }
@@ -603,7 +616,6 @@ public class OnlineVersusPanel extends JPanel {
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
             JFrame f = new JFrame("Online Versus - Network Stability");
-            f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
             boolean isServer = JOptionPane.showConfirmDialog(f, "Start as server?", "P2P Setup",
                     JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION;
             OnlineVersusPanel panel = new OnlineVersusPanel(isServer);
@@ -611,6 +623,38 @@ public class OnlineVersusPanel extends JPanel {
             f.pack();
             f.setLocationRelativeTo(null);
             f.setVisible(true);
+
+            // 창 닫을 때 모든 리소스 정리 후 강제 종료
+            f.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+            f.addWindowListener(new java.awt.event.WindowAdapter() {
+                @Override
+                public void windowClosing(java.awt.event.WindowEvent e) {
+                    panel.cleanupAll();
+                    f.dispose();
+                    System.exit(0); // 강제 종료
+                }
+            });
         });
     }
+
+    private void cleanupAll() {
+        try {
+            if (syncTimer != null)
+                syncTimer.stop();
+            if (heartbeatTimer != null)
+                heartbeatTimer.stop();
+            if (connectionCheckTimer != null)
+                connectionCheckTimer.stop();
+            client.disconnect();
+            loop.stopLoop();
+            GameServer.stopServer();
+            System.out.println("=== Active Threads ===");
+            Thread.getAllStackTraces().keySet().forEach(t -> {
+                System.out.println(t.getName() + " / daemon=" + t.isDaemon());
+            });
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
 }
