@@ -19,8 +19,7 @@ public class HUDSidebar extends JPanel {
 
     // smaller preview boxes
     private final NextBlockPanel next1 = new NextBlockPanel(96);
-    private final NextBlockPanel next2 = new NextBlockPanel(96);
-    private final NextBlockPanel next3 = new NextBlockPanel(96);
+    
 
     public HUDSidebar() {
         setBackground(new Color(0x0F141C));
@@ -28,15 +27,14 @@ public class HUDSidebar extends JPanel {
         setPreferredSize(new Dimension(220, 720));
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 
-        add(title("Next"));
+        add(title("NEXT"));
         add(Box.createVerticalStrut(8));
 
         JPanel nextWrap = new JPanel();
         nextWrap.setOpaque(false);
-        nextWrap.setLayout(new GridLayout(3, 1, 10, 10));
+        nextWrap.setLayout(new GridLayout(1,1,0,0));
+        nextWrap.setMaximumSize(new Dimension(180, 140));
         nextWrap.add(next1);
-        nextWrap.add(next2);
-        nextWrap.add(next3);
         add(nextWrap);
 
         add(Box.createVerticalStrut(18));
@@ -71,8 +69,7 @@ public class HUDSidebar extends JPanel {
     /** Set up to 3 next shapes; extra slots may be null. */
     public void setNextQueue(List<char[][]> shapes) {
         next1.setShape(shapes.size() > 0 ? shapes.get(0) : null);
-        next2.setShape(shapes.size() > 1 ? shapes.get(1) : null);
-        next3.setShape(shapes.size() > 2 ? shapes.get(2) : null);
+    
     }
 
     public void reset() {

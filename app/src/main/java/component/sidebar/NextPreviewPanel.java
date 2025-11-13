@@ -1,13 +1,21 @@
 package component.sidebar;
 
-import blocks.Block;
-import component.ColorBlindPalette;
-import component.ColorBlindPalette.Mode;
-
-import javax.swing.*;
-import java.awt.*;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Dimension;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.GridLayout;
+import java.awt.RenderingHints;
 import java.util.ArrayList;
 import java.util.List;
+
+import javax.swing.JComponent;
+import javax.swing.JPanel;
+
+import blocks.Block;
+import component.ColorBlindPalette;
 
 public class NextPreviewPanel extends JPanel {
     private static final Color BG_PANEL = new Color(30, 35, 50);   
@@ -34,23 +42,11 @@ public class NextPreviewPanel extends JPanel {
         this.maxCount = Math.max(1, n);
     }
 
-    public void setBlocks(List<Block> nextBlocks) {
-        removeAll();
-        blocks.clear();
-
-        if (nextBlocks != null) {
-            int n = Math.min(maxCount, nextBlocks.size());
-            blocks.addAll(nextBlocks.subList(0, n));
+    public void setBlocks(List<Block> blocks) {
+       this.blocks.clear();
+       if (blocks != null && !blocks.isEmpty()) {
+            this.blocks.add(blocks.get(0));
         }
-
-        // GridLayout 행 수를 blocks.size()로 고정
-        setLayout(new GridLayout(blocks.size(), 1, 0, 10));
-
-        for (Block b : blocks) {
-            add(createCell(b));
-        }
-
-        revalidate();
         repaint();
     }
 

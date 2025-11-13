@@ -1,7 +1,6 @@
 package logic;
 
 import java.awt.Color;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
@@ -79,52 +78,7 @@ public class BoardLogic {
     private final LinkedList<Block> previewQueue = new LinkedList<>();
     private Consumer<List<Block>> onNextQueueUpdate;
 
-     public enum Context { SINGLE, VERSUS_NORMAL, VERSUS_ITEM, VERSUS_TIME }
-    private Context context = Context.SINGLE;
-    private int playerId = 1;
-
-    public void configureFor(Context ctx, int playerId) {
-        this.context = ctx;
-        this.playerId = playerId;
-    }
-
-    public interface AttackListener {
-        void onAttack(int fromPlayerId, int linesToSend, int[] masks);
-    }
-    private AttackListener attackListener;
-    public void setAttackListener(AttackListener l) { this.attackListener = l; }
-
-    private final java.util.concurrent.ConcurrentLinkedQueue<Integer> incomingLines =
-            new java.util.concurrent.ConcurrentLinkedQueue<>();
-    private final java.util.concurrent.ConcurrentLinkedQueue<int[]> incomingMasks =
-            new java.util.concurrent.ConcurrentLinkedQueue<>();
-
-    public void queueGarbage(int lines, boolean excludeLastPart) {
-        if (lines > 0) incomingLines.add(lines);
-    }
-
-    public void queueGarbageMasks(int[] masks) {
-        if (masks != null && masks.length > 0) incomingMasks.add(masks);
-    }
-
-    public int getPendingGarbageCount() {
-        int c = incomingLines.stream().mapToInt(Integer::intValue).sum();
-        for (int[] m : incomingMasks) c += m.length;
-        return c;
-    }
-
-    private void applyPendingGarbageIfSafe() {
-        if (isPieceActive()) return;
-        Integer n;
-        while ((n = incomingLines.poll()) != null) addGarbageLines(n);
-        int[] masks;
-        while ((masks = incomingMasks.poll()) != null) addGarbageMasks(masks);
-    }
-
-    private boolean isPieceActive() {
-        return state.getCurr() != null;
-    }
-
+     
     /** 기본 생성자 (NORMAL) */
     public BoardLogic(Consumer<Integer> onGameOver) {
         this(onGameOver, GameConfig.Difficulty.NORMAL);
@@ -239,30 +193,20 @@ public class BoardLogic {
         }
 
         // 2) 대전용: 최근 고정 블록(recentPlaced)을 제외한 마스크를 만들어 전송
-       
-        int[] masks = new int[lines];
-        for (int i = 0; i < lines; i++) {
-            int y = clearedRows.get(i);
-            int mask = 0;
-            for (int x = 0; x < WIDTH; x++) {
-                if (board[y][x] != null && !recentPlaced[y][x]) {
-                    mask |= (1 << x);
+        if (onLinesClearedWithMasks != null) {
+            int[] masks = new int[lines];
+            for (int i = 0; i < lines; i++) {
+                int y = clearedRows.get(i);
+                int mask = 0;
+                for (int x = 0; x < WIDTH; x++) {
+                    if (board[y][x] != null && !recentPlaced[y][x]) {
+                        mask |= (1 << x);
+                    }
                 }
+                masks[i] = mask;
             }
-            masks[i] = mask;
+            onLinesClearedWithMasks.accept(masks);
         }
-        if (onLinesClearedWithMasks != null)
-        onLinesClearedWithMasks.accept(masks);
-        if (context != Context.SINGLE && attackListener != null && lines >= 2) {
-            int send = switch (lines) {
-                case 2 -> 1;
-                case 3 -> 2;
-                case 4 -> 4;
-                default -> 0;
-            };
-            if (send > 0) attackListener.onAttack(playerId, send, masks);
-        }
-        
         // 다음 턴을 위해 recentPlaced 초기화
         for (int yy = 0; yy < HEIGHT; yy++) java.util.Arrays.fill(recentPlaced[yy], false);
 
@@ -320,7 +264,7 @@ public class BoardLogic {
 
         refillPreview();
         fireNextQueueChanged();
-        applyPendingGarbageIfSafe();
+        
 
         if (!move.canMove(next, state.getX(), state.getY())) {
             gameOver = true;
@@ -491,10 +435,12 @@ public class BoardLogic {
     }
 
     /** HUD용 NEXT 블록 미리보기 */
-    public List<Block> getNextBlocks() {
-        return previewQueue.size() > 1
-                ? new ArrayList<>(previewQueue.subList(0, Math.min(3, previewQueue.size())))
-                : List.of();
+    public java.util.List<blocks.Block> getNextBlocks() {
+    if (previewQueue.isEmpty()) {
+        return java.util.List.of();
+    }
+    // only the very next block
+    return java.util.List.of(previewQueue.getFirst());
     }
 
     public void setOnNextQueueUpdate(Consumer<List<Block>> cb) {
