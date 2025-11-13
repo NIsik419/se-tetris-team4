@@ -1,6 +1,8 @@
 package component.network.websocket;
 
 import javax.websocket.*;
+
+import java.io.IOException;
 import java.net.URI;
 import java.util.function.Consumer;
 
@@ -24,11 +26,21 @@ public class GameClient {
         this.onConnected = callback;
     }
 
+    public void disconnect() {
+        if (session != null && session.isOpen()) {
+            try {
+                session.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
     @OnOpen
     public void onOpen(Session session) {
         this.session = session;
         System.out.println("[Client] Connected to server: " + session.getId());
-        
+
         // 연결 성공 콜백 실행
         if (onConnected != null) {
             javax.swing.SwingUtilities.invokeLater(onConnected);
