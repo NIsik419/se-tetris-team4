@@ -422,19 +422,8 @@ public class BoardPanel extends JPanel {
         nextPanel.setColorMode(s.colorBlindMode);
     }
 
-<<<<<<< HEAD
-    public void stopLoop() {
-        if (loop != null)
-            loop.stopLoop();
-    }
-
-    public void pauseLoop() {
-        if (loop != null)
-            loop.pauseLoop();
-    }
-=======
     public void startLoop() { loop.startLoop(); }
     public void stopLoop() { if (loop != null) loop.stopLoop(); }
     public void pauseLoop() { if (loop != null) loop.pauseLoop(); } 
->>>>>>> b8d6bc76c259b030698eabb3708cb787fc6ffecc
+
 }
