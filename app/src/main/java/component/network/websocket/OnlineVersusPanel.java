@@ -9,18 +9,21 @@ import logic.BoardLogic;
 
 import javax.swing.*;
 import java.awt.*;
+import java.io.*;
 import java.net.InetAddress;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 
 /**
- * OnlineVersusPanel (수정 버전)
- * 수정 사항:
- * 1. 중복 메서드 제거 (restartGame vs startRestartGame)
- * 2. Incoming 라벨 업데이트 로직 수정
- * 3. 타이머 리소스 정리 추가
- * 4. 연결 상태 초기화 개선
- * 5. Game Over 오버레이 참조 수정
+ * OnlineVersusPanel (IP 자동 저장 기능 추가)
+ * 새로운 기능:
+ * 1. 서버 IP 자동 저장 (recent_server_ip.txt)
+ * 2. 이전 접속 IP 자동 불러오기
+ * 3. 첫 접속 시 localhost 기본값 사용
  */
 public class OnlineVersusPanel extends JPanel {
+
+    private static final String IP_SAVE_FILE = "recent_server_ip.txt";
 
     private final JLabel myIncoming = new JLabel("0");
     private final JLabel oppIncoming = new JLabel("0");
@@ -91,7 +94,6 @@ public class OnlineVersusPanel extends JPanel {
         });
         oppLogic.getState().setCurr(null);
 
-        // 수정: 내 보드와 상대 보드 모두 Incoming 업데이트
         myLogic.setOnIncomingChanged(
                 count -> SwingUtilities.invokeLater(() -> myIncoming.setText(String.valueOf(count))));
 
@@ -127,10 +129,21 @@ public class OnlineVersusPanel extends JPanel {
                 Thread.sleep(1000);
                 client.connect("ws://localhost:8081/game");
             } else {
-                String ip = JOptionPane.showInputDialog(this, "Enter server IP:", "localhost");
+                // IP 자동 불러오기 및 저장 기능
+                String recentIp = loadRecentServerIp();
+                String prompt = recentIp != null 
+                    ? "Enter server IP: (Recent: " + recentIp + ")"
+                    : "Enter server IP:";
+                
+                String ip = JOptionPane.showInputDialog(this, prompt, recentIp != null ? recentIp : "localhost");
+                
                 if (ip == null || ip.trim().isEmpty()) {
-                    ip = "localhost";
+                    ip = recentIp != null ? recentIp : "localhost";
                 }
+                
+                // IP 저장
+                saveRecentServerIp(ip);
+                
                 client.connect("ws://" + ip + ":8081/game");
             }
         } catch (Exception e) {
@@ -194,6 +207,40 @@ public class OnlineVersusPanel extends JPanel {
                 centerOverlay();
             }
         });
+    }
+
+    /* ===== IP 자동 저장/불러오기 메서드 ===== */
+
+    /**
+     * 최근 접속한 서버 IP를 파일에서 불러옵니다.
+     * @return 저장된 IP 주소, 없으면 null
+     */
+    private String loadRecentServerIp() {
+        try {
+            if (Files.exists(Paths.get(IP_SAVE_FILE))) {
+                String ip = Files.readString(Paths.get(IP_SAVE_FILE)).trim();
+                if (!ip.isEmpty()) {
+                    System.out.println("[IP] Loaded recent IP: " + ip);
+                    return ip;
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("[IP] Failed to load recent IP: " + e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * 서버 IP를 파일에 저장합니다.
+     * @param ip 저장할 IP 주소
+     */
+    private void saveRecentServerIp(String ip) {
+        try {
+            Files.writeString(Paths.get(IP_SAVE_FILE), ip);
+            System.out.println("[IP] Saved recent IP: " + ip);
+        } catch (IOException e) {
+            System.err.println("[IP] Failed to save IP: " + e.getMessage());
+        }
     }
 
     private JPanel buildHud(String title, JLabel label) {
@@ -365,7 +412,6 @@ public class OnlineVersusPanel extends JPanel {
         }
     }
 
-    // 수정: Game Over 오버레이 - gameOverPanel 참조 저장
     private void showGameOverOverlay(boolean iLost) {
         JRootPane root = SwingUtilities.getRootPane(this);
         if (root == null)
@@ -376,7 +422,7 @@ public class OnlineVersusPanel extends JPanel {
         glass.setLayout(null);
         glass.setVisible(true);
 
-        gameOverPanel = new JPanel(); // 참조 저장
+        gameOverPanel = new JPanel();
         gameOverPanel.setLayout(new BoxLayout(gameOverPanel, BoxLayout.Y_AXIS));
         gameOverPanel.setBackground(new Color(20, 20, 25, 230));
         gameOverPanel.setBorder(BorderFactory.createEmptyBorder(40, 40, 40, 40));
@@ -405,7 +451,7 @@ public class OnlineVersusPanel extends JPanel {
         exitBtn.setFont(new Font("Arial", Font.BOLD, 16));
         exitBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
         exitBtn.addActionListener(e -> {
-            cleanupAll(); // 리소스 정리 추가
+            cleanupAll();
             Window w = SwingUtilities.getWindowAncestor(this);
             if (w != null)
                 w.dispose();
@@ -444,7 +490,6 @@ public class OnlineVersusPanel extends JPanel {
         }
     }
 
-    // 수정: updateGameOverOverlay - null 체크 추가
     private void updateGameOverOverlay(String msg) {
         if (gameOverPanel != null && gameOverPanel.getComponentCount() > 0) {
             Component c = gameOverPanel.getComponent(0);
@@ -545,7 +590,6 @@ public class OnlineVersusPanel extends JPanel {
         });
     }
 
-    // 추가: 리소스 정리 메서드
     private void cleanup() {
         if (connectionCheckTimer != null && connectionCheckTimer.isRunning()) {
             connectionCheckTimer.stop();
@@ -572,35 +616,31 @@ public class OnlineVersusPanel extends JPanel {
         }
     }
 
-    // 수정: 중복 메서드 통합 (restartGame 제거, performRestart로 통일)
     private void performRestart() {
         SwingUtilities.invokeLater(() -> {
             myRestartReady = false;
             oppRestartReady = false;
-            gameStarted = false; // 상태 초기화 추가
+            gameStarted = false;
 
             JRootPane root = SwingUtilities.getRootPane(this);
             if (root != null) {
                 root.getGlassPane().setVisible(false);
             }
-            // 게임 루프 정지 후 리셋
+
             loop.stopLoop();
 
             myLogic.reset();
             oppLogic.reset();
 
-            // 상대방 보드는 curr를 null로 유지 (초기화 때와 동일)
             oppLogic.getState().setCurr(null);
 
-            // Incoming 카운트 초기화
             myIncoming.setText("0");
             oppIncoming.setText("0");
 
-            // 화면 갱신
             myView.repaint();
             oppView.repaint();
 
-            gameStarted = true; // 게임 재시작
+            gameStarted = true;
             loop.startLoop();
             myView.requestFocusInWindow();
 
@@ -624,14 +664,13 @@ public class OnlineVersusPanel extends JPanel {
             f.setLocationRelativeTo(null);
             f.setVisible(true);
 
-            // 창 닫을 때 모든 리소스 정리 후 강제 종료
             f.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
             f.addWindowListener(new java.awt.event.WindowAdapter() {
                 @Override
                 public void windowClosing(java.awt.event.WindowEvent e) {
                     panel.cleanupAll();
                     f.dispose();
-                    System.exit(0); // 강제 종료
+                    System.exit(0);
                 }
             });
         });
