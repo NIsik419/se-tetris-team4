@@ -4,7 +4,7 @@ import logic.BoardLogic;
 import component.config.Settings;
 import component.score.ScoreBoard;
 import component.items.*;
-import component.ColorBlindPalette;             
+import component.ColorBlindPalette;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
@@ -42,14 +42,14 @@ public class BoardPanel extends JPanel {
     private final Runnable onExitToMenu;
     private java.util.function.Consumer<Integer> onGameOver;
 
-
     /** 기본 생성자: 키맵(화살표/Space/P) 사용 */
     public BoardPanel(GameConfig config, Runnable onExitToMenu) {
         this(config, onExitToMenu, false, null);
     }
 
     /** 오버로드: wasMode=true면 키맵(WASD/F/R) 사용 */
-    public BoardPanel(GameConfig config, Runnable onExitToMenu, boolean wasMode, java.util.function.Consumer<Integer> onGameOver) {
+    public BoardPanel(GameConfig config, Runnable onExitToMenu, boolean wasMode,
+            java.util.function.Consumer<Integer> onGameOver) {
         this.config = config;
         this.onExitToMenu = onExitToMenu;
         this.onGameOver = onGameOver;
@@ -75,7 +75,7 @@ public class BoardPanel extends JPanel {
         }
 
         this.boardView = new BoardView(logic);
-        this.loop      = new GameLoop(logic, this::drawBoard);
+        this.loop = new GameLoop(logic, this::drawBoard);
 
         // 루프 제어 콜백 연결
         logic.setLoopControl(loop::pauseLoop, loop::resumeLoop);
@@ -94,7 +94,6 @@ public class BoardPanel extends JPanel {
 
         // 첫 렌더에서도 NEXT 보장
         SwingUtilities.invokeLater(() -> nextPanel.setBlocks(logic.getNextBlocks()));
-
 
         // === 레이아웃 구성 ===
         add(centerBoard(boardView), BorderLayout.CENTER);
@@ -134,19 +133,26 @@ public class BoardPanel extends JPanel {
                     onExitToMenu.run();
                 },
                 () -> pausePanel != null && pausePanel.isVisible(), // 현재 일시정지 여부
-                () -> { if (pausePanel != null) pausePanel.showPanel(); }, // 일시정지 ON
-                () -> { if (pausePanel != null) pausePanel.hidePanel(); }, // 일시정지 OFF
-                loop::resumeLoop,  // 일시정지 해제 시 루프 재개
-                loop::pauseLoop,   // 일시정지 시 루프 정지
+                () -> {
+                    if (pausePanel != null)
+                        pausePanel.showPanel();
+                }, // 일시정지 ON
+                () -> {
+                    if (pausePanel != null)
+                        pausePanel.hidePanel();
+                }, // 일시정지 OFF
+                loop::resumeLoop, // 일시정지 해제 시 루프 재개
+                loop::pauseLoop, // 일시정지 시 루프 정지
                 title -> { // 타이틀 설정
                     JFrame f = (JFrame) SwingUtilities.getWindowAncestor(this);
-                    if (f != null) f.setTitle(title);
+                    if (f != null)
+                        f.setTitle(title);
                 },
                 () -> settings != null ? settings.colorBlindMode : ColorBlindPalette.Mode.NORMAL, // 현재 색맹모드
                 mode -> boardView.setColorMode(mode), // 색맹모드 변경 시
-                mode -> nextPanel.setColorMode(mode)  // nextPanel 동기화
+                mode -> nextPanel.setColorMode(mode) // nextPanel 동기화
         );
-        
+
         if (wasMode) {
             installer.install(boardView, deps, KeyBindingInstaller.KeySet.WASD, false); // P1 (WASD)
         } else {
@@ -179,21 +185,36 @@ public class BoardPanel extends JPanel {
         hud.add(title);
         hud.add(Box.createRigidArea(new Dimension(0, 15)));
 
-        hud.add(createStatPanel("SCORE", scoreLabel));
-        hud.add(Box.createRigidArea(new Dimension(0, 10)));
-        hud.add(createStatPanel("LEVEL", levelLabel));
-        hud.add(Box.createRigidArea(new Dimension(0, 10)));
-        hud.add(createStatPanel("LINES", linesLabel));
-        hud.add(Box.createRigidArea(new Dimension(0, 15)));
-
         JLabel nextLabel = new JLabel("NEXT");
         nextLabel.setFont(new Font("Arial", Font.BOLD, 18));
         nextLabel.setForeground(Color.WHITE);
         nextLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         hud.add(nextLabel);
         hud.add(Box.createRigidArea(new Dimension(0, 8)));
-        hud.add(nextPanel);
-        hud.add(Box.createVerticalGlue());
+
+        // Next panel wrapper (높이 제한)
+        JPanel nextWrapper = new JPanel(new BorderLayout());
+        nextWrapper.setBackground(new Color(20, 25, 35));
+
+        // 원하는 높이 지정 
+        int nextHeight = 110;
+
+        nextWrapper.setPreferredSize(new Dimension(200, nextHeight));
+        nextWrapper.setMaximumSize(new Dimension(200, nextHeight));
+        nextWrapper.setMinimumSize(new Dimension(200, nextHeight));
+
+        nextWrapper.add(nextPanel, BorderLayout.CENTER);
+        hud.add(nextWrapper);
+
+        // 아래 여백
+        hud.add(Box.createRigidArea(new Dimension(0, 20)));
+
+        hud.add(createStatPanel("SCORE", scoreLabel));
+        hud.add(Box.createRigidArea(new Dimension(0, 10)));
+        hud.add(createStatPanel("LEVEL", levelLabel));
+        hud.add(Box.createRigidArea(new Dimension(0, 10)));
+        hud.add(createStatPanel("LINES", linesLabel));
+        hud.add(Box.createRigidArea(new Dimension(0, 15)));
 
         JLabel controls = new JLabel("P:Pause | F11:Full | ESC:Exit");
         controls.setFont(new Font("Arial", Font.PLAIN, 11));
@@ -245,7 +266,7 @@ public class BoardPanel extends JPanel {
                                     isRestarting = true;
                                     loop.stopLoop();
                                     frame.dispose();
-                                    new GameFrame(config,false,false);
+                                    new GameFrame(config, false, false);
                                 },
                                 onExitToMenu);
                         removeHierarchyListener(this);
@@ -299,7 +320,7 @@ public class BoardPanel extends JPanel {
                     JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
                     if (frame != null)
                         frame.dispose();
-                    new GameFrame(config,false,false);
+                    new GameFrame(config, false, false);
                 },
                 onExitToMenu);
 
@@ -401,6 +422,13 @@ public class BoardPanel extends JPanel {
         nextPanel.setColorMode(s.colorBlindMode);
     }
 
-    public void stopLoop() { if (loop != null) loop.stopLoop(); }
-    public void pauseLoop() { if (loop != null) loop.pauseLoop(); } 
+    public void stopLoop() {
+        if (loop != null)
+            loop.stopLoop();
+    }
+
+    public void pauseLoop() {
+        if (loop != null)
+            loop.pauseLoop();
+    }
 }
