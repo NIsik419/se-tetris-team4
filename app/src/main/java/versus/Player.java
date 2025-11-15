@@ -77,11 +77,8 @@ public class Player {
         if (lines <= 0) return;
         System.out.printf("[PLAYER %s] enqueue g=%d pending=%d%n", id, lines, pendingMasks.size());
 
-        if (pendingMasks.size() >= 10) return; // 이미 10줄이면 무시
-
         final java.util.Random r = new java.util.Random();
         for (int i = 0; i < lines; i++) {
-            if (pendingMasks.size() >= 10) break; // cap 유지
             int hole = r.nextInt(BoardLogic.WIDTH);
             int mask = 0;
             for (int x = 0; x < BoardLogic.WIDTH; x++) {
@@ -97,12 +94,8 @@ public class Player {
         System.out.printf("[PLAYER %s] enqueueMasks len=%d pending=%d%n", id, masks.length, pendingMasks.size());
 
         for (int m : masks) {
-            if (pendingMasks.size() >= 10) {
-                // 10줄 초과 시 제일 아래(가장 오래된) 줄을 잘라내고 추가
-                pendingMasks.removeFirst();
+                pendingMasks.addLast(m);
             }
-            pendingMasks.addLast(m);
-        }
     }
 
     /** 스폰 직전에 호출되어 보드에 garbage 실제 주입 (오래된→최신 순서로 바닥부터) */
@@ -126,5 +119,6 @@ public class Player {
     public int getScore() { return logic.getScore(); }
 
     public void stop() { panel.stopLoop(); }
+    public void start() {panel.startLoop(); }
 
 }

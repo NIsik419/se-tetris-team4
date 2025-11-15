@@ -154,9 +154,9 @@ public class BoardPanel extends JPanel {
         );
 
         if (wasMode) {
-            installer.install(boardView, deps, KeyBindingInstaller.KeySet.WASD, false); // P1 (WASD)
+            installer.install(boardView, deps, KeyBindingInstaller.KeySet.WASD, false, false); // P1 (WASD)
         } else {
-            installer.install(boardView, deps, KeyBindingInstaller.KeySet.ARROWS, true); // P2 (방향키)
+            installer.install(boardView, deps, KeyBindingInstaller.KeySet.ARROWS, true, false); // P2 (방향키)
         }
     }
 
@@ -422,6 +422,7 @@ public class BoardPanel extends JPanel {
         nextPanel.setColorMode(s.colorBlindMode);
     }
 
+<<<<<<< HEAD
     public void stopLoop() {
         if (loop != null)
             loop.stopLoop();
@@ -431,4 +432,9 @@ public class BoardPanel extends JPanel {
         if (loop != null)
             loop.pauseLoop();
     }
+=======
+    public void startLoop() { loop.startLoop(); }
+    public void stopLoop() { if (loop != null) loop.stopLoop(); }
+    public void pauseLoop() { if (loop != null) loop.pauseLoop(); } 
+>>>>>>> b8d6bc76c259b030698eabb3708cb787fc6ffecc
 }

@@ -1,6 +1,7 @@
 package versus;
 
 import component.GameConfig;
+import component.PausePanel;
 
 import javax.swing.*;
 import java.awt.*;
@@ -13,6 +14,7 @@ import java.awt.*;
 public class VersusPanel extends JPanel {
 
     private VersusGameManager manager;
+    private PausePanel pausePanel;
 
     private final JLabel p1Queue = new JLabel("0");
     private final JLabel p2Queue = new JLabel("0");
@@ -51,6 +53,53 @@ public class VersusPanel extends JPanel {
         // 초기 HUD 동기화 (optional)
         p1Queue.setText(String.valueOf(manager.getP1Pending()));
         p2Queue.setText(String.valueOf(manager.getP2Pending()));
+
+        SwingUtilities.invokeLater(() -> {
+            JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
+            if (frame == null) return;
+
+            pausePanel = new PausePanel(
+                    frame,
+                    () -> { // CONTINUE
+                        manager.resumeBoth();
+                        pausePanel.hidePanel();
+                    },
+                    () -> { // RESTART 
+                        manager.pauseBoth();
+                        frame.setContentPane(new VersusPanel(itemMode));
+                        frame.revalidate();
+                    },
+                    () -> { // EXIT
+                        manager.pauseBoth();
+                        backToMenu.run();
+                    }
+            );
+            // ESC 키로 pause 토글
+            setupPauseKeyBinding();
+        });
+    }
+
+    private void setupPauseKeyBinding() {
+        InputMap im = getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        ActionMap am = getActionMap();
+
+        im.put(KeyStroke.getKeyStroke("P"), "togglePause");
+        im.put(KeyStroke.getKeyStroke("R"), "togglePause");
+        
+        am.put("togglePause", new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                if (pausePanel == null) return;
+
+                if (pausePanel.isVisible()) {
+                    manager.resumeBoth();
+                    pausePanel.hidePanel();
+                } else {
+                    manager.pauseBoth();
+                    pausePanel.showPanel();
+                }
+            }
+        });
     }
 
     private JPanel buildSmallHud(String title, JLabel value) {

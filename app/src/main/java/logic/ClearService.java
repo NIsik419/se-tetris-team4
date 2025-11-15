@@ -194,23 +194,25 @@ public class ClearService {
 
         Color[][] board = state.getBoard();
 
-        // 아래부터 위로 스캔하며 빈 줄 채우기
-        for (int y = GameState.HEIGHT - 1; y > 0; y--) {
-            if (isRowEmpty(board[y])) {
-                // 위에서 비어있지 않은 줄 찾기
-                int above = y - 1;
-                while (above >= 0 && isRowEmpty(board[above])) {
-                    above--;
-                }
+        int write = GameState.HEIGHT - 1; // 블럭을 써 내려갈 위치
 
-                if (above >= 0) {
-                    // 한 줄씩 내리기
+        // 아래에서 위로 스캔하면서 non-empty 줄만 아래로 복사
+        for (int read = GameState.HEIGHT - 1; read >= 0; read--) {
+            if (!isRowEmpty(board[read])) {
+                if (write != read) {
                     for (int x = 0; x < GameState.WIDTH; x++) {
-                        board[y][x] = board[above][x];
-                        board[above][x] = null;
+                        board[write][x] = board[read][x];
+                        board[read][x] = null;
                     }
-                    y++; // 같은 y를 다시 체크
                 }
+                write--;
+            }
+        }
+
+        // 나머지 위쪽 줄은 전부 비우기
+        for (int y = write; y >= 0; y--) {
+            for (int x = 0; x < GameState.WIDTH; x++) {
+                board[y][x] = null;
             }
         }
     }
