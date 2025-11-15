@@ -65,4 +65,8 @@ public class BoardSyncAdapter {
             }
         }
     }
+
+    public void sendScore(int score) {
+        client.send(new Message(MessageType.SCORE_UPDATE, score));
+    }
 }
