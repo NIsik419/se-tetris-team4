@@ -149,9 +149,17 @@ public class BoardPanel extends JPanel {
                         f.setTitle(title);
                 },
                 () -> settings != null ? settings.colorBlindMode : ColorBlindPalette.Mode.NORMAL, // 현재 색맹모드
-                mode -> boardView.setColorMode(mode), // 색맹모드 변경 시
-                mode -> nextPanel.setColorMode(mode) // nextPanel 동기화
-        );
+                mode -> {
+                    boardView.setColorMode(mode);
+                    nextPanel.setColorMode(mode);
+                },
+
+                // onColorModeChanged: Settings 에 저장
+                mode -> {
+                    if (settings != null) {
+                        settings.colorBlindMode = mode;
+                    }
+                });
 
         if (wasMode) {
             installer.install(boardView, deps, KeyBindingInstaller.KeySet.WASD, false, false); // P1 (WASD)
@@ -196,7 +204,7 @@ public class BoardPanel extends JPanel {
         JPanel nextWrapper = new JPanel(new BorderLayout());
         nextWrapper.setBackground(new Color(20, 25, 35));
 
-        // 원하는 높이 지정 
+        // 원하는 높이 지정
         int nextHeight = 110;
 
         nextWrapper.setPreferredSize(new Dimension(200, nextHeight));
@@ -422,8 +430,18 @@ public class BoardPanel extends JPanel {
         nextPanel.setColorMode(s.colorBlindMode);
     }
 
-    public void startLoop() { loop.startLoop(); }
-    public void stopLoop() { if (loop != null) loop.stopLoop(); }
-    public void pauseLoop() { if (loop != null) loop.pauseLoop(); } 
+    public void startLoop() {
+        loop.startLoop();
+    }
+
+    public void stopLoop() {
+        if (loop != null)
+            loop.stopLoop();
+    }
+
+    public void pauseLoop() {
+        if (loop != null)
+            loop.pauseLoop();
+    }
 
 }

@@ -111,6 +111,7 @@ public class KeyBindingInstaller {
                 d.setColorMode.accept(mode);
                 d.onColorModeChanged.accept(mode);
                 d.drawBoard.run();
+                
                 d.setTitle.accept("TETRIS - " + mode.name());
                 System.out.println("[DEBUG] Color mode switched → " + mode.name());
             }
