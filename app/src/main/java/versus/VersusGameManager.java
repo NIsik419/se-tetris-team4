@@ -110,4 +110,14 @@ public class VersusGameManager {
 
     public Player getP1() { return p1; }
     public Player getP2() { return p2; }
+
+    public void pauseBoth() {
+        p1.stop();
+        p2.stop();
+    }
+
+    public void resumeBoth() {
+        p1.start();
+        p2.start();
+    }
 }
