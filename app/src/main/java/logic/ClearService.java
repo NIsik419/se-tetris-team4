@@ -2,6 +2,9 @@ package logic;
 
 import java.awt.Color;
 import javax.swing.Timer;
+
+import logic.ParticleSystem.Particle;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -14,6 +17,8 @@ public class ClearService {
 
     private AnimationManager animMgr;
 
+    private ParticleSystem particleSystem = new ParticleSystem();
+
     private static final Color FLASH_WHITE = new Color(255, 255, 255, 250);
     private List<Integer> lastClearedRows = new ArrayList<>();
 
@@ -24,6 +29,10 @@ public class ClearService {
     /** AnimationManager 설정 */
     public void setAnimationManager(AnimationManager mgr) {
         this.animMgr = mgr;
+    }
+
+    public ParticleSystem getParticleSystem() {
+        return particleSystem;
     }
 
     /** 메인 라인 클리어 로직 */
@@ -69,30 +78,76 @@ public class ClearService {
         System.out.println("[DEBUG] Clearing " + linesCleared + " lines: " + fullRows);
 
         // 빠른 애니메이션 실행 (내부에서 즉시 삭제)
-        animateFastClear(fullRows, onFrameUpdate, () -> {
-            // 중력 즉시 적용 (애니메이션 없음)
+        animateWithParticles(fullRows, onFrameUpdate, () -> {
             applyGravityInstantly();
 
-            // 화면 갱신
             if (onFrameUpdate != null)
                 onFrameUpdate.run();
 
             clearing = false;
 
-            // 애니메이션 종료 알림
             if (animMgr != null) {
                 animMgr.finish(AnimationManager.AnimationType.LINE_CLEAR);
             }
 
-            System.out.println("[DEBUG] Clear + Gravity completed instantly");
+            System.out.println("[DEBUG] Clear + Gravity completed with particles");
 
-            // 완료 콜백
             if (onComplete != null)
                 onComplete.run();
         });
 
         return linesCleared;
     }
+
+    /** 파티클 효과 애니메이션 */
+    private void animateWithParticles(List<Integer> rows, Runnable onFrameUpdate, Runnable onComplete) {
+        if (animating)
+            return;
+        animating = true;
+
+        var board = state.getBoard();
+
+        // 1. 파티클 생성 (각 블록마다)
+        final int CELL_SIZE = 25; // BoardView의 CELL_SIZE와 동일하게 설정
+        for (int row : rows) {
+            particleSystem.createLineParticles(row, board, CELL_SIZE, GameState.WIDTH);
+        }
+
+        // 2. 블록 즉시 삭제 (잔상 없음)
+        for (int row : rows) {
+            Arrays.fill(board[row], null);
+        }
+
+        animating=false;
+        if (onFrameUpdate != null)
+            onFrameUpdate.run();
+
+        // 3. 파티클 애니메이션 
+        Timer particleTimer = new Timer(8, null);
+        final int[] frame = { 0 };
+        final int MAX_FRAMES = 5;
+
+        particleTimer.addActionListener(e -> {
+            frame[0]++;
+
+            // 파티클 업데이트
+            particleSystem.update();
+
+            if (onFrameUpdate != null)
+                onFrameUpdate.run();
+
+            // 30프레임 또는 파티클이 모두 사라지면 종료
+            if (frame[0] >= MAX_FRAMES || particleSystem.getParticles().isEmpty()) {
+                ((Timer) e.getSource()).stop();
+                particleSystem.clear();
+                animating = false;
+                if (onComplete != null)
+                    onComplete.run();
+            }
+        });
+        particleTimer.start();
+    }
+
 
     /** 초고속 클리어 애니메이션 */
     private void animateFastClear(List<Integer> rows, Runnable onFrameUpdate, Runnable onComplete) {
@@ -110,9 +165,9 @@ public class ClearService {
             onFrameUpdate.run();
 
         // 즉시 삭제 대신 잠깐 색 유지 -> 페이드 아웃 중에 null 처리
-        Timer fadeTimer = new Timer(25, null); // 조금 느리게 (25ms)
+        Timer fadeTimer = new Timer(10, null); // 조금 느리게 (25ms)
         final int[] frame = { 0 };
-        final int TOTAL_FRAMES = 5;
+        final int TOTAL_FRAMES = 4;
 
         fadeTimer.addActionListener(e -> {
             frame[0]++;
@@ -132,7 +187,7 @@ public class ClearService {
             if (onFrameUpdate != null)
                 onFrameUpdate.run();
 
-            if (frame[0] == 2) {
+            if (frame[0] == TOTAL_FRAMES / 2) {
                 // 중간쯤에서 실제 블록 제거
                 for (int row : rows) {
                     Arrays.fill(board[row], null);

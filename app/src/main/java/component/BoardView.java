@@ -1,10 +1,12 @@
 package component;
 
 import logic.BoardLogic;
+import logic.ParticleSystem;
 import blocks.Block;
 import component.items.*;
 import javax.swing.*;
 import java.awt.*;
+import java.util.List; // ⭐ 추가
 import logic.MovementService;
 
 public class BoardView extends JPanel {
@@ -45,19 +47,6 @@ public class BoardView extends JPanel {
         g2.setComposite(AlphaComposite.SrcOver.derive(0.9f));
 
         Color[][] grid = logic.getBoard();
-        Color[][] fade = logic.getFadeLayer();
-
-        // 디버그: fadeLayer 상태 확인
-        int fadeCount = 0;
-        for (int y = 0; y < BoardLogic.HEIGHT; y++) {
-            for (int x = 0; x < BoardLogic.WIDTH; x++) {
-                if (fade[y][x] != null)
-                    fadeCount++;
-            }
-        }
-        if (fadeCount > 0) {
-            System.out.println("[DEBUG] paintComponent() - fadeLayer has " + fadeCount + " non-null cells");
-        }
 
         // ===배경 격자 ===
         g2.setColor(GRID_LINE);
@@ -75,14 +64,8 @@ public class BoardView extends JPanel {
             }
         }
 
-        // === fadeLayer는 무조건 위에 덮어씌우기 ===
-        for (int y = 0; y < BoardLogic.HEIGHT; y++) {
-            for (int x = 0; x < BoardLogic.WIDTH; x++) {
-                if (fade[y][x] != null) {
-                    drawFade(g2, x, y, fade[y][x]);
-                }
-            }
-        }
+        // === ⭐ fadeLayer 제거 (파티클 사용으로 대체) ===
+        // 기존 fadeLayer 코드는 주석 처리하거나 제거
 
         // === Ghost 블록 ===
         drawGhostBlock(g2);
@@ -92,26 +75,71 @@ public class BoardView extends JPanel {
         if (curr != null)
             drawCurrentBlock(g2, curr);
 
+        // === ⭐ 파티클 렌더링 (맨 위에) ===
+        drawParticles(g2);
+
         g2.dispose();
     }
 
-    private void drawFade(Graphics2D g2, int x, int y, Color fadeColor) {
-        int px = x * CELL_SIZE + CELL_GAP;
-        int py = y * CELL_SIZE + CELL_GAP;
-        int size = CELL_SIZE - CELL_GAP * 2;
-
-        // 배경을 꽉 채움 (화이트 플래시가 확실히 보임)
-        g2.setColor(fadeColor);
-        g2.fillRoundRect(px, py, size, size, ARC, ARC);
-
-        //
-        int alpha = fadeColor.getAlpha();
-        if (alpha > 150) {
-            g2.setColor(new Color(255, 255, 255, Math.min(255, alpha + 50)));
-            g2.setStroke(new BasicStroke(2));
-            g2.drawRoundRect(px, py, size, size, ARC, ARC);
+    /** ⭐ 파티클 렌더링 */
+    private void drawParticles(Graphics2D g2) {
+        ParticleSystem particles = logic.getClearService().getParticleSystem();
+        List<ParticleSystem.Particle> particleList = particles.getParticles();
+        
+        // 안티앨리어싱 강화 (부드러운 파티클)
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+        
+        for (ParticleSystem.Particle p : particleList) {
+            float alpha = p.getAlpha();
+            
+            // 파티클 색상 (알파 적용)
+            Color c = new Color(
+                p.color.getRed() / 255f,
+                p.color.getGreen() / 255f,
+                p.color.getBlue() / 255f,
+                alpha
+            );
+            
+            int px = (int) p.x;
+            int py = (int) p.y;
+            
+            // 메인 파티클 (원형)
+            g2.setColor(c);
+            g2.fillOval(px - p.size / 2, py - p.size / 2, p.size, p.size);
+            
+            // 빛나는 효과 (높은 알파일 때)
+            if (alpha > 0.6f) {
+                Color glow = new Color(1f, 1f, 1f, alpha * 0.4f);
+                g2.setColor(glow);
+                int glowSize = p.size + 2;
+                g2.fillOval(px - glowSize / 2, py - glowSize / 2, glowSize, glowSize);
+            }
+            
+            // 선택: 꼬리 효과 (속도가 빠를 때)
+            double speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+            if (speed > 2.0 && alpha > 0.5f) {
+                g2.setColor(new Color(
+                    p.color.getRed() / 255f,
+                    p.color.getGreen() / 255f,
+                    p.color.getBlue() / 255f,
+                    alpha * 0.3f
+                ));
+                
+                // 꼬리 방향 계산
+                int tailX = (int) (px - p.vx * 2);
+                int tailY = (int) (py - p.vy * 2);
+                
+                g2.setStroke(new BasicStroke(Math.max(1, p.size / 2)));
+                g2.drawLine(px, py, tailX, tailY);
+            }
         }
     }
+
+    // ⭐ drawFade 메서드 제거 또는 사용 안 함
+    // private void drawFade(Graphics2D g2, int x, int y, Color fadeColor) {
+    //     // 파티클 시스템으로 대체됨
+    // }
 
     /** 기본 셀 렌더링 */
     private void drawCell(Graphics2D g2, int x, int y, Color color) {
@@ -175,7 +203,6 @@ public class BoardView extends JPanel {
                             drawItemSymbol(g2, lci, x, y);
                         }
                     } else if (block instanceof ItemBlock item) {
-                        // 다른 아이템은 모든 칸에 표시
                         drawItemSymbol(g2, item, x, y);
                     }
                 }
