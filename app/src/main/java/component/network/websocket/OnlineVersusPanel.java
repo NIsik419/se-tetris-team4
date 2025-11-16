@@ -13,6 +13,7 @@ import javax.swing.*;
 import blocks.Block;
 import java.util.List;
 import java.awt.*;
+import java.awt.event.WindowListener;
 import java.io.*;
 import java.net.InetAddress;
 import java.nio.file.Files;
@@ -213,12 +214,12 @@ public class OnlineVersusPanel extends JPanel {
         myView.setFocusable(true);
         SwingUtilities.invokeLater(myView::requestFocusInWindow);
 
-        /*  점수/레벨 업데이트 타이머 */
+        /* 점수/레벨 업데이트 타이머 */
         Timer hudTimer = new Timer(100, e -> {
             if (gameStarted) {
                 mySidebar.setScore(myLogic.getScore());
                 mySidebar.setLevel(myLogic.getLevel());
-                mySidebar.setNextBlocks(myLogic.getNextBlocks()); 
+                mySidebar.setNextBlocks(myLogic.getNextBlocks());
 
                 oppSidebar.setScore(oppLogic.getScore());
                 oppSidebar.setLevel(oppLogic.getLevel());
@@ -632,13 +633,162 @@ public class OnlineVersusPanel extends JPanel {
             lagLabel.setForeground(new Color(255, 100, 100));
 
             JOptionPane.showMessageDialog(this,
-                    "Connection lost! Game ended.",
+                    "Connection lost! Returning to lobby...",
                     "Network Error",
                     JOptionPane.ERROR_MESSAGE);
 
+            // 창을 닫지 않고 초기 상태로 리셋
+            resetToInitialState();
+        });
+    }
+
+    /**
+     * P2P 대전 모드 초기 상태로 돌아갑니다.
+     * 서버/클라이언트 선택 화면으로 복귀합니다.
+     */
+    private void resetToInitialState() {
+        SwingUtilities.invokeLater(() -> {
+            // 1. 게임 상태 초기화
+            gameStarted = false;
+            isReady = false;
+            oppReady = false;
+            myRestartReady = false;
+            oppRestartReady = false;
+
+            // 2. 보드 리셋
+            myLogic.reset();
+            oppLogic.reset();
+            oppLogic.getState().setCurr(null);
+
+            // 3. HUD 리셋
+            myIncoming.setText("0");
+            oppIncoming.setText("0");
+            lagLabel.setText("Connection: OK");
+            lagLabel.setForeground(new Color(100, 255, 100));
+
+            // 4. 화면 갱신
+            myView.repaint();
+            oppView.repaint();
+
+            // 5. 기존 오버레이 제거
+            JRootPane root = SwingUtilities.getRootPane(this);
+            if (root != null) {
+                root.getGlassPane().setVisible(false);
+            }
+
+            // 6. 새로운 서버/클라이언트 선택
+            int choice = JOptionPane.showConfirmDialog(
+                    this,
+                    "Start as server?",
+                    "P2P Setup - Reconnect",
+                    JOptionPane.YES_NO_CANCEL_OPTION);
+
+            if (choice == JOptionPane.CANCEL_OPTION) {
+                // 취소 시 메인 메뉴로 복귀
+                returnToMainMenu();
+                return;
+            }
+
+            // 7. 새로운 연결 시도
+            boolean newIsServer = (choice == JOptionPane.YES_OPTION);
+            reconnect(newIsServer);
+        });
+    }
+
+    /**
+     * 새로운 서버/클라이언트로 재연결을 시도합니다.
+     */
+    private void reconnect(boolean newIsServer) {
+        try {
+            // 기존 클라이언트 정리
+            if (client != null) {
+                client.disconnect();
+            }
+
+            isServer = newIsServer;
+
+            // 새로운 클라이언트 생성 및 교체
+            GameClient newClient = new GameClient(this::onNetworkMessage);
+
+            newClient.setOnConnected(() -> {
+                System.out.println("[DEBUG] Reconnected!");
+                isReady = true;
+                lastPongTime = System.currentTimeMillis();
+                newClient.send(new Message(MessageType.PLAYER_READY, "ready"));
+                updateOverlay("Connected! Waiting for opponent...");
+                checkReadyState();
+            });
+
+            if (isServer) {
+                // 서버 재시작
+                GameServer.stopServer();
+                Thread.sleep(500);
+                GameServer.startServer(8081);
+                Thread.sleep(1000);
+                newClient.connect("ws://localhost:8081/game");
+            } else {
+                // 클라이언트 - IP 입력
+                String recentIp = loadRecentServerIp();
+                String prompt = recentIp != null
+                        ? "Enter server IP: (Recent: " + recentIp + ")"
+                        : "Enter server IP:";
+
+                String ip = JOptionPane.showInputDialog(this, prompt,
+                        recentIp != null ? recentIp : "localhost");
+
+                if (ip == null || ip.trim().isEmpty()) {
+                    // 입력 취소 시 메인 메뉴로
+                    returnToMainMenu();
+                    return;
+                }
+
+                saveRecentServerIp(ip);
+                newClient.connect("ws://" + ip + ":8081/game");
+            }
+
+            // ⭐ adapter 업데이트 (이 부분을 먼저 해야 함)
+            adapter = new BoardSyncAdapter(myLogic, oppLogic, newClient);
+
+            // 새로운 오버레이 생성
+            createOverlay();
+
+            System.out.println("[RECONNECT] Successfully reconnected as " +
+                    (isServer ? "server" : "client"));
+
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this,
+                    "Reconnection failed: " + e.getMessage(),
+                    "Error",
+                    JOptionPane.ERROR_MESSAGE);
+
+            // 재연결 실패 시에도 메인 메뉴로 복귀
+            returnToMainMenu();
+        }
+    }
+
+    /**
+     * 메인 메뉴로 돌아갑니다.
+     * GameFrame을 닫으면 GameLauncher의 WindowListener가 자동으로 메뉴로 복귀시킵니다.
+     */
+    private void returnToMainMenu() {
+        cleanupAll();
+
+        SwingUtilities.invokeLater(() -> {
             Window window = SwingUtilities.getWindowAncestor(this);
+
+            System.out.println("[DEBUG] returnToMainMenu called");
+            System.out.println("[DEBUG] Window: " + window);
+            System.out.println("[DEBUG] Window class: " + (window != null ? window.getClass().getName() : "null"));
+
             if (window != null) {
-                window.dispose();
+                WindowListener[] listeners = window.getWindowListeners();
+                System.out.println("[DEBUG] WindowListeners count: " + listeners.length);
+                for (int i = 0; i < listeners.length; i++) {
+                    System.out.println("[DEBUG] Listener " + i + ": " + listeners[i].getClass().getName());
+                }
+
+                window.dispose(); // GameFrame 닫기 → GameLauncher가 메뉴 표시
+                System.out.println("[DEBUG] window.dispose() called");
             }
         });
     }
@@ -675,6 +825,7 @@ public class OnlineVersusPanel extends JPanel {
             oppRestartReady = false;
             gameStarted = false;
 
+            // 게임 오버 오버레이 제거
             JRootPane root = SwingUtilities.getRootPane(this);
             if (root != null) {
                 root.getGlassPane().setVisible(false);
@@ -682,22 +833,29 @@ public class OnlineVersusPanel extends JPanel {
 
             loop.stopLoop();
 
+            // 보드 리셋
             myLogic.reset();
             oppLogic.reset();
-
             oppLogic.getState().setCurr(null);
 
+            // HUD 리셋
             myIncoming.setText("0");
             oppIncoming.setText("0");
 
             myView.repaint();
             oppView.repaint();
 
-            gameStarted = true;
-            loop.startLoop();
-            myView.requestFocusInWindow();
+            // ⭐ 대기 상태로 복귀 (Start 버튼 다시 활성화)
+            isReady = true;
+            oppReady = true;
 
-            System.out.println("[GAME] Restarted");
+            // 새로운 대기 오버레이 생성
+            createOverlay();
+            updateOverlay("Ready! Press Start");
+            startButton.setEnabled(true);
+            startButton.setBackground(new Color(50, 180, 80));
+
+            System.out.println("[GAME] Returned to lobby (waiting state)");
         });
     }
 
