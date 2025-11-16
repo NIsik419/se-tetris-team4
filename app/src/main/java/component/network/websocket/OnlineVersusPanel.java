@@ -3,28 +3,38 @@ package component.network.websocket;
 import component.GameConfig;
 import component.GameLoop;
 import component.board.KeyBindingInstaller;
+import component.sidebar.HUDSidebar;
 import component.BoardView;
 import component.ColorBlindPalette;
 import logic.BoardLogic;
-
+import blocks.Block;
 import javax.swing.*;
+
+import blocks.Block;
+import java.util.List;
 import java.awt.*;
+import java.io.*;
 import java.net.InetAddress;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 
 /**
- * OnlineVersusPanel (수정 버전)
- * 수정 사항:
- * 1. 중복 메서드 제거 (restartGame vs startRestartGame)
- * 2. Incoming 라벨 업데이트 로직 수정
- * 3. 타이머 리소스 정리 추가
- * 4. 연결 상태 초기화 개선
- * 5. Game Over 오버레이 참조 수정
+ * OnlineVersusPanel (IP 자동 저장 기능 추가)
+ * 새로운 기능:
+ * 1. 서버 IP 자동 저장 (recent_server_ip.txt)
+ * 2. 이전 접속 IP 자동 불러오기
+ * 3. 첫 접속 시 localhost 기본값 사용
  */
 public class OnlineVersusPanel extends JPanel {
+
+    private static final String IP_SAVE_FILE = "recent_server_ip.txt";
 
     private final JLabel myIncoming = new JLabel("0");
     private final JLabel oppIncoming = new JLabel("0");
     private final JLabel lagLabel = new JLabel("Connection: OK");
+
+    private HUDSidebar mySidebar;
+    private HUDSidebar oppSidebar;
 
     private final BoardLogic myLogic;
     private final BoardLogic oppLogic;
@@ -66,10 +76,11 @@ public class OnlineVersusPanel extends JPanel {
         setLayout(new BorderLayout(0, 0));
         setBackground(new Color(18, 22, 30));
 
-        /* 상단 HUD */
+        /* 상단 HUD - 높이 고정 */
         JPanel topHud = new JPanel(new GridLayout(1, 3, 20, 0));
         topHud.setBackground(new Color(18, 22, 30));
         topHud.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
+        topHud.setPreferredSize(new Dimension(0, 80)); // 높이 고정
         topHud.add(buildHud("My Incoming", myIncoming));
 
         // 중앙 연결 상태 표시
@@ -85,28 +96,57 @@ public class OnlineVersusPanel extends JPanel {
         topHud.add(buildHud("Opponent Incoming", oppIncoming));
         add(topHud, BorderLayout.NORTH);
 
-        /* 보드 패널 */
+        /* 보드 로직 초기화 */
         myLogic = new BoardLogic(score -> adapter.sendGameOver());
         oppLogic = new BoardLogic(score -> {
         });
         oppLogic.getState().setCurr(null);
 
-        // 수정: 내 보드와 상대 보드 모두 Incoming 업데이트
         myLogic.setOnIncomingChanged(
                 count -> SwingUtilities.invokeLater(() -> myIncoming.setText(String.valueOf(count))));
-
         oppLogic.setOnIncomingChanged(
                 count -> SwingUtilities.invokeLater(() -> oppIncoming.setText(String.valueOf(count))));
 
         myView = new BoardView(myLogic);
         oppView = new BoardView(oppLogic);
 
-        JPanel boardsPanel = new JPanel(new GridLayout(1, 2, 20, 0));
+        /* 중앙 컨테이너 - 사이드바 + 보드들 */
+        JPanel centerContainer = new JPanel(new BorderLayout(0, 0));
+        centerContainer.setBackground(new Color(18, 22, 30));
+
+        // 왼쪽 사이드바 (나)
+        mySidebar = new HUDSidebar();
+        mySidebar.setPreferredSize(new Dimension(160, 0)); // 폭 고정
+        centerContainer.add(mySidebar, BorderLayout.WEST);
+
+        // 보드 패널 - GridBagLayout으로 중앙 정렬
+        JPanel boardsContainer = new JPanel(new GridBagLayout());
+        boardsContainer.setBackground(new Color(18, 22, 30));
+        boardsContainer.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.weightx = 1.0;
+        gbc.weighty = 1.0;
+        gbc.anchor = GridBagConstraints.CENTER;
+        gbc.insets = new Insets(0, 10, 0, 10);
+
+        // 보드들을 담을 패널 - 내 보드가 왼쪽
+        JPanel boardsPanel = new JPanel(new GridLayout(1, 2, 30, 0));
         boardsPanel.setBackground(new Color(18, 22, 30));
-        boardsPanel.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
         boardsPanel.add(myView);
         boardsPanel.add(oppView);
-        add(boardsPanel, BorderLayout.CENTER);
+
+        boardsContainer.add(boardsPanel, gbc);
+        centerContainer.add(boardsContainer, BorderLayout.CENTER);
+
+        // 오른쪽 사이드바 (상대)
+        oppSidebar = new HUDSidebar();
+        oppSidebar.setPreferredSize(new Dimension(160, 0)); // 폭 고정
+        centerContainer.add(oppSidebar, BorderLayout.EAST);
+
+        add(centerContainer, BorderLayout.CENTER);
 
         /* 네트워크 초기화 */
         client = new GameClient(this::onNetworkMessage);
@@ -127,10 +167,21 @@ public class OnlineVersusPanel extends JPanel {
                 Thread.sleep(1000);
                 client.connect("ws://localhost:8081/game");
             } else {
-                String ip = JOptionPane.showInputDialog(this, "Enter server IP:", "localhost");
+                // IP 자동 불러오기 및 저장 기능
+                String recentIp = loadRecentServerIp();
+                String prompt = recentIp != null
+                        ? "Enter server IP: (Recent: " + recentIp + ")"
+                        : "Enter server IP:";
+
+                String ip = JOptionPane.showInputDialog(this, prompt, recentIp != null ? recentIp : "localhost");
+
                 if (ip == null || ip.trim().isEmpty()) {
-                    ip = "localhost";
+                    ip = recentIp != null ? recentIp : "localhost";
                 }
+
+                // IP 저장
+                saveRecentServerIp(ip);
+
                 client.connect("ws://" + ip + ":8081/game");
             }
         } catch (Exception e) {
@@ -161,6 +212,19 @@ public class OnlineVersusPanel extends JPanel {
 
         myView.setFocusable(true);
         SwingUtilities.invokeLater(myView::requestFocusInWindow);
+
+        /*  점수/레벨 업데이트 타이머 */
+        Timer hudTimer = new Timer(100, e -> {
+            if (gameStarted) {
+                mySidebar.setScore(myLogic.getScore());
+                mySidebar.setLevel(myLogic.getLevel());
+                mySidebar.setNextBlocks(myLogic.getNextBlocks()); 
+
+                oppSidebar.setScore(oppLogic.getScore());
+                oppSidebar.setLevel(oppLogic.getLevel());
+            }
+        });
+        hudTimer.start();
 
         /* 동기화 타이머 */
         syncTimer = new Timer(300, e -> {
@@ -194,6 +258,42 @@ public class OnlineVersusPanel extends JPanel {
                 centerOverlay();
             }
         });
+    }
+
+    /* ===== IP 자동 저장/불러오기 메서드 ===== */
+
+    /**
+     * 최근 접속한 서버 IP를 파일에서 불러옵니다.
+     * 
+     * @return 저장된 IP 주소, 없으면 null
+     */
+    private String loadRecentServerIp() {
+        try {
+            if (Files.exists(Paths.get(IP_SAVE_FILE))) {
+                String ip = Files.readString(Paths.get(IP_SAVE_FILE)).trim();
+                if (!ip.isEmpty()) {
+                    System.out.println("[IP] Loaded recent IP: " + ip);
+                    return ip;
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("[IP] Failed to load recent IP: " + e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * 서버 IP를 파일에 저장합니다.
+     * 
+     * @param ip 저장할 IP 주소
+     */
+    private void saveRecentServerIp(String ip) {
+        try {
+            Files.writeString(Paths.get(IP_SAVE_FILE), ip);
+            System.out.println("[IP] Saved recent IP: " + ip);
+        } catch (IOException e) {
+            System.err.println("[IP] Failed to save IP: " + e.getMessage());
+        }
     }
 
     private JPanel buildHud(String title, JLabel label) {
@@ -365,7 +465,6 @@ public class OnlineVersusPanel extends JPanel {
         }
     }
 
-    // 수정: Game Over 오버레이 - gameOverPanel 참조 저장
     private void showGameOverOverlay(boolean iLost) {
         JRootPane root = SwingUtilities.getRootPane(this);
         if (root == null)
@@ -376,7 +475,7 @@ public class OnlineVersusPanel extends JPanel {
         glass.setLayout(null);
         glass.setVisible(true);
 
-        gameOverPanel = new JPanel(); // 참조 저장
+        gameOverPanel = new JPanel();
         gameOverPanel.setLayout(new BoxLayout(gameOverPanel, BoxLayout.Y_AXIS));
         gameOverPanel.setBackground(new Color(20, 20, 25, 230));
         gameOverPanel.setBorder(BorderFactory.createEmptyBorder(40, 40, 40, 40));
@@ -405,7 +504,7 @@ public class OnlineVersusPanel extends JPanel {
         exitBtn.setFont(new Font("Arial", Font.BOLD, 16));
         exitBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
         exitBtn.addActionListener(e -> {
-            cleanupAll(); // 리소스 정리 추가
+            cleanupAll();
             Window w = SwingUtilities.getWindowAncestor(this);
             if (w != null)
                 w.dispose();
@@ -444,7 +543,6 @@ public class OnlineVersusPanel extends JPanel {
         }
     }
 
-    // 수정: updateGameOverOverlay - null 체크 추가
     private void updateGameOverOverlay(String msg) {
         if (gameOverPanel != null && gameOverPanel.getComponentCount() > 0) {
             Component c = gameOverPanel.getComponent(0);
@@ -545,7 +643,6 @@ public class OnlineVersusPanel extends JPanel {
         });
     }
 
-    // 추가: 리소스 정리 메서드
     private void cleanup() {
         if (connectionCheckTimer != null && connectionCheckTimer.isRunning()) {
             connectionCheckTimer.stop();
@@ -572,35 +669,31 @@ public class OnlineVersusPanel extends JPanel {
         }
     }
 
-    // 수정: 중복 메서드 통합 (restartGame 제거, performRestart로 통일)
     private void performRestart() {
         SwingUtilities.invokeLater(() -> {
             myRestartReady = false;
             oppRestartReady = false;
-            gameStarted = false; // 상태 초기화 추가
+            gameStarted = false;
 
             JRootPane root = SwingUtilities.getRootPane(this);
             if (root != null) {
                 root.getGlassPane().setVisible(false);
             }
-            // 게임 루프 정지 후 리셋
+
             loop.stopLoop();
 
             myLogic.reset();
             oppLogic.reset();
 
-            // 상대방 보드는 curr를 null로 유지 (초기화 때와 동일)
             oppLogic.getState().setCurr(null);
 
-            // Incoming 카운트 초기화
             myIncoming.setText("0");
             oppIncoming.setText("0");
 
-            // 화면 갱신
             myView.repaint();
             oppView.repaint();
 
-            gameStarted = true; // 게임 재시작
+            gameStarted = true;
             loop.startLoop();
             myView.requestFocusInWindow();
 
@@ -610,7 +703,15 @@ public class OnlineVersusPanel extends JPanel {
 
     @Override
     public Dimension getPreferredSize() {
-        return new Dimension(800, 750);
+        // 보드 크기에 맞춰 전체 크기 조정
+        // 보드 2개 + 사이드바 2개 + 여백
+        int boardWidth = myView.getPreferredSize().width;
+        int boardHeight = myView.getPreferredSize().height;
+
+        int totalWidth = (boardWidth * 2) + (160 * 2) + 100; // 보드2개 + 사이드바2개 + 여백
+        int totalHeight = boardHeight + 180; // 보드 높이 + 상단HUD + 여백
+
+        return new Dimension(totalWidth, totalHeight);
     }
 
     public static void main(String[] args) {
@@ -624,14 +725,13 @@ public class OnlineVersusPanel extends JPanel {
             f.setLocationRelativeTo(null);
             f.setVisible(true);
 
-            // 창 닫을 때 모든 리소스 정리 후 강제 종료
             f.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
             f.addWindowListener(new java.awt.event.WindowAdapter() {
                 @Override
                 public void windowClosing(java.awt.event.WindowEvent e) {
                     panel.cleanupAll();
                     f.dispose();
-                    System.exit(0); // 강제 종료
+                    System.exit(0);
                 }
             });
         });
@@ -655,6 +755,22 @@ public class OnlineVersusPanel extends JPanel {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    private char[][] blockToShape(Block block) {
+        if (block == null)
+            return null;
+
+        int w = block.width();
+        int h = block.height();
+        char[][] shape = new char[h][w];
+
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                shape[y][x] = block.getShape(x, y) == 1 ? '#' : ' ';
+            }
+        }
+        return shape;
     }
 
 }

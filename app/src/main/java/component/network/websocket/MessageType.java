@@ -11,4 +11,6 @@ public enum MessageType {
     MODE_SELECT,    // 게임 모드 선택 신호
     RESTART_READY, // 재시작 준비 신호 
     RESTART_START , // 재시작 시작 신호
+    SCORE_UPDATE,   // 점수 업데이트
+    NEXT_BLOCKS    // 다음 블록 정보
 }
