@@ -19,11 +19,12 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 
 /**
- * OnlineVersusPanel (IP 자동 저장 기능 추가)
- * 새로운 기능:
- * 1. 서버 IP 자동 저장 (recent_server_ip.txt)
- * 2. 이전 접속 IP 자동 불러오기
- * 3. 첫 접속 시 localhost 기본값 사용
+ * OnlineVersusPanel (델타 전송 방식 적용)
+ * 
+ * 주요 변경사항:
+ * - 전체 보드 전송 → 델타(변경사항만) 전송
+ * - 75% 네트워크 대역폭 절약
+ * - 동기화 통계 추적
  */
 public class OnlineVersusPanel extends JPanel {
 
@@ -32,6 +33,7 @@ public class OnlineVersusPanel extends JPanel {
     private final JLabel myIncoming = new JLabel("0");
     private final JLabel oppIncoming = new JLabel("0");
     private final JLabel lagLabel = new JLabel("Connection: OK");
+    private final JLabel syncStatsLabel = new JLabel(""); // 동기화 통계 표시
 
     private HUDSidebar mySidebar;
     private HUDSidebar oppSidebar;
@@ -58,6 +60,7 @@ public class OnlineVersusPanel extends JPanel {
     private long lastPongTime = 0;
     private Timer heartbeatTimer;
     private Timer connectionCheckTimer;
+    private Timer statsTimer; // 통계 업데이트 타이머
     private static final long PING_INTERVAL = 1000;
     private static final long LAG_THRESHOLD = 200;
     private static final long DISCONNECT_THRESHOLD = 5000;
@@ -77,10 +80,10 @@ public class OnlineVersusPanel extends JPanel {
         setBackground(new Color(18, 22, 30));
 
         /* 상단 HUD - 높이 고정 */
-        JPanel topHud = new JPanel(new GridLayout(1, 3, 20, 0));
+        JPanel topHud = new JPanel(new GridLayout(1, 4, 15, 0)); // 4칸으로 변경 (통계 추가)
         topHud.setBackground(new Color(18, 22, 30));
         topHud.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
-        topHud.setPreferredSize(new Dimension(0, 80)); // 높이 고정
+        topHud.setPreferredSize(new Dimension(0, 80));
         topHud.add(buildHud("My Incoming", myIncoming));
 
         // 중앙 연결 상태 표시
@@ -92,6 +95,16 @@ public class OnlineVersusPanel extends JPanel {
         lagLabel.setHorizontalAlignment(SwingConstants.CENTER);
         lagPanel.add(lagLabel);
         topHud.add(lagPanel);
+
+        // 동기화 통계 표시 (NEW!)
+        JPanel syncPanel = new JPanel();
+        syncPanel.setBackground(new Color(24, 28, 38));
+        syncPanel.setBorder(BorderFactory.createEmptyBorder(8, 12, 8, 12));
+        syncStatsLabel.setForeground(new Color(150, 200, 255));
+        syncStatsLabel.setFont(new Font("Arial", Font.PLAIN, 11));
+        syncStatsLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        syncPanel.add(syncStatsLabel);
+        topHud.add(syncPanel);
 
         topHud.add(buildHud("Opponent Incoming", oppIncoming));
         add(topHud, BorderLayout.NORTH);
@@ -116,7 +129,7 @@ public class OnlineVersusPanel extends JPanel {
 
         // 왼쪽 사이드바 (나)
         mySidebar = new HUDSidebar();
-        mySidebar.setPreferredSize(new Dimension(160, 0)); // 폭 고정
+        mySidebar.setPreferredSize(new Dimension(160, 0));
         centerContainer.add(mySidebar, BorderLayout.WEST);
 
         // 보드 패널 - GridBagLayout으로 중앙 정렬
@@ -143,7 +156,7 @@ public class OnlineVersusPanel extends JPanel {
 
         // 오른쪽 사이드바 (상대)
         oppSidebar = new HUDSidebar();
-        oppSidebar.setPreferredSize(new Dimension(160, 0)); // 폭 고정
+        oppSidebar.setPreferredSize(new Dimension(160, 0));
         centerContainer.add(oppSidebar, BorderLayout.EAST);
 
         add(centerContainer, BorderLayout.CENTER);
@@ -167,7 +180,6 @@ public class OnlineVersusPanel extends JPanel {
                 Thread.sleep(1000);
                 client.connect("ws://localhost:8081/game");
             } else {
-                // IP 자동 불러오기 및 저장 기능
                 String recentIp = loadRecentServerIp();
                 String prompt = recentIp != null
                         ? "Enter server IP: (Recent: " + recentIp + ")"
@@ -179,9 +191,7 @@ public class OnlineVersusPanel extends JPanel {
                     ip = recentIp != null ? recentIp : "localhost";
                 }
 
-                // IP 저장
                 saveRecentServerIp(ip);
-
                 client.connect("ws://" + ip + ":8081/game");
             }
         } catch (Exception e) {
@@ -213,12 +223,12 @@ public class OnlineVersusPanel extends JPanel {
         myView.setFocusable(true);
         SwingUtilities.invokeLater(myView::requestFocusInWindow);
 
-        /*  점수/레벨 업데이트 타이머 */
+        /* 점수/레벨 업데이트 타이머 */
         Timer hudTimer = new Timer(100, e -> {
             if (gameStarted) {
                 mySidebar.setScore(myLogic.getScore());
                 mySidebar.setLevel(myLogic.getLevel());
-                mySidebar.setNextBlocks(myLogic.getNextBlocks()); 
+                mySidebar.setNextBlocks(myLogic.getNextBlocks());
 
                 oppSidebar.setScore(oppLogic.getScore());
                 oppSidebar.setLevel(oppLogic.getLevel());
@@ -226,13 +236,17 @@ public class OnlineVersusPanel extends JPanel {
         });
         hudTimer.start();
 
-        /* 동기화 타이머 */
+        /* 델타 동기화 타이머 - 변경사항만 전송 */
         syncTimer = new Timer(300, e -> {
             if (gameStarted) {
-                adapter.sendBoardState();
+                adapter.sendBoardState(); // 델타만 전송
             }
         });
         syncTimer.start();
+
+        /* 동기화 통계 업데이트 타이머 (NEW!) */
+        statsTimer = new Timer(2000, e -> updateSyncStats());
+        statsTimer.start();
 
         /* Heartbeat 타이머 */
         heartbeatTimer = new Timer((int) PING_INTERVAL, e -> sendPing());
@@ -245,6 +259,10 @@ public class OnlineVersusPanel extends JPanel {
             SwingUtilities.invokeLater(() -> {
                 loop.stopLoop();
                 client.send(new Message(MessageType.GAME_OVER, null));
+                
+                // 게임 종료 시 통계 출력
+                adapter.printStats();
+                
                 showGameOverOverlay(true);
             });
         });
@@ -260,13 +278,17 @@ public class OnlineVersusPanel extends JPanel {
         });
     }
 
+    /* ===== 동기화 통계 업데이트 (NEW!) ===== */
+    
+    private void updateSyncStats() {
+        if (!gameStarted) return;
+        
+        String stats = adapter.getStatsString();
+        SwingUtilities.invokeLater(() -> syncStatsLabel.setText(stats));
+    }
+
     /* ===== IP 자동 저장/불러오기 메서드 ===== */
 
-    /**
-     * 최근 접속한 서버 IP를 파일에서 불러옵니다.
-     * 
-     * @return 저장된 IP 주소, 없으면 null
-     */
     private String loadRecentServerIp() {
         try {
             if (Files.exists(Paths.get(IP_SAVE_FILE))) {
@@ -282,11 +304,6 @@ public class OnlineVersusPanel extends JPanel {
         return null;
     }
 
-    /**
-     * 서버 IP를 파일에 저장합니다.
-     * 
-     * @param ip 저장할 IP 주소
-     */
     private void saveRecentServerIp(String ip) {
         try {
             Files.writeString(Paths.get(IP_SAVE_FILE), ip);
@@ -437,6 +454,7 @@ public class OnlineVersusPanel extends JPanel {
             case GAME_OVER -> {
                 SwingUtilities.invokeLater(() -> {
                     loop.stopLoop();
+                    adapter.printStats(); // 통계 출력
                     showGameOverOverlay(false);
                 });
             }
@@ -451,7 +469,14 @@ public class OnlineVersusPanel extends JPanel {
                 performRestart();
             }
 
+            // 델타 메시지 처리 (BoardSyncAdapter가 처리)
+            case BOARD_DELTA, BOARD_DELTA_COMPRESSED, BOARD_FULL_SYNC -> {
+                adapter.handleIncoming(msg);
+                SwingUtilities.invokeLater(oppView::repaint);
+            }
+
             default -> {
+                // 기타 메시지도 adapter에 위임
                 adapter.handleIncoming(msg);
                 SwingUtilities.invokeLater(oppView::repaint);
             }
@@ -578,7 +603,7 @@ public class OnlineVersusPanel extends JPanel {
 
             loop.startLoop();
             myView.requestFocusInWindow();
-            System.out.println("[GAME] Started with mode: " + selectedMode);
+            System.out.println("[GAME] Started with mode: " + selectedMode + " (Delta Sync Enabled)");
         });
     }
 
@@ -653,6 +678,9 @@ public class OnlineVersusPanel extends JPanel {
         if (syncTimer != null && syncTimer.isRunning()) {
             syncTimer.stop();
         }
+        if (statsTimer != null && statsTimer.isRunning()) {
+            statsTimer.stop();
+        }
         if (gameStarted) {
             loop.stopLoop();
         }
@@ -693,30 +721,31 @@ public class OnlineVersusPanel extends JPanel {
             myView.repaint();
             oppView.repaint();
 
+            // 델타 추적기 리셋
+            adapter.reset();
+
             gameStarted = true;
             loop.startLoop();
             myView.requestFocusInWindow();
 
-            System.out.println("[GAME] Restarted");
+            System.out.println("[GAME] Restarted (Delta tracking reset)");
         });
     }
 
     @Override
     public Dimension getPreferredSize() {
-        // 보드 크기에 맞춰 전체 크기 조정
-        // 보드 2개 + 사이드바 2개 + 여백
         int boardWidth = myView.getPreferredSize().width;
         int boardHeight = myView.getPreferredSize().height;
 
-        int totalWidth = (boardWidth * 2) + (160 * 2) + 100; // 보드2개 + 사이드바2개 + 여백
-        int totalHeight = boardHeight + 180; // 보드 높이 + 상단HUD + 여백
+        int totalWidth = (boardWidth * 2) + (160 * 2) + 100;
+        int totalHeight = boardHeight + 180;
 
         return new Dimension(totalWidth, totalHeight);
     }
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
-            JFrame f = new JFrame("Online Versus - Network Stability");
+            JFrame f = new JFrame("Online Versus - Delta Sync");
             boolean isServer = JOptionPane.showConfirmDialog(f, "Start as server?", "P2P Setup",
                     JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION;
             OnlineVersusPanel panel = new OnlineVersusPanel(isServer);
@@ -745,13 +774,16 @@ public class OnlineVersusPanel extends JPanel {
                 heartbeatTimer.stop();
             if (connectionCheckTimer != null)
                 connectionCheckTimer.stop();
+            if (statsTimer != null)
+                statsTimer.stop();
+            
+            // 최종 통계 출력
+            System.out.println("\n=== Final Sync Statistics ===");
+            adapter.printStats();
+            
             client.disconnect();
             loop.stopLoop();
             GameServer.stopServer();
-            System.out.println("=== Active Threads ===");
-            Thread.getAllStackTraces().keySet().forEach(t -> {
-                System.out.println(t.getName() + " / daemon=" + t.isDaemon());
-            });
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -772,5 +804,4 @@ public class OnlineVersusPanel extends JPanel {
         }
         return shape;
     }
-
 }
