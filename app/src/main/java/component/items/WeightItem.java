@@ -3,6 +3,7 @@ package component.items;
 import java.awt.Color;
 import logic.BoardLogic;
 import logic.ClearService;
+import logic.ParticleSystem;
 
 /**
  * WeightItem (무게추형 아이템)
@@ -12,8 +13,9 @@ import logic.ClearService;
  * - 즉시 바닥까지 낙하
  * - 착지 후 일반 블록처럼 남음
  * - 회전 불가, 좌우 이동만 가능
+ * - ⭐ 파괴된 블록마다 파티클 효과
  *
- * ✅ testMode: 테스트 환경일 때 비동기 Thread 없이 즉시 처리 (항상 onComplete 호출 보장)
+ * ✅ testMode: 테스트 환경일 때 비동기 Thread 없이 즉시 처리
  */
 public class WeightItem extends ItemBlock {
 
@@ -44,11 +46,30 @@ public class WeightItem extends ItemBlock {
         if (clearService != null)
             clearService.setSkipDuringItem(true);
 
-        // 폭 기준으로 아래 전부 제거
+        //  파티클 시스템 가져오기
+        ParticleSystem particleSystem = clearService != null ? clearService.getParticleSystem() : null;
+
+        // 폭 기준으로 아래 전부 제거 + 파티클 생성
+        final int CELL_SIZE = 25; // BoardView와 동일
         for (int dx = 0; dx < w; dx++) {
             int bx = startX + dx;
             if (bx < 0 || bx >= BoardLogic.WIDTH) continue;
+            
             for (int by = 0; by < BoardLogic.HEIGHT; by++) {
+                // ⭐ 블록이 있으면 파티클 생성
+                if (board[by][bx] != null && particleSystem != null) {
+                    Color blockColor = board[by][bx];
+                    // 테두리 블록만 파티클 생성 (옆이 비었거나 맨 끝)
+                    boolean isEdge = (bx == 0 || bx == BoardLogic.WIDTH - 1 ||
+                                     (bx > 0 && board[by][bx - 1] == null) ||
+                                     (bx < BoardLogic.WIDTH - 1 && board[by][bx + 1] == null));
+                    
+                    if (isEdge) {
+                        particleSystem.createExplosionParticles(bx, by, blockColor, CELL_SIZE);
+                    }
+                }
+                
+                // 블록 제거
                 board[by][bx] = null;
             }
         }
@@ -70,30 +91,37 @@ public class WeightItem extends ItemBlock {
         if (testMode) {
             if (clearService != null) {
                 clearService.setSkipDuringItem(false);
-                clearService.applyGravityInstantly(); // 중력 즉시 반영
-                clearService.clearLines(() -> {}, onComplete); // 라인 정리도 동기 실행
+                clearService.applyGravityInstantly();
+                clearService.clearLines(() -> {}, onComplete);
             } else if (onComplete != null) {
                 onComplete.run();
             }
-            return; // 🚀 비동기 코드 실행 안 함
+            return;
         }
 
-        // === 실제 게임용: 흔들림 애니메이션 + 비동기 라인 정리 ===
+        // === 실제 게임용: 파티클 애니메이션 + 흔들림 ===
+        
+        // ⭐ 파티클 애니메이션 시작
+        if (particleSystem != null && logic.getOnFrameUpdate() != null) {
+            startParticleAnimation(particleSystem, logic);
+        }
+
+        // 흔들림 애니메이션
         if (logic.getOnFrameUpdate() != null) {
             new Thread(() -> {
                 try {
                     for (int i = 0; i < 4; i++) {
-                        logic.setShakeOffset((i % 2 == 0) ? 3 : -3); // 좌우 번갈아 흔들기
+                        logic.setShakeOffset((i % 2 == 0) ? 3 : -3);
                         logic.getOnFrameUpdate().run();
                         Thread.sleep(50);
                     }
-                    logic.setShakeOffset(0); // 원위치
+                    logic.setShakeOffset(0);
                     logic.getOnFrameUpdate().run();
                 } catch (InterruptedException ignored) {}
             }).start();
         }
 
-        // 라인 정리 (비동기)
+        // 라인 정리
         if (clearService != null) {
             clearService.setSkipDuringItem(false);
             clearService.clearLines(logic.getOnFrameUpdate(), () -> {
@@ -101,5 +129,30 @@ public class WeightItem extends ItemBlock {
                     onComplete.run();
             });
         }
+    }
+
+    /**
+     * ⭐ 파티클 애니메이션 시작 (백그라운드)
+     */
+    private void startParticleAnimation(ParticleSystem particleSystem, BoardLogic logic) {
+        javax.swing.Timer particleTimer = new javax.swing.Timer(16, null);
+        final int[] frame = { 0 };
+        final int MAX_FRAMES = 20; // 약 320ms
+
+        particleTimer.addActionListener(e -> {
+            frame[0]++;
+            particleSystem.update();
+
+            if (logic.getOnFrameUpdate() != null)
+                logic.getOnFrameUpdate().run();
+
+            if (frame[0] >= MAX_FRAMES || particleSystem.getParticles().isEmpty()) {
+                ((javax.swing.Timer) e.getSource()).stop();
+                System.out.println("[WeightItem] Particle animation finished");
+            }
+        });
+
+        particleTimer.setRepeats(true);
+        particleTimer.start();
     }
 }
