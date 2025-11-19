@@ -100,7 +100,7 @@ public class ClearService {
     }
 
     /** 파티클 효과 애니메이션 */
-    private void animateWithParticles(List<Integer> rows, Runnable onFrameUpdate, Runnable onComplete) {
+    public void animateWithParticles(List<Integer> rows, Runnable onFrameUpdate, Runnable onComplete) {
         if (animating)
             return;
         animating = true;
@@ -118,11 +118,11 @@ public class ClearService {
             Arrays.fill(board[row], null);
         }
 
-        animating=false;
+        animating = false;
         if (onFrameUpdate != null)
             onFrameUpdate.run();
 
-        // 3. 파티클 애니메이션 
+        // 3. 파티클 애니메이션
         Timer particleTimer = new Timer(8, null);
         final int[] frame = { 0 };
         final int MAX_FRAMES = 5;
@@ -147,7 +147,6 @@ public class ClearService {
         });
         particleTimer.start();
     }
-
 
     /** 초고속 클리어 애니메이션 */
     private void animateFastClear(List<Integer> rows, Runnable onFrameUpdate, Runnable onComplete) {
@@ -288,6 +287,28 @@ public class ClearService {
         if (onComplete != null)
             onComplete.run();
     }
+
+    public void applyCellGravity() {
+        Color[][] board = state.getBoard();
+
+        // 아래에서 위로 스캔
+        for (int y = GameState.HEIGHT - 2; y >= 0; y--) {
+            for (int x = 0; x < GameState.WIDTH; x++) {
+                if (board[y][x] != null && board[y + 1][x] == null) {
+                    int ny = y;
+
+                    // 가능한 만큼 아래로 이동
+                    while (ny + 1 < GameState.HEIGHT && board[ny + 1][x] == null) {
+                        board[ny + 1][x] = board[ny][x];
+                        board[ny][x] = null;
+                        ny++;
+                    }
+                }
+            }
+        }
+    }
+
+    
 
     /** 꽉 찬 줄 찾기 */
     public List<Integer> findFullRows() {

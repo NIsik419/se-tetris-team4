@@ -14,12 +14,12 @@ public class ParticleSystem {
     private final Random random = new Random();
 
     public static class Particle {
-        public double x, y;           // 위치
-        public double vx, vy;         // 속도
-        public Color color;           // 색상
-        public int life;              // 남은 수명 (프레임)
-        public int maxLife;           // 최대 수명
-        public int size;              // 크기
+        public double x, y; // 위치
+        public double vx, vy; // 속도
+        public Color color; // 색상
+        public int life; // 남은 수명 (프레임)
+        public int maxLife; // 최대 수명
+        public int size; // 크기
 
         public Particle(double x, double y, double vx, double vy, Color color, int life, int size) {
             this.x = x;
@@ -35,7 +35,11 @@ public class ParticleSystem {
         public void update() {
             x += vx;
             y += vy;
-            vy += 0.3; // 중력
+
+            vx *= 0.96; // 살짝 감속 → 더 부드럽다
+            vy *= 0.96;
+
+            vy += 0.35; // 부드러운 중력
             life--;
         }
 
@@ -49,35 +53,106 @@ public class ParticleSystem {
     }
 
     /**
-     * 블록이 사라질 때 파티클 생성
-     * @param blockX 블록 X 좌표 (보드 좌표)
-     * @param blockY 블록 Y 좌표 (보드 좌표)
-     * @param blockColor 블록 색상
-     * @param cellSize 셀 크기 (픽셀)
+     * ⭐ 폭발 전용 파티클 생성 (WeightItem, ColorBomb 등)
+     * - 더 많은 파티클
+     * - 빠른 속도
+     * - 방사형 확산
+     * - 연기/불꽃 효과
      */
-    public void createBlockParticles(int blockX, int blockY, Color blockColor, int cellSize) {
-        // 블록 중심점 (픽셀 좌표)
+    public void createExplosionParticles(int blockX, int blockY, Color blockColor, int cellSize) {
         double centerX = blockX * cellSize + cellSize / 2.0;
         double centerY = blockY * cellSize + cellSize / 2.0;
 
-        // 8~12개의 파티클 생성
-        int count = 8 + random.nextInt(5);
-        for (int i = 0; i < count; i++) {
-            // 랜덤한 방향으로 튀어나감
+        // 메인 폭발 (밝고 색감 강함)
+        int mainCount = 18 + random.nextInt(8);
+        for (int i = 0; i < mainCount; i++) {
             double angle = random.nextDouble() * Math.PI * 2;
-            double speed = 1.5 + random.nextDouble() * 2.5; // 속도 랜덤
+            double speed = 2.0 + random.nextDouble() * 3.5; // 균형 잡힌 확산 속도
 
             double vx = Math.cos(angle) * speed;
-            double vy = Math.sin(angle) * speed - 2; // 위쪽으로 약간 더 튀김
+            double vy = Math.sin(angle) * speed * 0.6; // 위로 너무 많이 튀는 걸 방지
 
-            // 색상 변형 (밝게 또는 어둡게)
-            Color particleColor = adjustBrightness(blockColor, 0.8 + random.nextDouble() * 0.4);
+            // 중력 때문에 결국 내려오도록
+            if (vy < -1.5)
+                vy = -1.5 + random.nextDouble() * 1.2;
 
-            // 크기 랜덤 (2~4픽셀)
-            int size = 2 + random.nextInt(3);
+            Color fireColor = new Color(
+                    Math.min(255, blockColor.getRed() + 40 + random.nextInt(40)),
+                    Math.min(255, blockColor.getGreen() + 40 + random.nextInt(40)),
+                    Math.min(255, blockColor.getBlue() + 40 + random.nextInt(40)));
 
-            // 수명 랜덤 (15~25프레임)
-            int life = 15 + random.nextInt(11);
+            int size = 3 + random.nextInt(2);
+            int life = 15 + random.nextInt(12); // 자연스러움
+
+            particles.add(new Particle(centerX, centerY, vx, vy, fireColor, life, size));
+        }
+
+        // 스파크 (작고 빠르게 흩어지는 조각)
+        int sparkCount = 12 + random.nextInt(6);
+        for (int i = 0; i < sparkCount; i++) {
+            double angle = random.nextDouble() * Math.PI * 2;
+            double speed = 3.5 + random.nextDouble() * 3.5;
+
+            double vx = Math.cos(angle) * speed;
+            double vy = Math.sin(angle) * speed * 0.7;
+
+            if (vy < -2.5)
+                vy = -2.5 + random.nextDouble() * 1.5;
+
+            Color sparkColor = new Color(
+                    255,
+                    220 + random.nextInt(30),
+                    150 + random.nextInt(70));
+
+            int size = 1 + random.nextInt(2);
+            int life = 10 + random.nextInt(10);
+
+            particles.add(new Particle(centerX, centerY, vx, vy, sparkColor, life, size));
+        }
+
+        // 연기 (위로 은은하게 올라감)
+        int smokeCount = 6 + random.nextInt(4);
+        for (int i = 0; i < smokeCount; i++) {
+            double angle = -Math.PI / 2 + (random.nextDouble() - 0.5) * Math.PI / 5;
+            double speed = 0.3 + random.nextDouble() * 0.8;
+
+            double vx = Math.cos(angle) * speed * 0.4;
+            double vy = Math.sin(angle) * speed * 0.7;
+
+            int gray = 80 + random.nextInt(40);
+            Color smokeColor = new Color(gray, gray, gray, 180);
+
+            int size = 4 + random.nextInt(3);
+            int life = 25 + random.nextInt(10);
+
+            particles.add(new Particle(centerX, centerY, vx, vy, smokeColor, life, size));
+        }
+    }
+
+    /**
+     * 블록이 사라질 때 파티클 생성 (빠르고 적게)
+     */
+    public void createBlockParticles(int blockX, int blockY, Color blockColor, int cellSize) {
+        double centerX = blockX * cellSize + cellSize / 2.0;
+        double centerY = blockY * cellSize + cellSize / 2.0;
+
+        // ⭐ 4~6개만 생성 (빠르게)
+        int count = 4 + random.nextInt(3);
+        for (int i = 0; i < count; i++) {
+            double angle = random.nextDouble() * Math.PI * 2;
+            double speed = 2.0 + random.nextDouble() * 2.0; // 빠르게
+
+            double vx = Math.cos(angle) * speed;
+            double vy = Math.sin(angle) * speed - 1.5; // 위로 살짝
+
+            // 밝은 색상
+            Color particleColor = new Color(
+                    Math.min(255, blockColor.getRed() + 50),
+                    Math.min(255, blockColor.getGreen() + 50),
+                    Math.min(255, blockColor.getBlue() + 50));
+
+            int size = 2 + random.nextInt(2); // 2~3픽셀
+            int life = 12 + random.nextInt(8); // 10~18프레임 (짧게)
 
             particles.add(new Particle(centerX, centerY, vx, vy, particleColor, life, size));
         }
@@ -89,11 +164,11 @@ public class ParticleSystem {
     public void createLineParticles(int rowY, Color[][] board, int cellSize, int width) {
         for (int x = 0; x < width; x++) {
             if (board[rowY][x] != null) {
-                // 양끝(테두리)만 파티클 생성
-                boolean isEdge = (x == 0 || x == width - 1 || 
-                                 board[rowY][x - 1] == null || 
-                                 (x < width - 1 && board[rowY][x + 1] == null));
-                
+                // ⭐ 양끝(테두리)만 파티클 생성
+                boolean isEdge = (x == 0 || x == width - 1 ||
+                        board[rowY][x - 1] == null ||
+                        (x < width - 1 && board[rowY][x + 1] == null));
+
                 if (isEdge) {
                     createBlockParticles(x, rowY, board[rowY][x], cellSize);
                 }
@@ -105,6 +180,7 @@ public class ParticleSystem {
      * 모든 파티클 업데이트
      */
     public void update() {
+        // ⭐ Iterator 사용으로 안전하게 제거
         particles.removeIf(p -> {
             p.update();
             return p.isDead();
@@ -115,14 +191,22 @@ public class ParticleSystem {
      * 파티클 렌더링용 리스트 반환
      */
     public List<Particle> getParticles() {
-        return particles;
+        return new ArrayList<>(particles); // ⭐ 복사본 반환 (동시성 안전)
     }
 
     /**
-     * 모든 파티클 제거
+     * 모든 파티클 즉시 제거
      */
     public void clear() {
         particles.clear();
+        System.out.println("[ParticleSystem] Cleared all particles");
+    }
+
+    /**
+     * 현재 파티클 개수
+     */
+    public int getParticleCount() {
+        return particles.size();
     }
 
     /**

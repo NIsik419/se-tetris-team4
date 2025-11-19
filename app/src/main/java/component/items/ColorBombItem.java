@@ -5,21 +5,22 @@ import java.awt.Color;
 import blocks.Block;
 import logic.BoardLogic;
 import logic.ClearService;
+import logic.ParticleSystem;
 
 /**
- * 💥 ColorBombItem
- * -----------------
- * - 같은 색상의 모든 블록 제거
- * - 제거된 칸에 잔상(fadeLayer) 남기고 번쩍 효과
- * - 중력 처리 + 라인 클리어
- * 
- * ✅ testMode: 테스트 모드일 경우 Timer/Thread 대신 즉시 효과를 적용
+ * 💥 ColorBombItem (색 폭탄)
+ *
+ * - 자기와 동일한 색상인 모든 블록을 제거
+ * - 테두리 블록만 폭발 파티클 생성
+ * - 점수(삭제 개수 × 10)
+ * - 중력 적용 + 라인 정리
+ *
+ * ✅ testMode: 테스트 환경에서 즉시 실행
  */
 public class ColorBombItem extends ItemBlock {
 
     private boolean testMode = false;
 
-    /** 테스트용: 비동기 대신 즉시 적용할지 여부 */
     public void setTestMode(boolean testMode) {
         this.testMode = testMode;
     }
@@ -31,50 +32,103 @@ public class ColorBombItem extends ItemBlock {
     @Override
     public void activate(BoardLogic logic, Runnable onComplete) {
         var board = logic.getBoard();
-        var fade = logic.getFadeLayer();
         var clearService = logic.getClearService();
-        Color target = getColor();
+        if (clearService != null)
+            clearService.setSkipDuringItem(true);
 
-        // === 1️⃣ 대상 색상 제거 + fade 잔상 남기기 ===
+        ParticleSystem particleSystem = clearService != null ? clearService.getParticleSystem() : null;
+
+        Color targetColor = this.color;
         int removed = 0;
-        for (int y = 0; y < board.length; y++) {
-            for (int x = 0; x < board[y].length; x++) {
-                if (target.equals(board[y][x])) {
+        final int CELL_SIZE = 25;
+
+        // 같은 색상 모두 제거 + 파티클
+        for (int y = 0; y < BoardLogic.HEIGHT; y++) {
+            for (int x = 0; x < BoardLogic.WIDTH; x++) {
+                if (board[y][x] != null && board[y][x].equals(targetColor)) {
+
+                    boolean isEdge =
+                            (x == 0 || x == BoardLogic.WIDTH - 1
+                                    || (x > 0 && !targetColor.equals(board[y][x - 1]))
+                                    || (x < BoardLogic.WIDTH - 1 && !targetColor.equals(board[y][x + 1])));
+
+                    if (isEdge && particleSystem != null) {
+                        particleSystem.createExplosionParticles(x, y, targetColor, CELL_SIZE);
+                    }
+
                     board[y][x] = null;
-                    fade[y][x] = new Color(
-                            target.getRed(),
-                            target.getGreen(),
-                            target.getBlue(),
-                            80); // 잔상 투명도
                     removed++;
                 }
             }
         }
 
-        // === 2️⃣ 점수 반영 ===
+        // 점수 반영
         if (removed > 0) {
             logic.addScore(removed * 10);
         }
 
-        // === 3️⃣ 중력 및 클리어 처리 ===
+        // === testMode 즉시 처리 ===
         if (testMode) {
-            // 테스트 환경 → 즉시 실행
-            clearService.applyGravityInstantly();
-            onComplete.run();
+            if (clearService != null) {
+                clearService.setSkipDuringItem(false);
+                clearService.applyGravityInstantly();
+                clearService.clearLines(() -> {}, onComplete);
+            } else if (onComplete != null) {
+                onComplete.run();
+            }
             return;
         }
 
-        // 실제 게임 환경 → 비동기 Thread 처리
-        new Thread(() -> {
-            try {
-                // 순서: 중력 → 라인 클리어 → 완료 콜백
-                clearService.applyGravityStepwise(() -> {}, () -> {
-                    clearService.clearLines(() -> {}, onComplete);
-                });
-            } catch (Exception e) {
-                // 예외 시에도 테스트가 죽지 않게 안전하게 콜백 호출
-                onComplete.run();
+        // === 실제 게임: 파티클 애니메이션 ===
+        if (particleSystem != null && logic.getOnFrameUpdate() != null) {
+            startParticleAnimation(particleSystem, logic);
+        }
+
+        // === 흔들림 효과 ===
+        if (logic.getOnFrameUpdate() != null) {
+            new Thread(() -> {
+                try {
+                    for (int i = 0; i < 4; i++) {
+                        logic.setShakeOffset((i % 2 == 0) ? 2 : -2);
+                        logic.getOnFrameUpdate().run();
+                        Thread.sleep(50);
+                    }
+                    logic.setShakeOffset(0);
+                    logic.getOnFrameUpdate().run();
+                } catch (InterruptedException ignored) {}
+            }).start();
+        }
+
+        // === 라인 클리어 + 완료 ===
+        if (clearService != null) {
+            clearService.setSkipDuringItem(false);
+            clearService.applyCellGravity();
+            clearService.clearLines(logic.getOnFrameUpdate(), () -> {
+                if (onComplete != null)
+                    onComplete.run();
+            });
+        }
+    }
+
+    /** 파티클 애니메이션 */
+    private void startParticleAnimation(ParticleSystem ps, BoardLogic logic) {
+        javax.swing.Timer timer = new javax.swing.Timer(16, null);
+        final int[] frame = {0};
+        final int MAX_FRAMES = 20;
+
+        timer.addActionListener(e -> {
+            frame[0]++;
+            ps.update();
+
+            if (logic.getOnFrameUpdate() != null)
+                logic.getOnFrameUpdate().run();
+
+            if (frame[0] >= MAX_FRAMES || ps.getParticles().isEmpty()) {
+                ((javax.swing.Timer) e.getSource()).stop();
             }
-        }).start();
+        });
+
+        timer.setRepeats(true);
+        timer.start();
     }
 }

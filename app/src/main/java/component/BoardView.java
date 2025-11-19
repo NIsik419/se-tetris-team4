@@ -23,10 +23,18 @@ public class BoardView extends JPanel {
     public static final int HEIGHT = BoardLogic.HEIGHT;
     private static final Color GRID_LINE = new Color(50, 55, 70);
     private static final Color BG_GAME = new Color(25, 30, 42);
+    private final Timer renderTimer;
 
     public BoardView(BoardLogic logic) {
         this.logic = logic;
         this.move = new MovementService(logic.getState());
+
+         // 렌더링 60fps 전용 타이머
+        renderTimer = new Timer(16, e -> {
+            logic.getClearService().getParticleSystem().update();
+            repaint();
+        });
+        renderTimer.start();
         setBackground(BG_GAME);
         setBorder(BorderFactory.createLineBorder(GRID_LINE, 3));
     }
@@ -44,7 +52,7 @@ public class BoardView extends JPanel {
             return;
         Graphics2D g2 = (Graphics2D) g.create();
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g2.setComposite(AlphaComposite.SrcOver.derive(0.9f));
+        // g2.setComposite(AlphaComposite.SrcOver.derive(0.9f));
 
         Color[][] grid = logic.getBoard();
 
@@ -64,8 +72,7 @@ public class BoardView extends JPanel {
             }
         }
 
-        // === ⭐ fadeLayer 제거 (파티클 사용으로 대체) ===
-        // 기존 fadeLayer 코드는 주석 처리하거나 제거
+        // === fadeLayer 제거 (파티클 사용으로 대체) ===
 
         // === Ghost 블록 ===
         drawGhostBlock(g2);
@@ -75,23 +82,30 @@ public class BoardView extends JPanel {
         if (curr != null)
             drawCurrentBlock(g2, curr);
 
-        // === ⭐ 파티클 렌더링 (맨 위에) ===
+        // === 파티클 렌더링 (맨 위에) ===
         drawParticles(g2);
 
         g2.dispose();
     }
 
-    /** ⭐ 파티클 렌더링 */
+    /**  파티클 렌더링 */
     private void drawParticles(Graphics2D g2) {
         ParticleSystem particles = logic.getClearService().getParticleSystem();
         List<ParticleSystem.Particle> particleList = particles.getParticles();
+
+        // 파티클이 없으면 바로 리턴
+        if (particleList.isEmpty()) {
+            return;
+        }
         
         // 안티앨리어싱 강화 (부드러운 파티클)
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+        g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_SPEED);
         
         for (ParticleSystem.Particle p : particleList) {
+            if (p.life <= 0) continue;    
             float alpha = p.getAlpha();
+            if (alpha <= 0) continue;
             
             // 파티클 색상 (알파 적용)
             Color c = new Color(
