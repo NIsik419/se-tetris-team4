@@ -37,7 +37,7 @@ public class BoardView extends JPanel {
 
     @Override
     protected void paintComponent(Graphics g) {
-        // boolean clearing = logic.isLineClearing();
+        boolean clearing = logic.isLineClearing();
         super.paintComponent(g);
         if (!visibleDuringStandby)
             return;
