@@ -49,6 +49,61 @@ public class ParticleSystem {
     }
 
     /**
+     * ⚡ 번개 파티클 (LightningItem용)
+     * - 위로 튀어오름
+     * - 노란색/흰색 번쩍임
+     * - 빠른 속도
+     */
+    public void createLightningParticles(int blockX, int blockY, Color blockColor, int cellSize) {
+        double centerX = blockX * cellSize + cellSize / 2.0;
+        double centerY = blockY * cellSize + cellSize / 2.0;
+
+        // 8~12개의 번개 파티클
+        int count = 8 + random.nextInt(5);
+        for (int i = 0; i < count; i++) {
+            // 위쪽으로 집중 (번개가 위로 튐)
+            double angle = -Math.PI / 2 + (random.nextDouble() - 0.5) * Math.PI / 2;
+            double speed = 3.0 + random.nextDouble() * 3.0; // 빠르게
+
+            double vx = Math.cos(angle) * speed;
+            double vy = Math.sin(angle) * speed;
+
+            // 번개 색상 (노란색/흰색)
+            Color lightningColor;
+            if (random.nextBoolean()) {
+                // 노란색
+                lightningColor = new Color(255, 240, 100);
+            } else {
+                // 흰색
+                lightningColor = new Color(255, 255, 255);
+            }
+
+            int size = 2 + random.nextInt(2); // 2~3픽셀
+            int life = 8 + random.nextInt(8); // 8~16프레임 (짧고 빠르게)
+
+            particles.add(new Particle(centerX, centerY, vx, vy, lightningColor, life, size));
+        }
+
+        // 추가: 작은 전기 불꽃 (4~6개)
+        int sparkCount = 4 + random.nextInt(3);
+        for (int i = 0; i < sparkCount; i++) {
+            double angle = random.nextDouble() * Math.PI * 2; // 모든 방향
+            double speed = 1.5 + random.nextDouble() * 2.0;
+
+            double vx = Math.cos(angle) * speed;
+            double vy = Math.sin(angle) * speed - 1.0; // 약간 위로
+
+            // 하늘색 전기
+            Color sparkColor = new Color(150, 220, 255);
+
+            int size = 1 + random.nextInt(2); // 1~2픽셀
+            int life = 10 + random.nextInt(8);
+
+            particles.add(new Particle(centerX, centerY, vx, vy, sparkColor, life, size));
+        }
+    }
+
+    /**
      * ⭐ 부스러기 효과 (LineClearItem용)
      * - 작은 파편들이 아래로 떨어짐
      * - 간단하고 깔끔한 효과
