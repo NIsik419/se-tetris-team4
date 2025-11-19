@@ -22,15 +22,17 @@ public class GameFrame extends JFrame {
         if (p2pMode) {
             // 🧩 온라인 대전 모드
             this.activePanel = new component.network.websocket.OnlineVersusPanel(isServer);
+            setTitle("Tetris Online Battle");
+            setSize(950, 750);
         } else {
             // 🎮 싱글 모드
             this.activePanel = new BoardPanel(config, this::returnToMenu);
+            setSize(720, 800);
         }
 
         add(activePanel, BorderLayout.CENTER);
 
         pack();
-        setSize(720, 800);
         setLocationRelativeTo(null);
         setVisible(true);
 
@@ -44,7 +46,6 @@ public class GameFrame extends JFrame {
     // 메뉴로 돌아가기 콜백
     private void returnToMenu() {
         dispose();
-        SwingUtilities.invokeLater(() -> new launcher.GameLauncher());
     }
 
     // BoardPanel 접근자 (싱글모드일 때만 유효)

@@ -21,8 +21,8 @@ public class HUDSidebar extends JPanel {
 
     // smaller preview boxes
     private final NextBlockPanel next1 = new NextBlockPanel(96);
-    private final NextBlockPanel next2 = new NextBlockPanel(96);
-    private final NextBlockPanel next3 = new NextBlockPanel(96);
+    // private final NextBlockPanel next2 = new NextBlockPanel(96);
+    // private final NextBlockPanel next3 = new NextBlockPanel(96);
 
     public HUDSidebar() {
         setBackground(new Color(0x0F141C));
@@ -31,14 +31,14 @@ public class HUDSidebar extends JPanel {
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 
         add(title("Next"));
-        add(Box.createVerticalStrut(8));
+        add(Box.createVerticalStrut(4));
 
         JPanel nextWrap = new JPanel();
         nextWrap.setOpaque(false);
-        nextWrap.setLayout(new GridLayout(3, 1, 10, 10));
+        nextWrap.setLayout(new GridLayout(1, 1, 10, 10));
         nextWrap.add(next1);
-        nextWrap.add(next2);
-        nextWrap.add(next3);
+        // nextWrap.add(next2);
+        // nextWrap.add(next3);
         add(nextWrap);
 
         add(Box.createVerticalStrut(18));
@@ -73,15 +73,14 @@ public class HUDSidebar extends JPanel {
     /** Set up to 3 next shapes; extra slots may be null. */
     public void setNextQueue(List<char[][]> shapes) {
         next1.setShape(shapes.size() > 0 ? shapes.get(0) : null);
-        next2.setShape(shapes.size() > 1 ? shapes.get(1) : null);
-        next3.setShape(shapes.size() > 2 ? shapes.get(2) : null);
+        // next2.setShape(shapes.size() > 1 ? shapes.get(1) : null);
+        // next3.setShape(shapes.size() > 2 ? shapes.get(2) : null);
     }
 
     // Block 리스트를 직접 받는 메서드 추가
     public void setNextBlocks(List<Block> blocks) {
         next1.setBlock(blocks.size() > 0 ? blocks.get(0) : null);
-        next2.setBlock(blocks.size() > 1 ? blocks.get(1) : null);
-        next3.setBlock(blocks.size() > 2 ? blocks.get(2) : null);
+        
     }
 
     public void reset() {

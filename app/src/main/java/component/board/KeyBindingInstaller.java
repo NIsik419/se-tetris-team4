@@ -111,6 +111,7 @@ public class KeyBindingInstaller {
                 d.setColorMode.accept(mode);
                 d.onColorModeChanged.accept(mode);
                 d.drawBoard.run();
+                
                 d.setTitle.accept("TETRIS - " + mode.name());
                 System.out.println("[DEBUG] Color mode switched → " + mode.name());
             }
@@ -174,8 +175,9 @@ public class KeyBindingInstaller {
      * @param d    의존성
      * @param set  키셋 (ARROWS or WASD)
      * @param enableDebug 디버그키(1~5) 바인딩 여부
+     * @param enablePauseKey  P/R 키를 "pause" 액션에 바인딩할지 여부
      */
-    public void install(JComponent comp, Deps d, KeySet set, boolean enableDebug) {
+    public void install(JComponent comp, Deps d, KeySet set, boolean enableDebug, boolean enablePauseKey) {
         InputMap im = comp.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
         ActionMap am = comp.getActionMap();
 
@@ -186,14 +188,18 @@ public class KeyBindingInstaller {
             im.put(KeyStroke.getKeyStroke("DOWN"),  ACT_DOWN);
             im.put(KeyStroke.getKeyStroke("UP"),    ACT_ROT);
             im.put(KeyStroke.getKeyStroke("SPACE"), ACT_DROP);
-            im.put(KeyStroke.getKeyStroke("P"),     "pause");
+            if (enablePauseKey) {
+                im.put(KeyStroke.getKeyStroke("P"), "pause");   // 🔹 여기만 옵션으로
+            }
         } else { // WASD
             im.put(KeyStroke.getKeyStroke("A"), ACT_LEFT);
             im.put(KeyStroke.getKeyStroke("D"), ACT_RIGHT);
             im.put(KeyStroke.getKeyStroke("S"), ACT_DOWN);
             im.put(KeyStroke.getKeyStroke("W"), ACT_ROT);
             im.put(KeyStroke.getKeyStroke("F"), ACT_DROP);
-            im.put(KeyStroke.getKeyStroke("R"), "pause");
+            if (enablePauseKey) {
+                im.put(KeyStroke.getKeyStroke("R"), "pause");   // 🔹 여기도 옵션
+            }
         }
 
         // 공통 유틸
@@ -215,15 +221,19 @@ public class KeyBindingInstaller {
         registerCoreActions(am, d);
     }
 
+    public void install(JComponent comp, Deps d, KeySet set, boolean enableDebug) {
+        install(comp, d, set, enableDebug, true);
+    }
+
     /* =================== 하위호환용 래퍼 =================== */
 
     /** (호환) ARROWS 키셋 설치 — 예전의 install() 의미 */
     public void install(JComponent comp, Deps d) {
-        install(comp, d, KeySet.ARROWS, /*enableDebug=*/true);
+        install(comp, d, KeySet.ARROWS, /*enableDebug=*/true, /*enablePauseKey=*/true);
     }
 
     /** (호환) WASD 키셋 설치 — 예전의 installForP2() 의미 */
     public void installForP2(JComponent comp, Deps d) {
-        install(comp, d, KeySet.WASD, /*enableDebug=*/true);
+        install(comp, d, KeySet.WASD, /*enableDebug=*/true, true);
     }
 }

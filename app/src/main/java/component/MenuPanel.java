@@ -46,10 +46,9 @@ import javax.swing.JRadioButton;
 import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
-import javax.swing.Timer; // ADDED
+import javax.swing.Timer;
 
 import versus.VersusFrame;
-import component.network.websocket.P2PFrame;
 
 public class MenuPanel extends JPanel {
 
@@ -61,13 +60,40 @@ public class MenuPanel extends JPanel {
         LEFT, RIGHT, UP, DOWN, NEXT
     }
 
+    private enum ScreenSize {
+        SMALL, MEDIUM, LARGE, FULLSCREEN
+    }
+
+    private void applyScreenPreset(ScreenSize preset) {
+        java.awt.Window w = SwingUtilities.getWindowAncestor(this);
+        if (!(w instanceof JFrame f))
+            return;
+
+        f.setExtendedState(JFrame.NORMAL);
+        f.setResizable(true);
+        switch (preset) {
+            case SMALL -> f.setSize(new Dimension(600, 480));
+            case MEDIUM -> f.setSize(new Dimension(900, 720));
+            case LARGE -> f.setSize(new Dimension(1200, 840));
+            case FULLSCREEN -> {
+                f.setExtendedState(f.getExtendedState() | JFrame.MAXIMIZED_BOTH);
+                f.toFront();
+                f.requestFocus();
+                return;
+            }
+        }
+        f.setLocationRelativeTo(null);
+    }
+
     private final Consumer<GameConfig> onStart;
     private final Consumer<MenuItem> onSelect;
-    // starry background
+
+    // Starry background
     private static final int STARS = 80;
     private final float[] sx = new float[STARS], sy = new float[STARS], sv = new float[STARS], ss = new float[STARS];
     private final Timer anim;
-    // Title w/ glow animation
+
+    // Title animation
     private JLabel title;
     private float titleGlowPhase = 0f;
     private float titleFloat = 0f;
@@ -81,13 +107,21 @@ public class MenuPanel extends JPanel {
     private final JRadioButton[][] diffButtons = new JRadioButton[2][3];
     private final JButton[] startButtons = new JButton[2];
 
-    // main menu & sub-sections
+    // Main menu & sub-sections
     private JPanel menuColumn;
     private JPanel individualSub;
-    private JPanel individualItemRow;
     private JPanel individualNormalRow;
+    private JPanel individualItemRow;
+
     private JPanel multiplayerSub;
-    private JPanel multiplayerItemRow;
+    private JPanel onlineP2PSub;
+    private JPanel onlineNormalRow;
+    private JPanel onlineItemRow;
+    private JPanel onlineTimeRow;
+    private JPanel local2PSub;
+    private JPanel localNormalRow;
+    private JPanel localItemRow;
+    private JPanel localTimeRow;
 
     // Keyboard nav state
     private final List<JButton> navOrder = new ArrayList<>();
@@ -101,7 +135,7 @@ public class MenuPanel extends JPanel {
         setBackground(new Color(0x0A0F18));
         setLayout(new GridBagLayout());
 
-        // stars + title animation
+        // Stars + title animation
         seedStars();
         anim = new Timer(33, e -> {
             stepStars();
@@ -113,20 +147,52 @@ public class MenuPanel extends JPanel {
         });
         anim.start();
 
-        // keyboard shortcuts
+        // Keyboard shortcuts
         InputMap im = getInputMap(WHEN_IN_FOCUSED_WINDOW);
         ActionMap am = getActionMap();
         im.put(KeyStroke.getKeyStroke("ESCAPE"), "exit");
         im.put(KeyStroke.getKeyStroke('S'), "score");
         im.put(KeyStroke.getKeyStroke('T'), "settings");
 
-        // arrow keys and enter wired to nav
+        // Arrow keys and enter
         im.put(KeyStroke.getKeyStroke("UP"), "up");
         im.put(KeyStroke.getKeyStroke("DOWN"), "down");
         im.put(KeyStroke.getKeyStroke("LEFT"), "left");
         im.put(KeyStroke.getKeyStroke("RIGHT"), "right");
         im.put(KeyStroke.getKeyStroke("ENTER"), "enter");
         im.put(KeyStroke.getKeyStroke("SPACE"), "enter");
+
+        // Screen size hotkeys
+        im.put(KeyStroke.getKeyStroke('1'), "sizeSmall");
+        im.put(KeyStroke.getKeyStroke('2'), "sizeMedium");
+        im.put(KeyStroke.getKeyStroke('3'), "sizeLarge");
+        im.put(KeyStroke.getKeyStroke('4'), "sizeFull");
+        im.put(KeyStroke.getKeyStroke("F11"), "sizeFull");
+
+        am.put("sizeSmall", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                applyScreenPreset(ScreenSize.SMALL);
+            }
+        });
+        am.put("sizeMedium", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                applyScreenPreset(ScreenSize.MEDIUM);
+            }
+        });
+        am.put("sizeLarge", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                applyScreenPreset(ScreenSize.LARGE);
+            }
+        });
+        am.put("sizeFull", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                applyScreenPreset(ScreenSize.FULLSCREEN);
+            }
+        });
 
         am.put("exit", new AbstractAction() {
             @Override
@@ -147,7 +213,7 @@ public class MenuPanel extends JPanel {
             }
         });
 
-        // Arrow behavior = change selected button in navOrder
+        // Arrow behavior
         am.put("up", new AbstractAction() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -180,7 +246,6 @@ public class MenuPanel extends JPanel {
         });
 
         buildUI();
-        highlightCard(0); // compat
         rebuildNavOrder();
         setSelection(0);
     }
@@ -204,14 +269,6 @@ public class MenuPanel extends JPanel {
 
     public GameConfig getCurrentConfig() {
         return new GameConfig(GameConfig.Mode.CLASSIC, GameConfig.Difficulty.NORMAL, false);
-    }
-
-    private void highlightCard(int index) {
-        repaint();
-    }
-
-    private int getSelectedIndex(JRadioButton[] group) {
-        return 0;
     }
 
     // UI CONSTRUCTION
@@ -276,7 +333,7 @@ public class MenuPanel extends JPanel {
         menuColumn.setLayout(new BoxLayout(menuColumn, BoxLayout.Y_AXIS));
         add(menuColumn, gb);
 
-        // INDIVIDUAL
+        // ===== INDIVIDUAL =====
         JButton btnIndividual = makeMainButton("INDIVIDUAL", () -> togglePanel(individualSub));
         btnIndividual.setAlignmentX(CENTER_ALIGNMENT);
         menuColumn.add(btnIndividual);
@@ -286,21 +343,25 @@ public class MenuPanel extends JPanel {
         individualSub.setAlignmentX(CENTER_ALIGNMENT);
 
         individualSub.add(makeSubButton("Normal Game", () -> togglePanel(individualNormalRow)));
-        individualSub.add(Box.createVerticalStrut(8));
+        individualSub.add(Box.createVerticalStrut(9));
 
         individualNormalRow = makeDifficultyRowFor(GameConfig.Mode.CLASSIC);
         individualNormalRow.setVisible(false);
         individualSub.add(individualNormalRow);
-        individualSub.add(Box.createVerticalStrut(8));
+        individualSub.add(Box.createVerticalStrut(9));
 
-        individualSub.add(makeSubButton("Item",
-                () -> onStart.accept(new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.NORMAL, false))));
+        individualSub.add(makeSubButton("Item", () -> togglePanel(individualItemRow)));
+        individualSub.add(Box.createVerticalStrut(9));
+
+        individualItemRow = makeItemDifficultyRowForSingle();
+        individualItemRow.setVisible(false);
+        individualSub.add(individualItemRow);
 
         individualSub.setVisible(false);
         menuColumn.add(individualSub);
         menuColumn.add(Box.createVerticalStrut(18));
 
-        // MULTIPLAYER
+        // ===== MULTIPLAYER =====
         JButton btnMultiplayer = makeMainButton("MULTIPLAYER", () -> togglePanel(multiplayerSub));
         btnMultiplayer.setAlignmentX(CENTER_ALIGNMENT);
         menuColumn.add(btnMultiplayer);
@@ -308,47 +369,79 @@ public class MenuPanel extends JPanel {
 
         multiplayerSub = makeSubPanel();
         multiplayerSub.setAlignmentX(CENTER_ALIGNMENT);
-        // P2P 대전 모드
-        multiplayerSub.add(makeSubButton("Online P2P Battle", () -> {
-            int choice = JOptionPane.showConfirmDialog(
-                    MenuPanel.this,
-                    "서버로 시작하시겠습니까?",
-                    "P2P 대전 모드",
-                    JOptionPane.YES_NO_OPTION);
-            boolean isServer = (choice == JOptionPane.YES_OPTION);
 
-            // 🔹 실제 프레임 실행
-            JFrame f = (JFrame) SwingUtilities.getWindowAncestor(MenuPanel.this);
-            new component.network.websocket.P2PFrame(isServer); // ← WebSocket 기반 대전 프레임
-            if (f != null)
-                f.dispose();
-        }));
-        multiplayerSub.add(Box.createVerticalStrut(8));
+        // Online P2P Battle
+        multiplayerSub.add(makeSubButton("Online P2P Battle", () -> togglePanel(onlineP2PSub)));
+        multiplayerSub.add(Box.createVerticalStrut(9));
 
-        // 로컬 2P 대전 (옵션)
-        multiplayerSub.add(makeSubButton("Local 2P (Same PC)", () -> {
-            JFrame f = (JFrame) SwingUtilities.getWindowAncestor(MenuPanel.this);
-            new VersusFrame(false); // ← 오프라인 2인용 대전
-            if (f != null)
-                f.dispose();
-        }));
-        multiplayerSub.add(Box.createVerticalStrut(8));
+        onlineP2PSub = makeSubPanel();
+        onlineP2PSub.setAlignmentX(CENTER_ALIGNMENT);
 
-        multiplayerSub.add(makeSubButton("Item", () -> {
-            JFrame f = (JFrame) SwingUtilities.getWindowAncestor(MenuPanel.this);
-            new VersusFrame(true); // 아이템 모드 대전
-            if (f != null) f.dispose();
-        }));
-        multiplayerSub.add(Box.createVerticalStrut(8));
+        onlineP2PSub.add(makeSubButton("NORMAL", () -> togglePanel(onlineNormalRow)));
+        onlineP2PSub.add(Box.createVerticalStrut(7));
 
-        multiplayerSub.add(makeSubButton("TIME ATTACK", () -> onStart
-                .accept(new GameConfig(GameConfig.Mode.TIME_ATTACK, GameConfig.Difficulty.NORMAL, false))));
+        onlineNormalRow = makeOnlineP2PRowFor(GameConfig.Mode.CLASSIC);
+        onlineNormalRow.setVisible(false);
+        onlineP2PSub.add(onlineNormalRow);
+        onlineP2PSub.add(Box.createVerticalStrut(7));
+
+        onlineP2PSub.add(makeSubButton("ITEM", () -> togglePanel(onlineItemRow)));
+        onlineP2PSub.add(Box.createVerticalStrut(7));
+
+        onlineItemRow = makeOnlineP2PRowFor(GameConfig.Mode.ITEM);
+        onlineItemRow.setVisible(false);
+        onlineP2PSub.add(onlineItemRow);
+        onlineP2PSub.add(Box.createVerticalStrut(7));
+
+        onlineP2PSub.add(makeSubButton("TIME", () -> togglePanel(onlineTimeRow)));
+        onlineP2PSub.add(Box.createVerticalStrut(7));
+
+        onlineTimeRow = makeOnlineP2PRowFor(GameConfig.Mode.TIME_ATTACK);
+        onlineTimeRow.setVisible(false);
+        onlineP2PSub.add(onlineTimeRow);
+
+        onlineP2PSub.setVisible(false);
+        multiplayerSub.add(onlineP2PSub);
+        multiplayerSub.add(Box.createVerticalStrut(12));
+
+        // Local 2P (Same PC)
+        multiplayerSub.add(makeSubButton("Local 2P (Same PC)", () -> togglePanel(local2PSub)));
+        multiplayerSub.add(Box.createVerticalStrut(9));
+
+        local2PSub = makeSubPanel();
+        local2PSub.setAlignmentX(CENTER_ALIGNMENT);
+
+        local2PSub.add(makeSubButton("NORMAL", () -> togglePanel(localNormalRow)));
+        local2PSub.add(Box.createVerticalStrut(7));
+
+        localNormalRow = makeLocal2PRowFor(false);
+        localNormalRow.setVisible(false);
+        local2PSub.add(localNormalRow);
+        local2PSub.add(Box.createVerticalStrut(7));
+
+        local2PSub.add(makeSubButton("ITEM", () -> togglePanel(localItemRow)));
+        local2PSub.add(Box.createVerticalStrut(7));
+
+        localItemRow = makeLocal2PRowFor(true);
+        localItemRow.setVisible(false);
+        local2PSub.add(localItemRow);
+        local2PSub.add(Box.createVerticalStrut(7));
+
+        local2PSub.add(makeSubButton("TIME", () -> togglePanel(localTimeRow)));
+        local2PSub.add(Box.createVerticalStrut(7));
+
+        localTimeRow = makeLocal2PTimeRow();
+        localTimeRow.setVisible(false);
+        local2PSub.add(localTimeRow);
+
+        local2PSub.setVisible(false);
+        multiplayerSub.add(local2PSub);
 
         multiplayerSub.setVisible(false);
         menuColumn.add(multiplayerSub);
         menuColumn.add(Box.createVerticalStrut(22));
 
-        // SIMPLE ENTRIES
+        // ===== SIMPLE ENTRIES =====
         JButton btnSetting = makeMainButton("SETTING", () -> onSelect.accept(MenuItem.SETTINGS));
         btnSetting.setAlignmentX(CENTER_ALIGNMENT);
         menuColumn.add(btnSetting);
@@ -363,14 +456,14 @@ public class MenuPanel extends JPanel {
         btnExit.setAlignmentX(CENTER_ALIGNMENT);
         menuColumn.add(btnExit);
 
-        // stubs
+        // Stubs
         cardsContainer = new JPanel(new GridLayout(1, 2, 26, 0));
         cardsContainer.setOpaque(false);
         bottomPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 24, 0));
         bottomPanel.setOpaque(false);
     }
 
-    // expand/collapse calls rebuildNavOrder()
+    // Toggle panel visibility
     private void togglePanel(JPanel p) {
         if (p == null)
             return;
@@ -380,16 +473,73 @@ public class MenuPanel extends JPanel {
         repaint();
     }
 
-    // row of E/M/H launches NORMAL MODE with that difficulty
+    // Difficulty row for single player NORMAL mode
     private JPanel makeDifficultyRowFor(GameConfig.Mode mode) {
-        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         row.setOpaque(false);
+        row.setAlignmentX(LEFT_ALIGNMENT);
         row.add(makeGlassSmallButton("EASY",
                 () -> onStart.accept(new GameConfig(mode, GameConfig.Difficulty.EASY, false))));
         row.add(makeGlassSmallButton("MEDIUM",
                 () -> onStart.accept(new GameConfig(mode, GameConfig.Difficulty.NORMAL, false))));
         row.add(makeGlassSmallButton("HARD",
                 () -> onStart.accept(new GameConfig(mode, GameConfig.Difficulty.HARD, false))));
+        return row;
+    }
+
+    // Difficulty row for single player ITEM mode
+    private JPanel makeItemDifficultyRowForSingle() {
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        row.setOpaque(false);
+        row.setAlignmentX(LEFT_ALIGNMENT);
+        row.add(makeGlassSmallButton("EASY",
+                () -> onStart.accept(new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.EASY, false))));
+        row.add(makeGlassSmallButton("MEDIUM",
+                () -> onStart.accept(new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.NORMAL, false))));
+        row.add(makeGlassSmallButton("HARD",
+                () -> onStart.accept(new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.HARD, false))));
+        return row;
+    }
+    
+    private JPanel makeOnlineP2PRowFor(GameConfig.Mode mode) {
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        row.setOpaque(false);
+        row.setAlignmentX(LEFT_ALIGNMENT);
+        row.add(makeGlassSmallButton("START", () -> {
+            // GameConfig 생성 (VERSUS 모드)
+            GameConfig config = new GameConfig(
+                    GameConfig.Mode.VERSUS, // P2P 대전 모드
+                    GameConfig.Difficulty.NORMAL, // 기본 난이도
+                    false // colorBlindMode
+            );
+
+            // GameLauncher의 onGameConfigSelect 콜백 호출
+            onStart.accept(config);
+        }));
+        return row;
+    }
+
+    // Local 2P row - opens VersusFrame with item mode flag
+    private JPanel makeLocal2PRowFor(boolean itemMode) {
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        row.setOpaque(false);
+        row.setAlignmentX(LEFT_ALIGNMENT);
+        row.add(makeGlassSmallButton("START", () -> {
+            JFrame f = (JFrame) SwingUtilities.getWindowAncestor(MenuPanel.this);
+            new VersusFrame(itemMode); // 오프라인 2인용 대전
+            if (f != null)
+                f.dispose();
+        }));
+        return row;
+    }
+
+    // Local 2P TIME row - launches TIME_ATTACK mode
+    private JPanel makeLocal2PTimeRow() {
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        row.setOpaque(false);
+        row.setAlignmentX(LEFT_ALIGNMENT);
+        row.add(makeGlassSmallButton("START", () -> onStart
+                .accept(new GameConfig(GameConfig.Mode.TIME_ATTACK, GameConfig.Difficulty.NORMAL, false))));
         return row;
     }
 
@@ -427,7 +577,7 @@ public class MenuPanel extends JPanel {
             return;
         for (int i = 0; i < navOrder.size(); i++) {
             JComponent c = navOrder.get(i);
-            c.putClientProperty("nav.selected", i == idx); // ADDED flag
+            c.putClientProperty("nav.selected", i == idx);
             c.repaint();
         }
     }
@@ -438,7 +588,7 @@ public class MenuPanel extends JPanel {
         navOrder.get(navIndex).doClick();
     }
 
-    // background paint
+    // Background paint
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
@@ -482,7 +632,7 @@ public class MenuPanel extends JPanel {
         g2.dispose();
     }
 
-    // button renderers with "selected" glow
+    // Button renderers
     private JButton makeMainButton(String text, Runnable action) {
         JButton b = new JButton(text) {
             private float hover = 0f;
@@ -517,7 +667,7 @@ public class MenuPanel extends JPanel {
 
             @Override
             public Dimension getPreferredSize() {
-                return new Dimension(220, 46);
+                return new Dimension(240, 52);
             }
 
             @Override
@@ -525,7 +675,7 @@ public class MenuPanel extends JPanel {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 int w = getWidth(), h = getHeight();
-                boolean sel = Boolean.TRUE.equals(getClientProperty("nav.selected")); // ADDED
+                boolean sel = Boolean.TRUE.equals(getClientProperty("nav.selected"));
 
                 Shape rr = new RoundRectangle2D.Float(0, 0, w - 1, h - 1, 10, 10);
                 GradientPaint bg = new GradientPaint(0, 0, new Color(60, 110, 140, (int) (140 + 60 * hover)),
@@ -533,14 +683,12 @@ public class MenuPanel extends JPanel {
                 g2.setPaint(bg);
                 g2.fill(rr);
 
-                // brighter border if selected
                 int borderA = sel ? 255 : (int) (100 + 100 * hover);
                 float stroke = sel ? 3.2f : (2f + hover);
                 g2.setColor(new Color(120, 190, 255, borderA));
                 g2.setStroke(new BasicStroke(stroke));
                 g2.draw(rr);
 
-                // subtle outer glow if selected
                 if (sel) {
                     g2.setColor(new Color(120, 190, 255, 120));
                     g2.draw(new RoundRectangle2D.Float(-2, -2, w + 3, h + 3, 12, 12));
@@ -557,6 +705,10 @@ public class MenuPanel extends JPanel {
                 g2.dispose();
             }
         };
+        Dimension d = new Dimension(240, 52);
+        b.setPreferredSize(d);
+        b.setMaximumSize(d);
+        b.setAlignmentX(LEFT_ALIGNMENT);
         return b;
     }
 
@@ -626,6 +778,10 @@ public class MenuPanel extends JPanel {
                 g2.dispose();
             }
         };
+        Dimension d = new Dimension(200, 40);
+        b.setPreferredSize(d);
+        b.setMaximumSize(d); // stop width growth
+        b.setAlignmentX(LEFT_ALIGNMENT);
         return b;
     }
 
@@ -650,7 +806,7 @@ public class MenuPanel extends JPanel {
             {
                 setOpaque(false);
                 setContentAreaFilled(false);
-                setBorder(BorderFactory.createEmptyBorder(8, 22, 8, 22));
+                setBorder(BorderFactory.createEmptyBorder(5, 14, 5, 14));
                 setFocusPainted(false);
                 setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
                 t.start();
@@ -673,7 +829,7 @@ public class MenuPanel extends JPanel {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 int w = getWidth(), h = getHeight();
-                boolean sel = Boolean.TRUE.equals(getClientProperty("nav.selected")); // ADDED
+                boolean sel = Boolean.TRUE.equals(getClientProperty("nav.selected"));
 
                 Shape rr = new RoundRectangle2D.Float(0, 0, w - 1, h - 1, 10, 10);
                 GradientPaint bg = new GradientPaint(0, 0, new Color(60, 110, 140, (int) (140 + 60 * hover)),
@@ -686,7 +842,7 @@ public class MenuPanel extends JPanel {
                 g2.setStroke(new BasicStroke(sel ? 3f : (2f + hover)));
                 g2.draw(rr);
 
-                g2.setFont(getFont().deriveFont(Font.BOLD, 15f));
+                g2.setFont(getFont().deriveFont(Font.BOLD, 12.5f));
                 FontMetrics fm = g2.getFontMetrics();
                 int tx = (w - fm.stringWidth(getText())) / 2;
                 int ty = (h + fm.getAscent() - fm.getDescent()) / 2;
@@ -696,12 +852,11 @@ public class MenuPanel extends JPanel {
                 g2.drawString(getText(), tx, ty);
                 g2.dispose();
             }
-
-            @Override
-            public Dimension getPreferredSize() {
-                return new Dimension(120, 40);
-            }
         };
+        Dimension d = new Dimension(96, 30); // clearly smaller than 200x40
+        b.setPreferredSize(d);
+        b.setMaximumSize(d);
+        b.setAlignmentX(LEFT_ALIGNMENT);
         return b;
     }
 
@@ -733,30 +888,4 @@ public class MenuPanel extends JPanel {
                 ss[i] = 1.0f;
         }
     }
-
-    public void stopAllTimers() {
-        // 메인 배경 애니메이션 Timer
-        if (anim != null && anim.isRunning()) {
-            anim.stop();
-        }
-
-        // 모든 버튼에 있는 hover 타이머 제거
-        stopTimersRecursive(this);
-    }
-
-    private void stopTimersRecursive(Container container) {
-        for (var comp : container.getComponents()) {
-            if (comp instanceof JButton b) {
-                Object timerObj = b.getClientProperty("hoverTimer");
-                if (timerObj instanceof Timer t) {
-                    if (t.isRunning())
-                        t.stop();
-                }
-            }
-            if (comp instanceof Container c) {
-                stopTimersRecursive(c);
-            }
-        }
-    }
-
 }

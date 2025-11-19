@@ -18,14 +18,14 @@ import component.network.websocket.*;
  * BoardLogic (대전 모드 완성)
  * ------------
  * - 2줄 이상 클리어 시 공격
- * - 최근 놓은 블록 제외한 마스크 전송
- * - Incoming 큐 시스템 (최대 10줄)
  * - 다음 블록 생성 전 가비지 라인 추가
  */
 public class BoardLogic {
     public static final int WIDTH = GameState.WIDTH;
     public static final int HEIGHT = GameState.HEIGHT;
-    private static final int MAX_INCOMING = 10; // 최대 대기 줄 수
+    private static final int MAX_GARBAGE = 10; // 회색 줄 max
+    private final boolean[] isGarbageRow = new boolean[HEIGHT];
+    private int garbageCount = 0;
 
     private Runnable pauseCallback;
     private Runnable resumeCallback;
@@ -50,9 +50,8 @@ public class BoardLogic {
     // 방금 고정된 블록 칸 표시 (마스크 전송 시 제외 용도)
     private final boolean[][] recentPlaced = new boolean[HEIGHT][WIDTH];
 
-    // ✅ 대기 중인 가비지 라인 큐 (각 원소는 int 마스크)
+    // 대기 중인 가비지 라인 큐 (각 원소는 int 마스크)
     private final Queue<Integer> incomingGarbageQueue = new LinkedList<>();
-    private int incomingCount = 0;
 
     public int getShakeOffset() {
         return shakeOffset;
@@ -185,13 +184,12 @@ public class BoardLogic {
         if (itemMode && b instanceof ItemBlock ib) {
             ib.activate(this, this::spawnNext);
         } else {
-            clearLines();
-            spawnNext();
+            clearLinesAndThen(this::spawnNext);
         }
     }
 
     /** 라인 클리어 처리 */
-    private void clearLines() {
+    private void clearLinesAndThen(Runnable afterClear) {
         var board = state.getBoard();
 
         java.util.List<Integer> clearedRows = new java.util.ArrayList<>();
@@ -210,8 +208,11 @@ public class BoardLogic {
         int lines = clearedRows.size();
         if (lines == 0) {
             comboCount = 0;
+            afterClear.run();
             return;
         }
+
+        updateGarbageFlagsOnClear(clearedRows);
 
         // 2줄 이상 클리어 시에만 공격
         if (lines >= 2 && onLinesClearedWithMasks != null) {
@@ -246,6 +247,9 @@ public class BoardLogic {
                 () -> {
                     if (resumeCallback != null)
                         javax.swing.SwingUtilities.invokeLater(resumeCallback);
+
+                    if (afterClear != null)
+                        SwingUtilities.invokeLater(afterClear);
                 });
 
         clearedLines += lines;
@@ -275,11 +279,11 @@ public class BoardLogic {
 
     /** 다음 블럭 스폰 (가비지 라인 먼저 추가) */
     private void spawnNext() {
-        // 대기 중인 가비지 라인 추가
-        applyIncomingGarbage();
 
         if (beforeSpawnHook != null)
             beforeSpawnHook.run();
+
+        applyIncomingGarbage();
 
         refillPreview();
 
@@ -308,14 +312,24 @@ public class BoardLogic {
             return;
 
         var board = state.getBoard();
+
+        // 필드에 남은 "가비지 슬롯" 계산
+        int available = MAX_GARBAGE - garbageCount;
+        if (available <= 0) {
+            incomingGarbageQueue.clear();
+            return;
+        }
+
         int addedLines = 0;
 
-        while (!incomingGarbageQueue.isEmpty() && addedLines < incomingCount) {
-            int mask = incomingGarbageQueue.poll(); // int로 수정
+        // available 만큼만 실제로 필드에 깔기
+        while (!incomingGarbageQueue.isEmpty() && addedLines < available) {
+            int mask = incomingGarbageQueue.poll();
 
-            // 한 줄 위로 밀기
+            // 한 줄 위로 밀면서 isGarbageRow도 같이 밀기
             for (int y = 0; y < HEIGHT - 1; y++) {
                 board[y] = java.util.Arrays.copyOf(board[y + 1], WIDTH);
+                isGarbageRow[y] = isGarbageRow[y + 1];
             }
 
             // 맨 아래에 가비지 라인 추가
@@ -325,12 +339,11 @@ public class BoardLogic {
                 last[x] = filled ? GARBAGE_COLOR : null;
             }
             board[HEIGHT - 1] = last;
-            addedLines++;
-        }
+            isGarbageRow[HEIGHT - 1] = true;
 
-        incomingCount = 0;
-        fireIncomingChanged();
-        System.out.println("[GARBAGE] " + addedLines + "줄 추가됨");
+            addedLines++;
+            garbageCount++;  // 필드에 깔린 회색줄 개수 증가
+        }
     }
 
     /** 상대에게서 가비지 라인 수신 (큐에 추가) */
@@ -338,32 +351,29 @@ public class BoardLogic {
         if (masks == null || masks.length == 0)
             return;
 
-        // 최대 10줄까지만 저장
-        int toAdd = Math.min(masks.length, MAX_INCOMING - incomingCount);
-
-        if (toAdd < masks.length) {
-            System.out.println("[GARBAGE] 큐 초과! " + masks.length + "줄 중 " + toAdd + "줄만 추가");
-        }
-
-        for (int i = 0; i < toAdd; i++) {
-            incomingGarbageQueue.offer(masks[i]); 
-            incomingCount++;
-        }
-
-        fireIncomingChanged();
-        System.out.println("[GARBAGE] 대기열에 " + toAdd + "줄 추가 (총 " + incomingCount + "줄)");
-    }
-
-    /** Incoming 변경 알림 */
-    private void fireIncomingChanged() {
-        if (onIncomingChanged != null) {
-            onIncomingChanged.accept(incomingCount);
+        for (int mask : masks) {
+            incomingGarbageQueue.offer(mask);
         }
     }
 
-    /** Incoming 카운트 조회 */
-    public int getIncomingCount() {
-        return incomingCount;
+    private void updateGarbageFlagsOnClear(List<Integer> clearedRows) {
+
+        for (int idx = 0; idx < clearedRows.size(); idx++) {
+            int y = clearedRows.get(idx) - idx; // 이미 이전 삭제로 한 칸씩 내려온 만큼 보정
+
+            if (y < 0 || y >= HEIGHT) continue;
+
+            // 이 줄이 가비지 줄이었다면 카운트 감소
+            if (isGarbageRow[y]) {
+                garbageCount--;
+            }
+
+            // y줄 위에 있는 줄들을 한 칸씩 아래로
+            for (int row = y; row > 0; row--) {
+                isGarbageRow[row] = isGarbageRow[row - 1];
+            }
+            isGarbageRow[0] = false; // 맨 위는 빈 줄
+        }
     }
 
     // === 이동 입력 ===
@@ -565,7 +575,6 @@ public class BoardLogic {
         score = 0;
         clearedLines = 0;
         deletedLinesTotal = 0;
-        incomingCount = 0;
         comboCount = 0;
         gameOver = false;
         nextIsItem = false;
