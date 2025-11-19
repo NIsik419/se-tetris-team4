@@ -18,6 +18,7 @@ import java.awt.GridLayout;
 import java.awt.Insets;
 import java.awt.Paint;
 import java.awt.RadialGradientPaint;
+import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.Shape;
 import java.awt.event.ActionEvent;
@@ -40,9 +41,9 @@ import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
+import javax.swing.JScrollPane;
 import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
@@ -52,22 +53,13 @@ import versus.VersusFrame;
 
 public class MenuPanel extends JPanel {
 
-    public enum MenuItem {
-        SETTINGS, SCOREBOARD, EXIT
-    }
-
-    public enum NavInput {
-        LEFT, RIGHT, UP, DOWN, NEXT
-    }
-
-    private enum ScreenSize {
-        SMALL, MEDIUM, LARGE, FULLSCREEN
-    }
+    public enum MenuItem { SETTINGS, SCOREBOARD, EXIT }
+    public enum NavInput { LEFT, RIGHT, UP, DOWN, NEXT }
+    private enum ScreenSize { SMALL, MEDIUM, LARGE, FULLSCREEN }
 
     private void applyScreenPreset(ScreenSize preset) {
         java.awt.Window w = SwingUtilities.getWindowAncestor(this);
-        if (!(w instanceof JFrame f))
-            return;
+        if (!(w instanceof JFrame f)) return;
 
         f.setExtendedState(JFrame.NORMAL);
         f.setResizable(true);
@@ -88,10 +80,19 @@ public class MenuPanel extends JPanel {
     private final Consumer<GameConfig> onStart;
     private final Consumer<MenuItem> onSelect;
 
-    // Starry background
-    private static final int STARS = 80;
-    private final float[] sx = new float[STARS], sy = new float[STARS], sv = new float[STARS], ss = new float[STARS];
-    private final Timer anim;
+   // Falling Tetris blocks background
+    private static final int BLOCKS = 40;
+    private final float[] bx = new float[BLOCKS];     // x position
+    private final float[] by = new float[BLOCKS];     // y position
+    private final float[] bvy = new float[BLOCKS];    // falling speed
+    private final int[] bSize = new int[BLOCKS];      // block size (px)
+    private final Color[] bColor = new Color[BLOCKS]; // block color
+
+    // helper for safe color / alpha ranges
+    private static int clamp(int v, int min, int max) {
+        return Math.max(min, Math.min(max, v));
+    }
+
 
     // Title animation
     private JLabel title;
@@ -112,8 +113,9 @@ public class MenuPanel extends JPanel {
     private JPanel individualSub;
     private JPanel individualNormalRow;
     private JPanel individualItemRow;
-
     private JPanel multiplayerSub;
+    private JPanel multiplayerItemRow;
+
     private JPanel onlineP2PSub;
     private JPanel onlineNormalRow;
     private JPanel onlineItemRow;
@@ -122,6 +124,9 @@ public class MenuPanel extends JPanel {
     private JPanel localNormalRow;
     private JPanel localItemRow;
     private JPanel localTimeRow;
+    private JScrollPane scrollPane;  
+    private Timer anim;
+
 
     // Keyboard nav state
     private final List<JButton> navOrder = new ArrayList<>();
@@ -135,10 +140,10 @@ public class MenuPanel extends JPanel {
         setBackground(new Color(0x0A0F18));
         setLayout(new GridBagLayout());
 
-        // Stars + title animation
-        seedStars();
+        // Falling blocks + title animation
+        seedBlocks();
         anim = new Timer(33, e -> {
-            stepStars();
+            stepBlocks();                  // move blocks
             titleGlowPhase += 0.03f;
             titleFloat += 0.02f;
             if (title != null)
@@ -146,6 +151,7 @@ public class MenuPanel extends JPanel {
             repaint();
         });
         anim.start();
+
 
         // Keyboard shortcuts
         InputMap im = getInputMap(WHEN_IN_FOCUSED_WINDOW);
@@ -168,6 +174,16 @@ public class MenuPanel extends JPanel {
         im.put(KeyStroke.getKeyStroke('3'), "sizeLarge");
         im.put(KeyStroke.getKeyStroke('4'), "sizeFull");
         im.put(KeyStroke.getKeyStroke("F11"), "sizeFull");
+        
+        am.put("sizeSmall",  new AbstractAction(){ @Override public void actionPerformed(ActionEvent e){ applyScreenPreset(ScreenSize.SMALL); }});
+        am.put("sizeMedium", new AbstractAction(){ @Override public void actionPerformed(ActionEvent e){ applyScreenPreset(ScreenSize.MEDIUM); }});
+        am.put("sizeLarge",  new AbstractAction(){ @Override public void actionPerformed(ActionEvent e){ applyScreenPreset(ScreenSize.LARGE); }});
+        am.put("sizeFull",   new AbstractAction(){ @Override public void actionPerformed(ActionEvent e){ applyScreenPreset(ScreenSize.FULLSCREEN); }});
+
+
+        am.put("exit",     new AbstractAction(){ @Override public void actionPerformed(ActionEvent e){ onSelect.accept(MenuItem.EXIT); }});
+        am.put("score",    new AbstractAction(){ @Override public void actionPerformed(ActionEvent e){ onSelect.accept(MenuItem.SCOREBOARD); }});
+        am.put("settings", new AbstractAction(){ @Override public void actionPerformed(ActionEvent e){ onSelect.accept(MenuItem.SETTINGS); }});
 
         am.put("sizeSmall", new AbstractAction() {
             @Override
@@ -327,11 +343,23 @@ public class MenuPanel extends JPanel {
         gb.gridy++;
         gb.insets = new Insets(0, 0, 0, 0);
         gb.weighty = 1.0;
+        gb.fill = GridBagConstraints.BOTH;
 
         menuColumn = new JPanel();
         menuColumn.setOpaque(false);
         menuColumn.setLayout(new BoxLayout(menuColumn, BoxLayout.Y_AXIS));
-        add(menuColumn, gb);
+        
+        // ScrollPane wrap
+        scrollPane = new JScrollPane(menuColumn,
+                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scrollPane.setBorder(null);
+        scrollPane.setOpaque(false);
+        scrollPane.getViewport().setOpaque(false);
+
+        // Make scroll smooth 
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        add(scrollPane, gb);
 
         // ===== INDIVIDUAL =====
         JButton btnIndividual = makeMainButton("INDIVIDUAL", () -> togglePanel(individualSub));
@@ -465,35 +493,58 @@ public class MenuPanel extends JPanel {
 
     // Toggle panel visibility
     private void togglePanel(JPanel p) {
-        if (p == null)
-            return;
+        if (p == null) return;
         p.setVisible(!p.isVisible());
         rebuildNavOrder();
         revalidate();
         repaint();
     }
 
+
     // Difficulty row for single player NORMAL mode
     private JPanel makeDifficultyRowFor(GameConfig.Mode mode) {
-        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        row.setOpaque(false);
-        row.setAlignmentX(LEFT_ALIGNMENT);
-        row.add(makeGlassSmallButton("EASY",
-                () -> onStart.accept(new GameConfig(mode, GameConfig.Difficulty.EASY, false))));
-        row.add(makeGlassSmallButton("MEDIUM",
-                () -> onStart.accept(new GameConfig(mode, GameConfig.Difficulty.NORMAL, false))));
-        row.add(makeGlassSmallButton("HARD",
-                () -> onStart.accept(new GameConfig(mode, GameConfig.Difficulty.HARD, false))));
-        return row;
+    JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+    row.setOpaque(false);
+    row.setAlignmentX(LEFT_ALIGNMENT);
+    row.add(makeGlassSmallButton("EASY",
+        () -> onStart.accept(new GameConfig(mode, GameConfig.Difficulty.EASY, false))));
+    row.add(makeGlassSmallButton("MEDIUM",
+        () -> onStart.accept(new GameConfig(mode, GameConfig.Difficulty.NORMAL, false))));
+    row.add(makeGlassSmallButton("HARD",
+        () -> onStart.accept(new GameConfig(mode, GameConfig.Difficulty.HARD, false))));
+    return row;
     }
 
-    // Difficulty row for single player ITEM mode
+    // E/M/H row for ITEM single-player (explicit per request)
     private JPanel makeItemDifficultyRowForSingle() {
         JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         row.setOpaque(false);
         row.setAlignmentX(LEFT_ALIGNMENT);
         row.add(makeGlassSmallButton("EASY",
-                () -> onStart.accept(new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.EASY, false))));
+            () -> onStart.accept(new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.EASY, false))));
+        row.add(makeGlassSmallButton("MEDIUM",
+            () -> onStart.accept(new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.NORMAL, false))));
+        row.add(makeGlassSmallButton("HARD",
+            () -> onStart.accept(new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.HARD, false))));
+        return row;
+    }
+    // E/M/H row for ITEM multiplayer (opens VersusFrame; wire difficulty later if needed)
+    private JPanel makeItemDifficultyRowForMulti() {
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        row.setOpaque(false);
+        row.setAlignmentX(LEFT_ALIGNMENT);
+        row.add(makeGlassSmallButton("EASY",   () -> openVersus()));
+        row.add(makeGlassSmallButton("MEDIUM", () -> openVersus()));
+        row.add(makeGlassSmallButton("HARD",   () -> openVersus()));
+        return row;
+    }
+
+    private VersusFrame openVersus() {
+        JFrame f = (JFrame) SwingUtilities.getWindowAncestor(MenuPanel.this);
+        VersusFrame row = new VersusFrame(false); 
+        if (f != null) f.dispose();
+        row.add(makeGlassSmallButton("SMALL",
+               () -> onStart.accept(new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.EASY, false))));
         row.add(makeGlassSmallButton("MEDIUM",
                 () -> onStart.accept(new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.NORMAL, false))));
         row.add(makeGlassSmallButton("HARD",
@@ -501,7 +552,7 @@ public class MenuPanel extends JPanel {
         return row;
     }
     
-    private JPanel makeOnlineP2PRowFor(GameConfig.Mode mode) {
+    private JPanel makeOnlineP2PRowFor(GameConfig.Mode modeIgnored) {
         JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         row.setOpaque(false);
         row.setAlignmentX(LEFT_ALIGNMENT);
@@ -509,15 +560,35 @@ public class MenuPanel extends JPanel {
             // GameConfig 생성 (VERSUS 모드)
             GameConfig config = new GameConfig(
                     GameConfig.Mode.VERSUS, // P2P 대전 모드
-                    GameConfig.Difficulty.NORMAL, // 기본 난이도
+                    GameConfig.Difficulty.EASY, // 기본 난이도
                     false // colorBlindMode
             );
 
             // GameLauncher의 onGameConfigSelect 콜백 호출
             onStart.accept(config);
         }));
-        return row;
-    }
+        // MEDIUM P2P
+    row.add(makeGlassSmallButton("MEDIUM", () -> {
+        GameConfig config = new GameConfig(
+                GameConfig.Mode.VERSUS,
+                GameConfig.Difficulty.NORMAL,
+                false
+        );
+        onStart.accept(config);
+    }));
+
+    // HARD P2P
+    row.add(makeGlassSmallButton("HARD", () -> {
+        GameConfig config = new GameConfig(
+                GameConfig.Mode.VERSUS,
+                GameConfig.Difficulty.HARD,
+                false
+        );
+        onStart.accept(config);
+    }));
+
+    return row;
+}
 
     // Local 2P row - opens VersusFrame with item mode flag
     private JPanel makeLocal2PRowFor(boolean itemMode) {
@@ -580,6 +651,10 @@ public class MenuPanel extends JPanel {
             c.putClientProperty("nav.selected", i == idx);
             c.repaint();
         }
+        // auto-scroll selected button into view
+        JComponent selected = navOrder.get(idx);
+        Rectangle rect = selected.getBounds();
+        menuColumn.scrollRectToVisible(rect);
     }
 
     private void activateSelection() {
@@ -623,11 +698,25 @@ public class MenuPanel extends JPanel {
         g2.setPaint(vignette);
         g2.fillRect(0, 0, w, h);
 
+        // falling Tetris blocks
         g2.setComposite(AlphaComposite.SrcOver);
-        for (int i = 0; i < STARS; i++) {
-            int a = (int) (120 * ss[i]);
-            g2.setColor(new Color(255, 255, 255, a));
-            g2.fillRect(Math.round(sx[i]), Math.round(sy[i]), 2, 2);
+        for (int i = 0; i < BLOCKS; i++) {
+            int size = bSize[i];
+            int x = Math.round(bx[i]);
+            int y = Math.round(by[i]);
+
+            // outer soft square
+            Color c = bColor[i];
+            g2.setColor(new Color(c.getRed(), c.getGreen(), c.getBlue(), 170));
+            g2.fillRoundRect(x, y, size, size, 6, 6);
+
+            // inner highlight
+            g2.setColor(new Color(255, 255, 255, 60));
+            g2.fillRoundRect(x + 3, y + 3, size - 6, size - 9, 6, 6);
+
+            // subtle outline
+            g2.setColor(new Color(0, 0, 0, 80));
+            g2.drawRoundRect(x, y, size, size, 6, 6);
         }
         g2.dispose();
     }
@@ -860,32 +949,47 @@ public class MenuPanel extends JPanel {
         return b;
     }
 
-    // star helpers
-    private void seedStars() {
-        Random r = new Random();
-        for (int i = 0; i < STARS; i++) {
-            sx[i] = r.nextInt(1400) - 100;
-            sy[i] = r.nextInt(900) - 100;
-            sv[i] = 0.2f + r.nextFloat() * 0.5f;
-            ss[i] = 0.4f + r.nextFloat() * 0.6f;
+    // block helpers
+   private void seedBlocks() {
+    Random r = new Random();
+    for (int i = 0; i < BLOCKS; i++) {
+        bx[i] = r.nextInt(800);          // initial x, will adjust with width later
+        by[i] = r.nextInt(600) - 600;    // start above screen
+        bvy[i] = 1.5f + r.nextFloat() * 2.5f; // falling speed 1.5~4.0
+        bSize[i] = 18 + r.nextInt(16);   // size 18~33
+
+        // pastel-ish Tetris colors
+        switch (r.nextInt(7)) {
+            case 0 -> bColor[i] = new Color(0x4FC3F7); // light blue
+            case 1 -> bColor[i] = new Color(0xFFEE58); // yellow
+            case 2 -> bColor[i] = new Color(0xFF8A65); // orange
+            case 3 -> bColor[i] = new Color(0x9575CD); // purple
+            case 4 -> bColor[i] = new Color(0x4DB6AC); // teal
+            case 5 -> bColor[i] = new Color(0x81C784); // green
+            default -> bColor[i] = new Color(0xE57373); // red
+            }
         }
     }
 
-    private void stepStars() {
-        int w = getWidth(), h = getHeight();
-        if (w == 0 || h == 0)
-            return;
-        for (int i = 0; i < STARS; i++) {
-            sy[i] += sv[i];
-            if (sy[i] > h + 20) {
-                sy[i] = -10;
-                sx[i] = (float) (Math.random() * w);
+
+    private void stepBlocks() {
+    int w = getWidth(), h = getHeight();
+    if (w == 0 || h == 0)
+        return;
+
+    Random r = new Random();
+
+    for (int i = 0; i < BLOCKS; i++) {
+        by[i] += bvy[i];
+
+        // if block goes below screen, respawn at top
+        if (by[i] > h + bSize[i]) {
+            bx[i] = r.nextInt(Math.max(w, 1));
+            by[i] = -bSize[i] - r.nextInt(200);          // slightly above top
+            bvy[i] = 1.5f + r.nextFloat() * 2.5f;
+            bSize[i] = 18 + r.nextInt(16);
             }
-            ss[i] += (Math.random() * 0.08 - 0.04);
-            if (ss[i] < 0.35f)
-                ss[i] = 0.35f;
-            if (ss[i] > 1.0f)
-                ss[i] = 1.0f;
         }
     }
 }
+        
