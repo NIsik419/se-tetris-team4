@@ -37,6 +37,7 @@ public class BoardView extends JPanel {
 
     @Override
     protected void paintComponent(Graphics g) {
+        // boolean clearing = logic.isLineClearing();
         super.paintComponent(g);
         if (!visibleDuringStandby)
             return;
@@ -75,6 +76,19 @@ public class BoardView extends JPanel {
             }
         }
 
+        // === Ghost 블록 ===
+        if (!clearing) {
+            drawGhostBlock(g2);
+        }
+
+        // === 현재 블록 ===
+        if (!clearing) {
+            Block curr = logic.getCurr();
+            if (curr != null) {
+                drawCurrentBlock(g2, curr);
+            }
+}
+
         // === fadeLayer는 무조건 위에 덮어씌우기 ===
         for (int y = 0; y < BoardLogic.HEIGHT; y++) {
             for (int x = 0; x < BoardLogic.WIDTH; x++) {
@@ -83,14 +97,6 @@ public class BoardView extends JPanel {
                 }
             }
         }
-
-        // === Ghost 블록 ===
-        drawGhostBlock(g2);
-
-        // === 현재 블록 ===
-        Block curr = logic.getCurr();
-        if (curr != null)
-            drawCurrentBlock(g2, curr);
 
         g2.dispose();
     }
@@ -133,6 +139,8 @@ public class BoardView extends JPanel {
 
     /** 유령 블록 (Ghost) */
     private void drawGhostBlock(Graphics2D g2) {
+        if (logic.getClearService().isClearing()) return;
+
         Block curr = logic.getCurr();
         if (curr == null)
             return;
