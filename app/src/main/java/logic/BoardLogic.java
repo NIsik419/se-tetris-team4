@@ -150,6 +150,8 @@ public class BoardLogic {
     private void fixBlock() {
         var b = state.getCurr();
         var board = state.getBoard();
+        int id = state.allocatePieceId(); 
+        int[][] pid = state.getPieceId();
 
         boolean blockOutOfBounds = false;
 
@@ -172,6 +174,7 @@ public class BoardLogic {
                     if (bx >= 0 && bx < WIDTH && by >= 0 && by < HEIGHT) {
                         board[by][bx] = b.getColor();
                         recentPlaced[by][bx] = true;
+                        pid[by][bx]    = id; 
                     }
                 }
             }
@@ -312,6 +315,7 @@ public class BoardLogic {
             return;
 
         var board = state.getBoard();
+        int[][] pid = state.getPieceId(); 
 
         // 필드에 남은 "가비지 슬롯" 계산
         int available = MAX_GARBAGE - garbageCount;
@@ -329,14 +333,18 @@ public class BoardLogic {
             // 한 줄 위로 밀면서 isGarbageRow도 같이 밀기
             for (int y = 0; y < HEIGHT - 1; y++) {
                 board[y] = java.util.Arrays.copyOf(board[y + 1], WIDTH);
+                pid[y]   = Arrays.copyOf(pid[y + 1], WIDTH); 
                 isGarbageRow[y] = isGarbageRow[y + 1];
             }
 
             // 맨 아래에 가비지 라인 추가
             Color[] last = new Color[WIDTH];
+            int[]   lastPid = new int[WIDTH];    
+
             for (int x = 0; x < WIDTH; x++) {
                 boolean filled = ((mask >> x) & 1) != 0;
                 last[x] = filled ? GARBAGE_COLOR : null;
+                lastPid[x] = 0;    
             }
             board[HEIGHT - 1] = last;
             isGarbageRow[HEIGHT - 1] = true;
@@ -613,6 +621,10 @@ public class BoardLogic {
         for (int y = 0; y < HEIGHT; y++) {
             Arrays.fill(recentPlaced[y], false);
         }
+    }
+
+    public boolean isLineClearing() {
+        return clear != null && clear.isClearing();
     }
 
 }

@@ -47,6 +47,7 @@ public class BoardView extends JPanel {
 
     @Override
     protected void paintComponent(Graphics g) {
+        boolean clearing = logic.isLineClearing();
         super.paintComponent(g);
         if (!visibleDuringStandby)
             return;
@@ -175,6 +176,8 @@ public class BoardView extends JPanel {
 
     /** 유령 블록 (Ghost) */
     private void drawGhostBlock(Graphics2D g2) {
+        if (logic.getClearService().isClearing()) return;
+
         Block curr = logic.getCurr();
         if (curr == null)
             return;
