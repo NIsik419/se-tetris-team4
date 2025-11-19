@@ -65,6 +65,11 @@ public class OnlineVersusPanel extends JPanel {
     private static final long LAG_THRESHOLD = 200;
     private static final long DISCONNECT_THRESHOLD = 5000;
 
+    // 시간제한 모드 용
+    private TimeLimitManager timeLimitManager;
+    private JLabel timerLabel; // 타이머 표시용
+    private static final long TIME_LIMIT_SECONDS = 180; // 3분
+
     // 오버레이 UI
     private JPanel gameOverPanel;
     private JPanel overlayPanel;
@@ -79,8 +84,8 @@ public class OnlineVersusPanel extends JPanel {
         setLayout(new BorderLayout(0, 0));
         setBackground(new Color(18, 22, 30));
 
-        /* 상단 HUD - 높이 고정 */
-        JPanel topHud = new JPanel(new GridLayout(1, 4, 15, 0)); // 4칸으로 변경 (통계 추가)
+        /* 상단 HUD - 타이머 추가 */
+        JPanel topHud = new JPanel(new GridLayout(1, 5, 15, 0)); // 4→5칸으로 변경
         topHud.setBackground(new Color(18, 22, 30));
         topHud.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
         topHud.setPreferredSize(new Dimension(0, 80));
@@ -95,6 +100,17 @@ public class OnlineVersusPanel extends JPanel {
         lagLabel.setHorizontalAlignment(SwingConstants.CENTER);
         lagPanel.add(lagLabel);
         topHud.add(lagPanel);
+
+        // 타이머 표시 추가
+        JPanel timerPanel = new JPanel();
+        timerPanel.setBackground(new Color(24, 28, 38));
+        timerPanel.setBorder(BorderFactory.createEmptyBorder(8, 12, 8, 12));
+        timerLabel = new JLabel("");
+        timerLabel.setForeground(Color.WHITE);
+        timerLabel.setFont(new Font("Arial", Font.BOLD, 16));
+        timerLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        timerPanel.add(timerLabel);
+        topHud.add(timerPanel);
 
         // 동기화 통계 표시 (NEW!)
         JPanel syncPanel = new JPanel();
@@ -164,6 +180,8 @@ public class OnlineVersusPanel extends JPanel {
         /* 네트워크 초기화 */
         client = new GameClient(this::onNetworkMessage);
         adapter = new BoardSyncAdapter(myLogic, oppLogic, client);
+
+        timeLimitManager = new TimeLimitManager(timerLabel, client, isServer);
 
         client.setOnConnected(() -> {
             System.out.println("[DEBUG] onConnected callback!");
@@ -259,10 +277,10 @@ public class OnlineVersusPanel extends JPanel {
             SwingUtilities.invokeLater(() -> {
                 loop.stopLoop();
                 client.send(new Message(MessageType.GAME_OVER, null));
-                
+
                 // 게임 종료 시 통계 출력
                 adapter.printStats();
-                
+
                 showGameOverOverlay(true);
             });
         });
@@ -279,10 +297,11 @@ public class OnlineVersusPanel extends JPanel {
     }
 
     /* ===== 동기화 통계 업데이트 (NEW!) ===== */
-    
+
     private void updateSyncStats() {
-        if (!gameStarted) return;
-        
+        if (!gameStarted)
+            return;
+
         String stats = adapter.getStatsString();
         SwingUtilities.invokeLater(() -> syncStatsLabel.setText(stats));
     }
@@ -365,9 +384,46 @@ public class OnlineVersusPanel extends JPanel {
             overlayPanel.add(modeLabel);
             overlayPanel.add(Box.createVerticalStrut(8));
 
-            modeSelector = new JComboBox<>(new String[] { "Normal", "Item", "Time Limit" });
-            modeSelector.setMaximumSize(new Dimension(200, 30));
+            //  모드 셀렉터 스타일 개선
+            modeSelector = new JComboBox<>(new String[] {
+                    "Normal",
+                    "Item",
+                    "Time Limit (3min)"
+            });
+            modeSelector.setMaximumSize(new Dimension(200, 35));
             modeSelector.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+            //  스타일 개선 - 배경색과 글자색 명확하게
+            modeSelector.setBackground(new Color(50, 60, 75));
+            modeSelector.setForeground(Color.WHITE);
+            modeSelector.setFont(new Font("Arial", Font.BOLD, 14));
+            modeSelector.setFocusable(false);
+
+            //  테두리 추가
+            modeSelector.setBorder(BorderFactory.createLineBorder(new Color(100, 150, 200), 2));
+
+            //  드롭다운 메뉴도 스타일 적용
+            modeSelector.setRenderer(new DefaultListCellRenderer() {
+                @Override
+                public Component getListCellRendererComponent(JList<?> list, Object value,
+                        int index, boolean isSelected, boolean cellHasFocus) {
+                    JLabel label = (JLabel) super.getListCellRendererComponent(
+                            list, value, index, isSelected, cellHasFocus);
+
+                    label.setFont(new Font("Arial", Font.BOLD, 14));
+
+                    if (isSelected) {
+                        label.setBackground(new Color(70, 120, 180));
+                        label.setForeground(Color.WHITE);
+                    } else {
+                        label.setBackground(new Color(50, 60, 75));
+                        label.setForeground(Color.WHITE);
+                    }
+
+                    label.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
+                    return label;
+                }
+            });
             modeSelector.addActionListener(e -> onModeChanged());
             overlayPanel.add(modeSelector);
             overlayPanel.add(Box.createVerticalStrut(20));
@@ -447,6 +503,15 @@ public class OnlineVersusPanel extends JPanel {
             case GAME_START -> {
                 lastPongTime = System.currentTimeMillis();
                 startGame();
+            }
+
+            case TIME_LIMIT_START -> {
+                // 클라이언트가 서버의 시작 시간 수신
+                if (!isServer) {
+                    long serverStartTime = WebSocketUtil.fromJson(msg.data, Long.class);
+                    timeLimitManager.syncStart(serverStartTime, TIME_LIMIT_SECONDS);
+                    System.out.println("[TIME] Synced with server start time");
+                }
             }
             case PING -> handlePing();
             case PONG -> handlePong();
@@ -601,6 +666,11 @@ public class OnlineVersusPanel extends JPanel {
                 rootPane.getGlassPane().setVisible(false);
             }
 
+            // 시간제한 모드
+            if (selectedMode.equals("Time Limit")) {
+                timeLimitManager.start(TIME_LIMIT_SECONDS, this::onTimeLimitTimeout);
+            }
+
             loop.startLoop();
             myView.requestFocusInWindow();
             System.out.println("[GAME] Started with mode: " + selectedMode + " (Delta Sync Enabled)");
@@ -724,8 +794,17 @@ public class OnlineVersusPanel extends JPanel {
             // 델타 추적기 리셋
             adapter.reset();
 
+            // 타이머 리셋
+            timeLimitManager.reset();
+
             gameStarted = true;
             loop.startLoop();
+
+            // 타임 리밋 모드면 타이머 재시작
+            if (selectedMode.equals("Time Limit")) {
+                timeLimitManager.start(TIME_LIMIT_SECONDS, this::onTimeLimitTimeout);
+            }
+
             myView.requestFocusInWindow();
 
             System.out.println("[GAME] Restarted (Delta tracking reset)");
@@ -741,6 +820,98 @@ public class OnlineVersusPanel extends JPanel {
         int totalHeight = boardHeight + 180;
 
         return new Dimension(totalWidth, totalHeight);
+    }
+
+    /**
+     * 타임 리밋 종료 시 호출
+     */
+    private void onTimeLimitTimeout() {
+        loop.stopLoop();
+
+        int myScore = myLogic.getScore();
+        int oppScore = oppLogic.getScore();
+
+        // 점수 비교하여 승부 결정
+        boolean iWon = myScore > oppScore;
+
+        // 타임아웃 메시지 전송
+        client.send(new Message(MessageType.GAME_OVER, "timeout"));
+
+        SwingUtilities.invokeLater(() -> {
+            showTimeLimitGameOverOverlay(iWon, myScore, oppScore);
+        });
+    }
+
+    /**
+     * 타임 리밋 게임 오버 오버레이 (점수 비교 표시)
+     */
+    private void showTimeLimitGameOverOverlay(boolean iWon, int myScore, int oppScore) {
+        JRootPane root = SwingUtilities.getRootPane(this);
+        if (root == null)
+            return;
+
+        JPanel glass = (JPanel) root.getGlassPane();
+        glass.removeAll();
+        glass.setLayout(null);
+        glass.setVisible(true);
+
+        gameOverPanel = new JPanel();
+        gameOverPanel.setLayout(new BoxLayout(gameOverPanel, BoxLayout.Y_AXIS));
+        gameOverPanel.setBackground(new Color(20, 20, 25, 230));
+        gameOverPanel.setBorder(BorderFactory.createEmptyBorder(40, 40, 40, 40));
+
+        // 승패 타이틀
+        JLabel title = new JLabel(iWon ? "TIME'S UP - YOU WIN!" : "TIME'S UP - YOU LOSE");
+        title.setFont(new Font("Arial", Font.BOLD, 24));
+        title.setForeground(iWon ? new Color(80, 255, 80) : Color.RED);
+        title.setAlignmentX(Component.CENTER_ALIGNMENT);
+        gameOverPanel.add(title);
+
+        gameOverPanel.add(Box.createVerticalStrut(20));
+
+        // 점수 비교
+        JLabel scoreCompare = new JLabel(String.format("Your Score: %d | Opponent: %d", myScore, oppScore));
+        scoreCompare.setFont(new Font("Arial", Font.PLAIN, 16));
+        scoreCompare.setForeground(Color.WHITE);
+        scoreCompare.setAlignmentX(Component.CENTER_ALIGNMENT);
+        gameOverPanel.add(scoreCompare);
+
+        gameOverPanel.add(Box.createVerticalStrut(25));
+
+        // 재시작 버튼
+        JButton restartBtn = new JButton("Restart");
+        restartBtn.setFont(new Font("Arial", Font.BOLD, 16));
+        restartBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
+        restartBtn.addActionListener(e -> {
+            myRestartReady = true;
+            client.send(new Message(MessageType.RESTART_READY, null));
+            updateGameOverOverlay("Waiting for opponent...");
+        });
+        gameOverPanel.add(restartBtn);
+
+        gameOverPanel.add(Box.createVerticalStrut(10));
+
+        // 종료 버튼
+        JButton exitBtn = new JButton("Exit");
+        exitBtn.setFont(new Font("Arial", Font.BOLD, 16));
+        exitBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
+        exitBtn.addActionListener(e -> {
+            cleanupAll();
+            Window w = SwingUtilities.getWindowAncestor(this);
+            if (w != null)
+                w.dispose();
+        });
+        gameOverPanel.add(exitBtn);
+
+        int w = 350, h = 280;
+        gameOverPanel.setBounds(
+                (getWidth() - w) / 2,
+                (getHeight() - h) / 2,
+                w, h);
+
+        glass.add(gameOverPanel);
+        glass.repaint();
+        glass.revalidate();
     }
 
     public static void main(String[] args) {
@@ -776,11 +947,15 @@ public class OnlineVersusPanel extends JPanel {
                 connectionCheckTimer.stop();
             if (statsTimer != null)
                 statsTimer.stop();
-            
+
+            // 타이머 정리 (NEW!)
+            if (timeLimitManager != null)
+                timeLimitManager.cleanup();
+
             // 최종 통계 출력
             System.out.println("\n=== Final Sync Statistics ===");
             adapter.printStats();
-            
+
             client.disconnect();
             loop.stopLoop();
             GameServer.stopServer();
