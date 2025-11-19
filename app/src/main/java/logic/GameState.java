@@ -28,6 +28,9 @@ public class GameState {
     private Block hold;     // 홀드 블록
     private boolean canHold = true;
     private boolean gameOver = false;
+    private int score = 0;
+    private int level = 1;
+    private int incomingLines = 0;
 
     private int x = 3, y = 0;
 
@@ -51,6 +54,15 @@ public class GameState {
 
     public boolean isGameOver() { return gameOver; }
     public void setGameOver(boolean value) { this.gameOver = value; }
+
+    public int getScore() { return score; }
+    public void setScore(int score) { this.score = score; }
+
+    public int getLevel() { return level; }
+    public void setLevel(int level) { this.level = level; }
+
+    public int getIncomingLines() { return incomingLines; }
+    public void setIncomingLines(int v) { this.incomingLines = v; }
 
     public int getX() { return x; }
     public int getY() { return y; }
