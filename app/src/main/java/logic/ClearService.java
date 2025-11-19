@@ -3,9 +3,12 @@ package logic;
 import java.awt.Color;
 import java.awt.Point;
 import javax.swing.Timer;
+import logic.GameState;
 
+import java.util.ArrayDeque;
 import logic.ParticleSystem.Particle;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Deque;
@@ -54,7 +57,7 @@ public class ClearService {
             animMgr.tryStart(AnimationManager.AnimationType.LINE_CLEAR);
         }
 
-        int[] totalCleared = {0}; // 연쇄로 몇 줄 지웠는지 합계
+        int[] totalCleared = { 0 }; // 연쇄로 몇 줄 지웠는지 합계
 
         clearLinesStep(onFrameUpdate, () -> {
             // 여기까지 왔으면 더 이상 지울 줄 없음
@@ -75,8 +78,8 @@ public class ClearService {
 
     /** 연쇄 클리어 한 스텝 (재귀적으로 자기 자신을 다시 부름) */
     private void clearLinesStep(Runnable onFrameUpdate,
-                                Runnable finalComplete,
-                                int[] totalCleared) {
+            Runnable finalComplete,
+            int[] totalCleared) {
 
         Color[][] board = state.getBoard();
         List<Integer> fullRows = new ArrayList<>();
@@ -90,7 +93,8 @@ public class ClearService {
                     break;
                 }
             }
-            if (full) fullRows.add(y);
+            if (full)
+                fullRows.add(y);
         }
 
         lastClearedRows = new ArrayList<>(fullRows);
@@ -119,8 +123,8 @@ public class ClearService {
 
             System.out.println("[DEBUG] Clear + Gravity completed with particles");
 
-            if (onComplete != null)
-                onComplete.run();
+            if (finalComplete != null)
+                finalComplete.run();
         });
     }
 
@@ -181,7 +185,7 @@ public class ClearService {
 
         var board = state.getBoard();
         var fade = state.getFadeLayer();
-        var pid   = state.getPieceId(); 
+        var pid = state.getPieceId();
 
         // 0단계: 잔상 생성
         applyOutlineEffect(rows);
@@ -216,7 +220,7 @@ public class ClearService {
                 // 중간쯤에서 실제 블록 제거
                 for (int row : rows) {
                     Arrays.fill(board[row], null);
-                    Arrays.fill(pid[row], 0); 
+                    Arrays.fill(pid[row], 0);
                 }
             }
 
@@ -236,14 +240,13 @@ public class ClearService {
     /** 라인 클리어 시 잔상/테두리 효과 */
     private void applyOutlineEffect(List<Integer> rows) {
         Color[][] board = state.getBoard();
-        Color[][] fade  = state.getFadeLayer();
+        Color[][] fade = state.getFadeLayer();
 
         for (int row : rows) {
             for (int x = 0; x < GameState.WIDTH; x++) {
                 Color base = board[row][x];
                 if (base != null) {
-                    boolean isEdge =
-                            (x == 0 || board[row][x - 1] == null) ||
+                    boolean isEdge = (x == 0 || board[row][x - 1] == null) ||
                             (x == GameState.WIDTH - 1 || board[row][x + 1] == null);
 
                     int r = base.getRed();
@@ -271,7 +274,7 @@ public class ClearService {
     // =========================
     private void compressBoardByRows() {
         Color[][] board = state.getBoard();
-        int[][]   pid   = state.getPieceId();
+        int[][] pid = state.getPieceId();
 
         int write = GameState.HEIGHT - 1; // 아래에서부터 쌓을 위치
 
@@ -281,9 +284,9 @@ public class ClearService {
                 if (write != read) {
                     for (int x = 0; x < GameState.WIDTH; x++) {
                         board[write][x] = board[read][x];
-                        pid[write][x]   = pid[read][x];  
+                        pid[write][x] = pid[read][x];
                         board[read][x] = null;
-                        pid[read][x]    = 0; 
+                        pid[read][x] = 0;
                     }
                 }
                 write--;
@@ -294,7 +297,7 @@ public class ClearService {
         for (int y = write; y >= 0; y--) {
             for (int x = 0; x < GameState.WIDTH; x++) {
                 board[y][x] = null;
-                pid[y][x]   = 0; 
+                pid[y][x] = 0;
             }
         }
     }
@@ -304,7 +307,8 @@ public class ClearService {
     // =========================
     public void applyGravityInstantly() {
         System.out.println("[DEBUG] applyGravityInstantly() called");
-        if (skipDuringItem) return;
+        if (skipDuringItem)
+            return;
 
         Color[][] board = state.getBoard();
 
@@ -324,7 +328,8 @@ public class ClearService {
                 }
             }
 
-            if (!movedAny) break;
+            if (!movedAny)
+                break;
         }
     }
 
@@ -342,9 +347,10 @@ public class ClearService {
         Color[][] fade = state.getFadeLayer();
         for (int y = 0; y < GameState.HEIGHT; y++)
             Arrays.fill(fade[y], null);
-        if (onFrameUpdate != null) onFrameUpdate.run();
+        if (onFrameUpdate != null)
+            onFrameUpdate.run();
 
-        Timer timer = new Timer(50, null);  // 느린/무거운 느낌
+        Timer timer = new Timer(50, null); // 느린/무거운 느낌
         timer.addActionListener(e -> {
             Color[][] board = state.getBoard();
 
@@ -360,11 +366,13 @@ public class ClearService {
                 }
             }
 
-            if (onFrameUpdate != null) onFrameUpdate.run();
+            if (onFrameUpdate != null)
+                onFrameUpdate.run();
 
             if (!movedAny) {
                 timer.stop();
-                if (onComplete != null) onComplete.run();
+                if (onComplete != null)
+                    onComplete.run();
             }
         });
 
@@ -381,20 +389,22 @@ public class ClearService {
         boolean[][] visited = new boolean[h][w];
         List<List<Point>> clusters = new ArrayList<>();
 
-        int[] dx = {1, -1, 0, 0};
-        int[] dy = {0, 0, 1, -1};
+        int[] dx = { 1, -1, 0, 0 };
+        int[] dy = { 0, 0, 1, -1 };
 
-        int[][] pid = state.getPieceId(); 
+        int[][] pid = state.getPieceId();
 
         for (int y = 0; y < h; y++) {
             for (int x = 0; x < w; x++) {
-                if (board[y][x] == null || visited[y][x]) continue;
+                if (board[y][x] == null || visited[y][x])
+                    continue;
 
                 int id = pid[y][x];
-                if (id == 0) continue;
+                if (id == 0)
+                    continue;
 
                 List<Point> cluster = new ArrayList<>();
-                Deque<Point> stack   = new ArrayDeque<>();
+                Deque<Point> stack = new ArrayDeque<>();
                 stack.push(new Point(x, y));
                 visited[y][x] = true;
 
@@ -405,10 +415,14 @@ public class ClearService {
                     for (int dir = 0; dir < 4; dir++) {
                         int nx = p.x + dx[dir];
                         int ny = p.y + dy[dir];
-                        if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
-                        if (visited[ny][nx]) continue;
-                        if (board[ny][nx] == null) continue; // 색은 상관X, 빈칸만 아니면 같은 덩어리
-                        if (pid[ny][nx] != id) continue;  
+                        if (nx < 0 || nx >= w || ny < 0 || ny >= h)
+                            continue;
+                        if (visited[ny][nx])
+                            continue;
+                        if (board[ny][nx] == null)
+                            continue; // 색은 상관X, 빈칸만 아니면 같은 덩어리
+                        if (pid[ny][nx] != id)
+                            continue;
 
                         visited[ny][nx] = true;
                         stack.push(new Point(nx, ny));
@@ -456,22 +470,23 @@ public class ClearService {
         // y가 큰(아래쪽) 것부터 처리해야 덮어쓰기 안 꼬임
         cluster.sort((a, b) -> Integer.compare(b.y, a.y));
 
-        int[][] pid = state.getPieceId(); 
+        int[][] pid = state.getPieceId();
 
         for (Point p : cluster) {
             int x = p.x;
             int y = p.y;
 
             Color c = board[y][x];
-            if (c == null) continue; // 혹시 이미 비어 있으면 스킵
+            if (c == null)
+                continue; // 혹시 이미 비어 있으면 스킵
 
-            int id = pid[y][x];    
+            int id = pid[y][x];
 
             board[y][x] = null;
-            pid[y][x]   = 0;     
+            pid[y][x] = 0;
 
             board[y + 1][x] = c;
-            pid[y + 1][x]   = id;    
+            pid[y + 1][x] = id;
         }
     }
 
@@ -479,7 +494,8 @@ public class ClearService {
     private int maxY(List<Point> cluster) {
         int max = -1;
         for (Point p : cluster) {
-            if (p.y > max) max = p.y;
+            if (p.y > max)
+                max = p.y;
         }
         return max;
     }
@@ -487,18 +503,18 @@ public class ClearService {
     /**
      * 줄 삭제 후, 윗줄들이 "한 칸씩" 내려오는 애니메이션.
      * - 실제 로직: 맨 아래에서 위로 스캔하면서
-     *   "비어 있는 줄 아래에, 바로 위 줄이 비어있지 않으면" 한 칸 내려보냄.
+     * "비어 있는 줄 아래에, 바로 위 줄이 비어있지 않으면" 한 칸 내려보냄.
      * - 이 한 칸 내리는 동작을 Timer로 여러 번 반복해서
-     *   전체가 스르르 내려오는 느낌을 만든다.
+     * 전체가 스르르 내려오는 느낌을 만든다.
      */
     private void compressBoardByRowsAnimated(Runnable onFrameUpdate,
-                                            Runnable onComplete) {
-        final int TICK_MS = 100;              // ⬅️ 줄 내려오는 속도(작을수록 빠름)
+            Runnable onComplete) {
+        final int TICK_MS = 100; // ⬅️ 줄 내려오는 속도(작을수록 빠름)
 
         Timer timer = new Timer(TICK_MS, null);
         timer.addActionListener(e -> {
             Color[][] board = state.getBoard();
-            int[][]   pid   = state.getPieceId();
+            int[][] pid = state.getPieceId();
             boolean moved = false;
 
             // 아래에서 위로 스캔하면서 "비어있는 줄 <- 바로 위 줄" 복사
@@ -507,20 +523,22 @@ public class ClearService {
                     // row (y-1)를 row y로 한 칸 내리고, 위는 비움
                     for (int x = 0; x < GameState.WIDTH; x++) {
                         board[y][x] = board[y - 1][x];
-                        pid[y][x]     = pid[y - 1][x]; 
+                        pid[y][x] = pid[y - 1][x];
                         board[y - 1][x] = null;
-                        pid[y - 1][x]   = 0; 
+                        pid[y - 1][x] = 0;
                     }
                     moved = true;
                 }
             }
 
-            if (onFrameUpdate != null) onFrameUpdate.run();
+            if (onFrameUpdate != null)
+                onFrameUpdate.run();
 
             // 더 내려올 줄이 없으면 애니메이션 종료
             if (!moved) {
                 timer.stop();
-                if (onComplete != null) onComplete.run();
+                if (onComplete != null)
+                    onComplete.run();
             }
         });
 
@@ -544,7 +562,8 @@ public class ClearService {
                     break;
                 }
             }
-            if (full) fullRows.add(y);
+            if (full)
+                fullRows.add(y);
         }
         return fullRows;
     }
@@ -556,7 +575,9 @@ public class ClearService {
 
     /** 한 줄이 비어있는지 검사 */
     private boolean isRowEmpty(Color[] row) {
-        for (Color c : row) if (c != null) return false;
+        for (Color c : row)
+            if (c != null)
+                return false;
         return true;
     }
 

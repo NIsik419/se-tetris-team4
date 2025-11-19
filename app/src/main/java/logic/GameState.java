@@ -42,7 +42,7 @@ public class GameState {
 
     public Block getCurr() { return curr; }
     public void setCurr(Block b) { this.curr = b; }
-
+    
     public Block getNext() { return next; }
     public void setNext(Block b) { this.next = b; }
 
