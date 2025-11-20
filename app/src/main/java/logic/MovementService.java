@@ -15,6 +15,11 @@ public class MovementService {
      * 현재 블록이 주어진 좌표(newX, newY)에 이동할 수 있는지 검사
      */
     public boolean canMove(Block b, int newX, int newY) {
+        //  null 체크 추가
+        if (b == null) {
+            return false;
+        }
+        
         var board = state.getBoard();
         for (int j = 0; j < b.height(); j++) {
             for (int i = 0; i < b.width(); i++) {
@@ -23,8 +28,12 @@ public class MovementService {
                     int by = newY + j;
 
                     // 보드 밖 체크
-                    if (bx < 0 || bx >= GameState.WIDTH || by < 0 || by >= GameState.HEIGHT)
+                    if (bx < 0 || bx >= GameState.WIDTH || by >= GameState.HEIGHT)
                         return false;
+                    
+                    //  by < 0 체크 제거 (스폰 시 위쪽에서 시작 가능)
+                    if (by < 0)
+                        continue;
 
                     // 고정된 블록 위면 이동 불가
                     if (board[by][bx] != null)
@@ -104,8 +113,6 @@ public class MovementService {
 
         return by + maxDrop;
     }
-
-    
 
     public void moveDown() {
         state.setPosition(state.getX(), state.getY() + 1);
