@@ -20,7 +20,7 @@ import component.ColorBlindPalette;
 public class NextPreviewPanel extends JPanel {
     private static final Color BG_PANEL = new Color(30, 35, 50);   
     private static final Color TILE_BG  = new Color(60, 65, 80);   
-    private int maxCount = 3;
+    private int maxCount = 1;
     private final List<Block> blocks = new ArrayList<>();
 
     private ColorBlindPalette.Mode colorMode = ColorBlindPalette.Mode.NORMAL;
@@ -53,7 +53,7 @@ public class NextPreviewPanel extends JPanel {
     private JComponent createCell(Block b) {
         JPanel container = new JPanel(new BorderLayout());
         container.setBackground(BG_PANEL);
-        container.setPreferredSize(new Dimension(120, 70)); 
+        container.setPreferredSize(new Dimension(110, 40)); 
 
         JPanel blockPanel = new JPanel() {
             @Override protected void paintComponent(Graphics g) {
@@ -62,14 +62,14 @@ public class NextPreviewPanel extends JPanel {
                 Graphics2D g2 = (Graphics2D) g;
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-                int blockSize = 18; 
+                int blockSize = 22; 
                 int totalW = b.width() * blockSize;
                 int totalH = b.height() * blockSize;
                 int offX = (getWidth()  - totalW) / 2;
                 int offY = (getHeight() - totalH) / 2;
 
                 g2.setColor(TILE_BG);
-                g2.fillRoundRect(offX - 5, offY - 5, totalW + 10, totalH + 10, 8, 8);
+                g2.fillRoundRect(offX - 3, offY - 3, totalW + 6, totalH + 6, 8, 8);
 
                 for (int j = 0; j < b.height(); j++) {
                     for (int i = 0; i < b.width(); i++) {
@@ -94,7 +94,7 @@ public class NextPreviewPanel extends JPanel {
             }
         };
         blockPanel.setBackground(BG_PANEL);
-        blockPanel.setPreferredSize(new Dimension(120, 80)); 
+        blockPanel.setPreferredSize(new Dimension(110, 40)); 
         container.add(blockPanel, BorderLayout.CENTER);
         return container;
     }

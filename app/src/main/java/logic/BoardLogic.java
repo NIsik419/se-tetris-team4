@@ -1,11 +1,14 @@
 package logic;
 
 import java.awt.Color;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
 import java.util.function.Consumer;
+
+import javax.swing.SwingUtilities;
 
 import blocks.Block;
 import component.BlockBag;
@@ -15,18 +18,21 @@ import component.SpeedManager;
 import component.items.ItemBlock;
 
 /**
- * BoardLogic (AnimationManager 통합)
+ * BoardLogic (대전 모드 완성)
  * ------------
- * - 게임 전체 로직 관리
- * - 블럭 생성: RWS 기반 BlockBag 사용
- * - 속도 관리: SpeedManager로 위임
- * - 애니메이션 충돌 방지: AnimationManager 중앙 관리
+ * - 2줄 이상 클리어 시 공격
+ * - 다음 블록 생성 전 가비지 라인 추가
  */
 public class BoardLogic {
     public static final int WIDTH = GameState.WIDTH;
     public static final int HEIGHT = GameState.HEIGHT;
+    private static final int MAX_GARBAGE = 10; // 회색 줄 max
+    private final boolean[] isGarbageRow = new boolean[HEIGHT];
+    private int garbageCount = 0;
+
     private Runnable pauseCallback;
     private Runnable resumeCallback;
+    private Runnable onGameOverCallback;
 
     public void setLoopControl(Runnable pause, Runnable resume) {
         this.pauseCallback = pause;
@@ -37,12 +43,18 @@ public class BoardLogic {
     private long lastClearTime = 0;
     private int shakeOffset = 0;
 
+    private Color[][] opponentBoard = new Color[HEIGHT][WIDTH];
+
     private java.util.function.IntConsumer onLineCleared;
     private Runnable beforeSpawnHook;
-    private java.util.function.Consumer<int[]> onLinesClearedWithMasks; // NEW: 마스크 이벤트
+    private java.util.function.Consumer<int[]> onLinesClearedWithMasks;
+    private java.util.function.IntConsumer onIncomingChanged; // ✅ Incoming 변경 알림
 
     // 방금 고정된 블록 칸 표시 (마스크 전송 시 제외 용도)
     private final boolean[][] recentPlaced = new boolean[HEIGHT][WIDTH];
+
+    // 대기 중인 가비지 라인 큐 (각 원소는 int 마스크)
+    private final Queue<Integer> incomingGarbageQueue = new LinkedList<>();
 
     public int getShakeOffset() {
         return shakeOffset;
@@ -60,7 +72,7 @@ public class BoardLogic {
     private final MovementService move = new MovementService(state);
     private final ClearService clear = new ClearService(state);
     private final BuffManager buff = new BuffManager();
-    private final AnimationManager animMgr = new AnimationManager(); 
+    private final AnimationManager animMgr = new AnimationManager();
     private ItemManager item;
 
     private final Consumer<Integer> onGameOver;
@@ -89,17 +101,12 @@ public class BoardLogic {
         this.onGameOver = onGameOver;
         this.difficulty = diff;
 
-        // RWS 기반 BlockBag 난이도 적용
         this.bag = new BlockBag(diff);
         this.item = new ItemManager(bag);
 
-        // SpeedManager 난이도 적용
         speedManager.setDifficulty(diff);
-
-        // ClearService에 AnimationManager 주입
         clear.setAnimationManager(animMgr);
 
-        // 초기 블럭 준비
         refillPreview();
         state.setCurr(previewQueue.removeFirst());
         fireNextQueueChanged();
@@ -107,6 +114,10 @@ public class BoardLogic {
 
     public void setOnLinesClearedWithMasks(java.util.function.Consumer<int[]> cb) {
         this.onLinesClearedWithMasks = cb;
+    }
+
+    public void setOnIncomingChanged(java.util.function.IntConsumer cb) {
+        this.onIncomingChanged = cb;
     }
 
     /** 큐가 부족하면 블럭 채워넣기 */
@@ -120,7 +131,6 @@ public class BoardLogic {
         this.itemMode = enabled;
     }
 
-    // === 점수 관리 ===
     public void addScore(int delta) {
         if (buff.isDoubleScoreActive())
             score += delta * 2;
@@ -128,7 +138,6 @@ public class BoardLogic {
             score += delta;
     }
 
-    // === 이동 / 중력 ===
     public void moveDown() {
         if (move.canMove(state.getCurr(), state.getX(), state.getY() + 1)) {
             move.moveDown();
@@ -146,59 +155,77 @@ public class BoardLogic {
         var b = state.getCurr();
         var board = state.getBoard();
 
+        boolean blockOutOfBounds = false;
+
         // recentPlaced 초기화
-        for (int yy = 0; yy < HEIGHT; yy++) Arrays.fill(recentPlaced[yy], false);
+        for (int yy = 0; yy < HEIGHT; yy++)
+            Arrays.fill(recentPlaced[yy], false);
 
         for (int j = 0; j < b.height(); j++) {
             for (int i = 0; i < b.width(); i++) {
                 if (b.getShape(i, j) == 1) {
                     int bx = state.getX() + i;
                     int by = state.getY() + j;
+
+                    // 상단 넘으면 즉시 game over
+                    if (by < 0) {
+                        blockOutOfBounds = true;
+                        continue;
+                    }
+
                     if (bx >= 0 && bx < WIDTH && by >= 0 && by < HEIGHT) {
                         board[by][bx] = b.getColor();
-                        recentPlaced[by][bx] = true; // 방금 고정된 칸으로 표시
+                        recentPlaced[by][bx] = true;
                     }
                 }
             }
         }
+        if(blockOutOfBounds) {
+            gameOver();
+            return;
+        }
 
-        // 아이템 블럭 처리
         if (itemMode && b instanceof ItemBlock ib) {
             ib.activate(this, this::spawnNext);
         } else {
-            clearLines(); // 여기서 recentPlaced를 고려해 마스크 이벤트 발행
-            spawnNext();
+            clearLinesAndThen(this::spawnNext);
         }
     }
 
-    /** 라인 클리어 처리 (애니메이션 pause/resume + 마스크 이벤트 발행) */
-    private void clearLines() {
+    /** 라인 클리어 처리 */
+    private void clearLinesAndThen(Runnable afterClear) {
         var board = state.getBoard();
 
-        // 1) 이번 프레임에 지워질 줄 찾기
         java.util.List<Integer> clearedRows = new java.util.ArrayList<>();
         for (int y = 0; y < HEIGHT; y++) {
             boolean full = true;
             for (int x = 0; x < WIDTH; x++) {
-                if (board[y][x] == null) { full = false; break; }
+                if (board[y][x] == null) {
+                    full = false;
+                    break;
+                }
             }
-            if (full) clearedRows.add(y);
+            if (full)
+                clearedRows.add(y);
         }
 
         int lines = clearedRows.size();
         if (lines == 0) {
-            // 라인 없으면 콤보만 리셋하고 종료
             comboCount = 0;
+            afterClear.run();
             return;
         }
 
-        // 2) 대전용: 최근 고정 블록(recentPlaced)을 제외한 마스크를 만들어 전송
-        if (onLinesClearedWithMasks != null) {
+        updateGarbageFlagsOnClear(clearedRows);
+
+        // 2줄 이상 클리어 시에만 공격
+        if (lines >= 2 && onLinesClearedWithMasks != null) {
             int[] masks = new int[lines];
             for (int i = 0; i < lines; i++) {
                 int y = clearedRows.get(i);
                 int mask = 0;
                 for (int x = 0; x < WIDTH; x++) {
+                    // 최근 놓은 블록 제외하고 마스크 생성
                     if (board[y][x] != null && !recentPlaced[y][x]) {
                         mask |= (1 << x);
                     }
@@ -206,24 +233,34 @@ public class BoardLogic {
                 masks[i] = mask;
             }
             onLinesClearedWithMasks.accept(masks);
+            System.out.println("[ATTACK] " + lines + "줄 클리어 → " + lines + "줄 공격 전송");
         }
-        // 다음 턴을 위해 recentPlaced 초기화
-        for (int yy = 0; yy < HEIGHT; yy++) java.util.Arrays.fill(recentPlaced[yy], false);
 
-        // 3) 애니메이션 동안 게임 일시정지
-        if (pauseCallback != null) pauseCallback.run();
+        // recentPlaced 초기화
+        for (int yy = 0; yy < HEIGHT; yy++)
+            java.util.Arrays.fill(recentPlaced[yy], false);
 
-        // 4) 실제 클리어 + 중력 적용 애니메이션 실행
+        if (pauseCallback != null)
+            pauseCallback.run();
+
         clear.clearLines(
-            () -> { if (onFrameUpdate != null) javax.swing.SwingUtilities.invokeLater(onFrameUpdate); },
-            () -> { if (resumeCallback != null) javax.swing.SwingUtilities.invokeLater(resumeCallback); }
-            );
+                () -> {
+                    if (onFrameUpdate != null)
+                        javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
+                },
+                () -> {
+                    if (resumeCallback != null)
+                        javax.swing.SwingUtilities.invokeLater(resumeCallback);
 
-        // 5) 통계/점수/콤보/레벨/아이템 처리
-        clearedLines      += lines;
+                    if (afterClear != null)
+                        SwingUtilities.invokeLater(afterClear);
+                });
+
+        clearedLines += lines;
         deletedLinesTotal += lines;
 
-        if (onLineCleared != null) onLineCleared.accept(lines);
+        if (onLineCleared != null)
+            onLineCleared.accept(lines);
         addScore(lines * 100);
 
         long now = System.currentTimeMillis();
@@ -244,11 +281,14 @@ public class BoardLogic {
         }
     }
 
-    /** 다음 블럭 스폰 */
+    /** 다음 블럭 스폰 (가비지 라인 먼저 추가) */
     private void spawnNext() {
-        if (beforeSpawnHook != null) beforeSpawnHook.run();
-        System.out.println("[SPAWN] beforeSpawnHook run");
-        // 현재 큐에 블럭이 부족하면 채워 넣기
+
+        if (beforeSpawnHook != null)
+            beforeSpawnHook.run();
+
+        applyIncomingGarbage();
+
         refillPreview();
 
         Block next;
@@ -267,55 +307,78 @@ public class BoardLogic {
         
 
         if (!move.canMove(next, state.getX(), state.getY())) {
-            gameOver = true;
-            System.out.println("[DEBUG] Game Over!");
-            onGameOver.accept(score);
+            gameOver();
         }
     }
 
-    /** 대전용: 아래에서부터 n줄 가비지 추가 (랜덤 구멍 1개) */
-    public void addGarbageLines(int n) {
-        if (n <= 0) return;
-        var board = state.getBoard();
-        java.util.Random r = new java.util.Random();
+    /** 대기 중인 가비지 라인을 보드 하단에 추가 */
+    private void applyIncomingGarbage() {
+        if (incomingGarbageQueue.isEmpty())
+            return;
 
-        for (int k = 0; k < n; k++) {
-            // 한 줄 위로 밀기
-            for (int y = 0; y < HEIGHT - 1; y++) {
-                board[y] = java.util.Arrays.copyOf(board[y + 1], WIDTH);
-            }
-            // 맨 아래 가비지 줄 생성(구멍 1개)
-            int hole = r.nextInt(WIDTH);
-            Color[] last = new Color[WIDTH];
-            for (int x = 0; x < WIDTH; x++)
-                last[x] = (x == hole) ? null : GARBAGE_COLOR;
-            board[HEIGHT - 1] = last;
+        var board = state.getBoard();
+
+        // 필드에 남은 "가비지 슬롯" 계산
+        int available = MAX_GARBAGE - garbageCount;
+        if (available <= 0) {
+            incomingGarbageQueue.clear();
+            return;
         }
 
-        System.out.println("[GARBAGE] inject = " + n);
-    }
+        int addedLines = 0;
 
-    /** 대전용: 마스크 배열을 그대로 '바닥부터' 삽입 (각 원소는 가로 WIDTH비트) */
-    public void addGarbageMasks(int[] masks) {
-        if (masks == null || masks.length == 0) return;
-        var board = state.getBoard();
+        // available 만큼만 실제로 필드에 깔기
+        while (!incomingGarbageQueue.isEmpty() && addedLines < available) {
+            int mask = incomingGarbageQueue.poll();
 
-        for (int k = 0; k < masks.length; k++) {
-            // 한 줄 위로 밀기
+            // 한 줄 위로 밀면서 isGarbageRow도 같이 밀기
             for (int y = 0; y < HEIGHT - 1; y++) {
                 board[y] = java.util.Arrays.copyOf(board[y + 1], WIDTH);
+                isGarbageRow[y] = isGarbageRow[y + 1];
             }
-            // 맨 아래에 mask대로 채움 (1=가비지, 0=빈칸)
-            int mask = masks[k];
+
+            // 맨 아래에 가비지 라인 추가
             Color[] last = new Color[WIDTH];
             for (int x = 0; x < WIDTH; x++) {
                 boolean filled = ((mask >> x) & 1) != 0;
                 last[x] = filled ? GARBAGE_COLOR : null;
             }
             board[HEIGHT - 1] = last;
-        }
+            isGarbageRow[HEIGHT - 1] = true;
 
-        System.out.println("[GARBAGE] inject masks = " + masks.length);
+            addedLines++;
+            garbageCount++;  // 필드에 깔린 회색줄 개수 증가
+        }
+    }
+
+    /** 상대에게서 가비지 라인 수신 (큐에 추가) */
+    public void addGarbageMasks(int[] masks) {
+        if (masks == null || masks.length == 0)
+            return;
+
+        for (int mask : masks) {
+            incomingGarbageQueue.offer(mask);
+        }
+    }
+
+    private void updateGarbageFlagsOnClear(List<Integer> clearedRows) {
+
+        for (int idx = 0; idx < clearedRows.size(); idx++) {
+            int y = clearedRows.get(idx) - idx; // 이미 이전 삭제로 한 칸씩 내려온 만큼 보정
+
+            if (y < 0 || y >= HEIGHT) continue;
+
+            // 이 줄이 가비지 줄이었다면 카운트 감소
+            if (isGarbageRow[y]) {
+                garbageCount--;
+            }
+
+            // y줄 위에 있는 줄들을 한 칸씩 아래로
+            for (int row = y; row > 0; row--) {
+                isGarbageRow[row] = isGarbageRow[row - 1];
+            }
+            isGarbageRow[0] = false; // 맨 위는 빈 줄
+        }
     }
 
     // === 이동 입력 ===
@@ -342,24 +405,6 @@ public class BoardLogic {
             score += 2;
         }
         moveDown();
-    }
-
-    // === 디버그용: 다음 블럭 강제 설정 ===
-    public void debugSetNextItem(Block itemBlock) {
-        try {
-            var field = bag.getClass().getDeclaredField("nextBlocks");
-            field.setAccessible(true);
-            @SuppressWarnings("unchecked")
-            Queue<Block> queue = (Queue<Block>) field.get(bag);
-
-            if (!queue.isEmpty())
-                queue.poll();
-            queue.add(itemBlock);
-
-            nextIsItem = false;
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
     }
 
     // === Getter ===
@@ -429,18 +474,14 @@ public class BoardLogic {
         return state.getFadeLayer();
     }
 
-    /** AnimationManager Getter */
     public AnimationManager getAnimationManager() {
         return animMgr;
     }
 
-    /** HUD용 NEXT 블록 미리보기 */
-    public java.util.List<blocks.Block> getNextBlocks() {
-    if (previewQueue.isEmpty()) {
-        return java.util.List.of();
-    }
-    // only the very next block
-    return java.util.List.of(previewQueue.getFirst());
+    public List<Block> getNextBlocks() {
+        return previewQueue.size() > 1
+                ? new ArrayList<>(previewQueue.subList(0, Math.min(3, previewQueue.size())))
+                : List.of();
     }
 
     public void setOnNextQueueUpdate(Consumer<List<Block>> cb) {
@@ -453,6 +494,130 @@ public class BoardLogic {
         }
     }
 
-    public void setOnLineCleared(java.util.function.IntConsumer c) { this.onLineCleared = c; }
-    public void setBeforeSpawnHook(Runnable r) { this.beforeSpawnHook = r; }
+    public void setOnLineCleared(java.util.function.IntConsumer c) {
+        this.onLineCleared = c;
+    }
+
+    public void setBeforeSpawnHook(Runnable r) {
+        this.beforeSpawnHook = r;
+    }
+
+    public void updateOpponentBoard(Color[][] newBoard) {
+        this.opponentBoard = newBoard;
+    }
+
+    /** 대전모드 전용: 상대 보드 전체를 교체 */
+    public void setBoard(Color[][] newBoard) {
+        Color[][] board = state.getBoard();
+        for (int y = 0; y < HEIGHT && y < newBoard.length; y++) {
+            for (int x = 0; x < WIDTH && x < newBoard[y].length; x++) {
+                board[y][x] = newBoard[y][x];
+            }
+        }
+    }
+
+    /** 상대가 게임오버 되었을 때 호출 */
+    public void onOpponentGameOver() {
+        System.out.println("[INFO] Opponent Game Over - YOU WIN!");
+        if (pauseCallback != null)
+            pauseCallback.run();
+    }
+
+    public void setOnGameOverCallback(Runnable r) {
+        this.onGameOverCallback = r;
+    }
+
+    private void gameOver() {
+        this.gameOver = true;
+        System.out.println("[GAME OVER] Your Score: " + score);
+        if (onGameOverCallback != null)
+            onGameOverCallback.run();
+        if (onGameOver != null)
+            onGameOver.accept(score);
+    }
+
+    public void debugSetNextItem(Block itemBlock) {
+        try {
+            var field = bag.getClass().getDeclaredField("nextBlocks");
+            field.setAccessible(true);
+            @SuppressWarnings("unchecked")
+            Queue<Block> queue = (Queue<Block>) field.get(bag);
+
+            if (!queue.isEmpty())
+                queue.poll();
+            queue.add(itemBlock);
+
+            nextIsItem = false;
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+    }
+
+    /**
+     * 게임 상태 초기화 (대전 재시작용)
+     * -----------------------------------------
+     * - 보드, 점수, 라인 카운트, 블록 큐, 속도 모두 초기화
+     */
+    public void reset() {
+        //  보드 전체 비우기
+        Color[][] board = state.getBoard();
+        for (int y = 0; y < HEIGHT; y++) {
+            Arrays.fill(board[y], null);
+        }
+
+        //  Fade 레이어 초기화
+        Color[][] fade = state.getFadeLayer();
+        if (fade != null) {
+            for (int y = 0; y < HEIGHT; y++) {
+                Arrays.fill(fade[y], null);
+            }
+        }
+
+        //  상태 및 변수 초기화
+        state.reset(); // GameState 내부 블록, 위치 초기화
+        state.setCurr(null); //  현재 블록 제거
+        state.setPosition(3, 0);
+        score = 0;
+        clearedLines = 0;
+        deletedLinesTotal = 0;
+        comboCount = 0;
+        gameOver = false;
+        nextIsItem = false;
+
+        // 공격/가비지 큐 초기화
+        incomingGarbageQueue.clear();
+        recentPlacedInitialize();
+
+        //  블록 백 및 프리뷰 재설정
+        previewQueue.clear();
+        bag.reset(); // BlockBag 내부 nextBlocks 초기화 (직접 구현 필요)
+        refillPreview();
+        state.setCurr(previewQueue.removeFirst());
+        fireNextQueueChanged();
+
+        //  속도 리셋
+        speedManager.resetLevel();
+
+        //HUD/UI 초기화
+        SwingUtilities.invokeLater(() -> {
+            if (onFrameUpdate != null)
+                onFrameUpdate.run(); // 즉시 화면 갱신 요청
+        });
+
+        if (state.getCurr() == null && !previewQueue.isEmpty()) {
+            Block next = previewQueue.removeFirst();
+            state.setCurr(next);
+            state.setPosition(3, 0);
+        }
+
+        System.out.println("[RESET] BoardLogic reset complete.");
+    }
+
+    /** recentPlaced 배열 초기화 */
+    private void recentPlacedInitialize() {
+        for (int y = 0; y < HEIGHT; y++) {
+            Arrays.fill(recentPlaced[y], false);
+        }
+    }
+
 }

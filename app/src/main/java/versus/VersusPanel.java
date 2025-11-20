@@ -1,6 +1,7 @@
 package versus;
 
 import component.GameConfig;
+import component.PausePanel;
 
 import javax.swing.*;
 import java.awt.*;
@@ -13,11 +14,12 @@ import java.awt.*;
 public class VersusPanel extends JPanel {
 
     private VersusGameManager manager;
+    private PausePanel pausePanel;
 
     private final JLabel p1Queue = new JLabel("0");
     private final JLabel p2Queue = new JLabel("0");
 
-    public VersusPanel() {
+    public VersusPanel(boolean itemMode) {
         setLayout(new BorderLayout(12, 0));
         setBackground(new Color(18, 22, 30));
 
@@ -28,12 +30,14 @@ public class VersusPanel extends JPanel {
         top.add(buildSmallHud("P2 Incoming", p2Queue));
         add(top, BorderLayout.NORTH);
 
+        var mode = itemMode ? GameConfig.Mode.ITEM : GameConfig.Mode.CLASSIC;
+
         // 매니저 생성(이벤트 배선 + HUD 콜백)
         Runnable backToMenu = () -> SwingUtilities.getWindowAncestor(this).dispose();
 
         manager = new VersusGameManager(
-                new GameConfig(GameConfig.Mode.CLASSIC, GameConfig.Difficulty.NORMAL, false),
-                new GameConfig(GameConfig.Mode.CLASSIC, GameConfig.Difficulty.NORMAL, false),
+                new GameConfig(mode, GameConfig.Difficulty.NORMAL, false),
+                new GameConfig(mode, GameConfig.Difficulty.NORMAL, false),
                 backToMenu,
                 pending -> p1Queue.setText(String.valueOf(pending)), // P1 라벨 갱신
                 pending -> p2Queue.setText(String.valueOf(pending))  // P2 라벨 갱신
@@ -49,6 +53,53 @@ public class VersusPanel extends JPanel {
         // 초기 HUD 동기화 (optional)
         p1Queue.setText(String.valueOf(manager.getP1Pending()));
         p2Queue.setText(String.valueOf(manager.getP2Pending()));
+
+        SwingUtilities.invokeLater(() -> {
+            JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
+            if (frame == null) return;
+
+            pausePanel = new PausePanel(
+                    frame,
+                    () -> { // CONTINUE
+                        manager.resumeBoth();
+                        pausePanel.hidePanel();
+                    },
+                    () -> { // RESTART 
+                        manager.pauseBoth();
+                        frame.setContentPane(new VersusPanel(itemMode));
+                        frame.revalidate();
+                    },
+                    () -> { // EXIT
+                        manager.pauseBoth();
+                        backToMenu.run();
+                    }
+            );
+            // ESC 키로 pause 토글
+            setupPauseKeyBinding();
+        });
+    }
+
+    private void setupPauseKeyBinding() {
+        InputMap im = getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        ActionMap am = getActionMap();
+
+        im.put(KeyStroke.getKeyStroke("P"), "togglePause");
+        im.put(KeyStroke.getKeyStroke("R"), "togglePause");
+        
+        am.put("togglePause", new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                if (pausePanel == null) return;
+
+                if (pausePanel.isVisible()) {
+                    manager.resumeBoth();
+                    pausePanel.hidePanel();
+                } else {
+                    manager.pauseBoth();
+                    pausePanel.showPanel();
+                }
+            }
+        });
     }
 
     private JPanel buildSmallHud(String title, JLabel value) {
@@ -74,9 +125,10 @@ public class VersusPanel extends JPanel {
     // 실행용
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
-            JFrame f = new JFrame("Versus Test");
+            boolean itemMode = false;
+            JFrame f = new JFrame(itemMode ? "Versus Test (Item)" : "Versus Test");
             f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-            f.setContentPane(new VersusPanel());
+            f.setContentPane(new VersusPanel(itemMode));
             f.setSize(1100, 800);
             f.setLocationRelativeTo(null);
             f.setVisible(true);

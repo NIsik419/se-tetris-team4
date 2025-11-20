@@ -15,11 +15,13 @@ import javax.swing.InputMap;
 import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 
+import component.BoardPanel;
 import component.GameConfig;
 import component.GameFrame;
 import component.MenuPanel;
@@ -28,10 +30,15 @@ import component.config.SettingsScreen;
 import component.score.ScoreBoard;
 import component.score.ScoreboardPanel;
 
+
 public class GameLauncher {
 
-    public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> new GameLauncher().show());
+   public static void main(String[] args) {
+    System.out.println("[DEBUG] main started");
+    SwingUtilities.invokeLater(() -> {
+        System.out.println("[DEBUG] creating GameLauncher");
+        new GameLauncher().show();
+    });
     }
 
     enum Screen {
@@ -71,7 +78,7 @@ public class GameLauncher {
         applyMenuScaleFromSettings();
         frame.setContentPane(root);
         frame.setVisible(true);
-        System.out.println("[DEBUG] GameLauncher created");
+        System.out.println("[DEBUG] show() entered");
         showScreen(Screen.MENU);
     }
 
@@ -105,13 +112,23 @@ public class GameLauncher {
     private void onGameConfigSelect(GameConfig config) {
         frame.setVisible(false);
 
+        boolean p2pMode = (config.mode() == GameConfig.Mode.VERSUS); // 예시: 메뉴에서 VERSUS 모드 선택 시
+
+        boolean isServer = false;
+        if (p2pMode) {
+            // 🔹 서버 / 클라이언트 선택 창
+            int res = JOptionPane.showConfirmDialog(null, "서버로 시작하시겠습니까?", "P2P 대전 모드",
+                    JOptionPane.YES_NO_OPTION);
+            isServer = (res == JOptionPane.YES_OPTION);
+        }
+
         // 새 구조로 변경
-        GameFrame game = new GameFrame(config);
+        GameFrame game = new GameFrame(config, p2pMode, isServer);
 
         try {
             // ✅ BoardPanel의 Settings 반영
-            if (game.getBoardPanel() != null) {
-                game.getBoardPanel().applySettings(settings);
+            if (game.getActivePanel() instanceof BoardPanel panel) {
+                panel.applySettings(settings);
             }
         } catch (Exception ignore) {
         }
@@ -121,8 +138,8 @@ public class GameLauncher {
         game.setVisible(true);
 
         // ✅ 아이템 모드 활성화
-        if (config.mode() == GameConfig.Mode.ITEM && game.getBoardPanel() != null) {
-            game.getBoardPanel().getLogic().setItemMode(true);
+        if (config.mode() == GameConfig.Mode.ITEM && game.getActivePanel() instanceof BoardPanel panel) {
+            panel.getLogic().setItemMode(true);
         }
 
         SwingUtilities.invokeLater(() -> {
@@ -138,11 +155,16 @@ public class GameLauncher {
         // ✅ 새 창 종료 시 메뉴 복귀
         game.addWindowListener(new WindowAdapter() {
             @Override
+            // public void windowClosed(WindowEvent e) {
+            // // Restart 중이라면 메뉴 복귀 X
+            // if (game.getBoardPanel() != null && game.getBoardPanel().isRestarting()) {
+            // return;
+            // }
+            // frame.setVisible(true);
+            // showScreen(Screen.MENU);
+            // }
+        
             public void windowClosed(WindowEvent e) {
-                // Restart 중이라면 메뉴 복귀 X
-                if (game.getBoardPanel() != null && game.getBoardPanel().isRestarting()) {
-                    return;
-                }
                 frame.setVisible(true);
                 showScreen(Screen.MENU);
             }

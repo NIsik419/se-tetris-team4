@@ -53,13 +53,23 @@ public class BlockBag {
 
     /** 다음 블럭 반환 */
     public Block next() {
-        if (nextBlocks.isEmpty()) fillBag();
+        if (nextBlocks.isEmpty())
+            fillBag();
         return nextBlocks.poll();
     }
 
     /** 다음 블럭 미리보기 */
     public List<Block> peekNext(int count) {
-        if (nextBlocks.size() < count) fillBag();
+        if (nextBlocks.size() < count)
+            fillBag();
         return new ArrayList<>(nextBlocks).subList(0, Math.min(count, nextBlocks.size()));
+    }
+
+    public void reset() {
+        nextBlocks.clear();
+        refill(); // refill()은 내부적으로 7개 블록을 새로 채우는 함수
+    }
+    private void refill() {
+        fillBag();
     }
 }

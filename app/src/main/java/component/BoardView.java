@@ -13,10 +13,10 @@ public class BoardView extends JPanel {
     private ColorBlindPalette.Mode colorMode = ColorBlindPalette.Mode.NORMAL;
 
     // === 상수 통일 (Board 기준) ===
-    private static final int CELL_SIZE = 35;
+    private static final int CELL_SIZE = 25;
     private static final int CELL_GAP = 2;
-    private static final int ARC = 8;
-    private static final int MAX_HEIGHT = 700;
+    private static final int ARC = 6;
+    private static final int MAX_HEIGHT = 500;
     public static final int WIDTH = BoardLogic.WIDTH;
     public static final int HEIGHT = BoardLogic.HEIGHT;
     private static final Color GRID_LINE = new Color(50, 55, 70);
@@ -38,6 +38,8 @@ public class BoardView extends JPanel {
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
+        if (!visibleDuringStandby)
+            return;
         Graphics2D g2 = (Graphics2D) g.create();
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g2.setComposite(AlphaComposite.SrcOver.derive(0.9f));
@@ -49,7 +51,8 @@ public class BoardView extends JPanel {
         int fadeCount = 0;
         for (int y = 0; y < BoardLogic.HEIGHT; y++) {
             for (int x = 0; x < BoardLogic.WIDTH; x++) {
-                if (fade[y][x] != null) fadeCount++;
+                if (fade[y][x] != null)
+                    fadeCount++;
             }
         }
         if (fadeCount > 0) {
@@ -63,7 +66,7 @@ public class BoardView extends JPanel {
         for (int c = 0; c <= BoardLogic.WIDTH; c++)
             g2.drawLine(c * CELL_SIZE, 0, c * CELL_SIZE, BoardLogic.HEIGHT * CELL_SIZE);
 
-        // ===  고정 블록 먼저 그리기 ===
+        // === 고정 블록 먼저 그리기 ===
         for (int y = 0; y < BoardLogic.HEIGHT; y++) {
             for (int x = 0; x < BoardLogic.WIDTH; x++) {
                 if (grid[y][x] != null) {
@@ -72,7 +75,7 @@ public class BoardView extends JPanel {
             }
         }
 
-        // ===  fadeLayer는 무조건 위에 덮어씌우기 ===
+        // === fadeLayer는 무조건 위에 덮어씌우기 ===
         for (int y = 0; y < BoardLogic.HEIGHT; y++) {
             for (int x = 0; x < BoardLogic.WIDTH; x++) {
                 if (fade[y][x] != null) {
@@ -84,7 +87,7 @@ public class BoardView extends JPanel {
         // === Ghost 블록 ===
         drawGhostBlock(g2);
 
-        // ===  현재 블록 ===
+        // === 현재 블록 ===
         Block curr = logic.getCurr();
         if (curr != null)
             drawCurrentBlock(g2, curr);
@@ -92,7 +95,6 @@ public class BoardView extends JPanel {
         g2.dispose();
     }
 
-   
     private void drawFade(Graphics2D g2, int x, int y, Color fadeColor) {
         int px = x * CELL_SIZE + CELL_GAP;
         int py = y * CELL_SIZE + CELL_GAP;
@@ -102,7 +104,7 @@ public class BoardView extends JPanel {
         g2.setColor(fadeColor);
         g2.fillRoundRect(px, py, size, size, ARC, ARC);
 
-        // 
+        //
         int alpha = fadeColor.getAlpha();
         if (alpha > 150) {
             g2.setColor(new Color(255, 255, 255, Math.min(255, alpha + 50)));
@@ -119,11 +121,11 @@ public class BoardView extends JPanel {
 
         g2.setColor(color);
         g2.fillRoundRect(px, py, size, size, ARC, ARC);
-        
+
         // 하이라이트
         g2.setColor(new Color(255, 255, 255, 60));
         g2.fillRoundRect(px, py, size, size / 3, ARC, ARC);
-        
+
         // 그림자
         g2.setColor(new Color(0, 0, 0, 40));
         g2.fillRoundRect(px, py + size * 2 / 3, size, size / 3, ARC, ARC);
@@ -168,8 +170,14 @@ public class BoardView extends JPanel {
                     Color color = ColorBlindPalette.convert(block.getColor(), colorMode);
                     drawCell(g2, x, y, color);
 
-                    if (block instanceof ItemBlock item)
+                    if (block instanceof LineClearItem lci) {
+                        if (i == lci.getLX() && j == lci.getLY()) {
+                            drawItemSymbol(g2, lci, x, y);
+                        }
+                    } else if (block instanceof ItemBlock item) {
+                        // 다른 아이템은 모든 칸에 표시
                         drawItemSymbol(g2, item, x, y);
+                    }
                 }
             }
         }
@@ -218,5 +226,12 @@ public class BoardView extends JPanel {
 
     public ColorBlindPalette.Mode getColorMode() {
         return colorMode;
+    }
+
+    private boolean visibleDuringStandby = true;
+
+    public void setVisibleDuringStandby(boolean visible) {
+        this.visibleDuringStandby = visible;
+        repaint();
     }
 }

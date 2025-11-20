@@ -1,7 +1,7 @@
 package component;
 
 public final class GameConfig {
-    public enum Mode { CLASSIC, ITEM, TIME_ATTACK }
+    public enum Mode { CLASSIC, ITEM, TIME_ATTACK,VERSUS }
     public enum Difficulty { EASY, NORMAL, HARD }
     public enum ScreenSize { SMALL, MEDIUM, LARGE }
 
