@@ -48,10 +48,9 @@ public class ColorBombItem extends ItemBlock {
             for (int x = 0; x < BoardLogic.WIDTH; x++) {
                 if (board[y][x] != null && board[y][x].equals(targetColor)) {
 
-                    boolean isEdge =
-                        (x == 0 || x == BoardLogic.WIDTH - 1
-                         || (x > 0 && !targetColor.equals(board[y][x - 1]))
-                         || (x < BoardLogic.WIDTH - 1 && !targetColor.equals(board[y][x + 1])));
+                    boolean isEdge = (x == 0 || x == BoardLogic.WIDTH - 1
+                            || (x > 0 && !targetColor.equals(board[y][x - 1]))
+                            || (x < BoardLogic.WIDTH - 1 && !targetColor.equals(board[y][x + 1])));
 
                     if (isEdge && ps != null) {
                         ps.createExplosionParticles(x, y, targetColor, CELL_SIZE);
@@ -75,7 +74,8 @@ public class ColorBombItem extends ItemBlock {
             if (clear != null) {
                 clear.setSkipDuringItem(false);
                 clear.applyGravityInstantly();
-                clear.clearLines(() -> {}, onComplete);
+                clear.clearLines(() -> {
+                }, onComplete);
             } else if (onComplete != null) {
                 onComplete.run();
             }
@@ -102,25 +102,32 @@ public class ColorBombItem extends ItemBlock {
                     }
                     logic.setShakeOffset(0);
                     logic.getOnFrameUpdate().run();
-                } catch (InterruptedException ignored) {}
+                } catch (InterruptedException ignored) {
+                }
             }).start();
         }
 
-      
         if (clear != null) {
             clear.setSkipDuringItem(false);
 
             // 1) 즉시 중력 (클러스터 중력 + 라인 압축)
             clear.applyGravityInstantly();
 
-            // 2) 추가로 만들어진 줄이 있으면 지우기
+            // 화면 갱신
+            if (logic.getOnFrameUpdate() != null) {
+                javax.swing.SwingUtilities.invokeLater(logic.getOnFrameUpdate());
+            }
+
+            //  추가로 만들어진 줄이 있으면 지우기
             clear.clearLines(
-                logic.getOnFrameUpdate(),
-                () -> {
-                    if (onComplete != null)
-                        onComplete.run();
-                }
-            );
+                    logic.getOnFrameUpdate(),
+                    () -> {
+                        if (onComplete != null)
+                            onComplete.run();
+                    });
+        } else {
+            if (onComplete != null)
+                onComplete.run();
         }
     }
 
@@ -129,7 +136,7 @@ public class ColorBombItem extends ItemBlock {
     // ==================================================
     private void startParticleAnimation(ParticleSystem ps, BoardLogic logic) {
         javax.swing.Timer timer = new javax.swing.Timer(16, null);
-        final int[] frame = {0};
+        final int[] frame = { 0 };
         final int MAX_FRAMES = 20;
 
         timer.addActionListener(e -> {

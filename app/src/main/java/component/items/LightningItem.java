@@ -17,6 +17,9 @@ import logic.ParticleSystem;
 
 /**
  * ⚡ LightningItem (번개 파티클 버전)
+ * - 랜덤 블록 10개 제거
+ * - 번개 체인 효과
+ * - 즉시 중력 + 연쇄 클리어
  */
 public class LightningItem extends ItemBlock {
 
@@ -37,14 +40,11 @@ public class LightningItem extends ItemBlock {
         var clear = logic.getClearService();
         var animMgr = logic.getAnimationManager();
         
-        // ⭐ 파티클 시스템
         ParticleSystem particleSystem = clear.getParticleSystem();
 
         if (animMgr != null) {
             animMgr.tryStart(AnimationManager.AnimationType.ITEM_EFFECT);
         }
-
-        clear.setSkipDuringItem(true);
 
         // === [TEST MODE] ===
         if (testMode) {
@@ -57,7 +57,6 @@ public class LightningItem extends ItemBlock {
             }
 
             if (filled.isEmpty()) {
-                clear.setSkipDuringItem(false);
                 if (onComplete != null)
                     onComplete.run();
                 return;
@@ -72,12 +71,6 @@ public class LightningItem extends ItemBlock {
             clear.applyGravityInstantly();
             logic.addScore(removeCount * 30);
 
-            clear.setSkipDuringItem(false);
-            int combo = clear.clearLines(safeGetFrameUpdate(logic), null);
-            if (combo > 0)
-                logic.addScore(combo * 100);
-
-            safeCallFrameUpdate(logic);
             if (onComplete != null)
                 onComplete.run();
 
@@ -94,7 +87,8 @@ public class LightningItem extends ItemBlock {
         }
 
         if (filled.isEmpty()) {
-            clear.setSkipDuringItem(false);
+            if (animMgr != null)
+                animMgr.finish(AnimationManager.AnimationType.ITEM_EFFECT);
             if (onComplete != null)
                 onComplete.run();
             return;
@@ -120,16 +114,19 @@ public class LightningItem extends ItemBlock {
             remaining.remove(next);
         }
 
-        // ⚡ 비동기 전류 + 파티클 애니메이션
+        // ⚡ 빠른 체인 애니메이션 + 즉시 중력
         new Thread(() -> {
             try {
                 Color[][] fadeLayer = logic.getFadeLayer();
                 final int CELL_SIZE = 25;
 
+                // ============================================
+                // 1) 빠른 번개 체인 (10ms → 5ms)
+                // ============================================
                 for (int i = 0; i < ordered.size(); i++) {
                     Point p = ordered.get(i);
                     
-                    // ⭐ 번개 파티클 생성
+                    // 번개 파티클 생성
                     if (particleSystem != null) {
                         Color blockColor = board[p.y][p.x];
                         if (blockColor != null) {
@@ -163,52 +160,57 @@ public class LightningItem extends ItemBlock {
                     }
 
                     safeCallFrameUpdate(logic);
-                    Thread.sleep(10);
+                    Thread.sleep(5); //  10ms → 5ms (더 빠르게)
                 }
 
-                // ⭐ 파티클 애니메이션 시작 (백그라운드)
-                if (particleSystem != null) {
-                    startLightningParticleAnimation(particleSystem, logic);
+                // ============================================
+                // 2) 빠른 페이드아웃
+                // ============================================
+                for (Point p : ordered) {
+                    fade[p.y][p.x] = null;
                 }
+                safeCallFrameUpdate(logic);
 
-                // 페이드아웃
-                for (int alpha = 180; alpha >= 0; alpha -= 180) {
-                    for (Point p : ordered) {
-                        fade[p.y][p.x] = alpha > 0 
-                            ? new Color(150, 220, 255, Math.max(alpha, 0))
-                            : null;
-                    }
-                    safeCallFrameUpdate(logic);
-                    Thread.sleep(15);
-                }
-
-                // fadeLayer 클리어
+                // ============================================
+                // 3) fadeLayer 클리어
+                // ============================================
                 for (int y = 0; y < GameState.HEIGHT; y++)
                     for (int x = 0; x < GameState.WIDTH; x++)
                         fade[y][x] = null;
 
                 safeCallFrameUpdate(logic);
 
-                // 흔들림
+                // ============================================
+                // 4) 파티클 애니메이션 (백그라운드)
+                // ============================================
+                if (particleSystem != null) {
+                    startLightningParticleAnimation(particleSystem, logic);
+                }
+
+                // ============================================
+                // 5) 간단한 흔들림
+                // ============================================
                 shakeGamePanel(logic);
 
-                // 중력 애니메이션
-                applyCellGravityFast(logic, clear, () -> {
-                    logic.addScore(removeCount * 30);
-                    clear.setSkipDuringItem(false);
-
-                    int combo = clear.clearLines(safeGetFrameUpdate(logic), null);
-                    if (combo > 0)
-                        logic.addScore(combo * 100);
-
+                // ============================================
+                // 6) 즉시 중력 적용 (메인 스레드에서)
+                // ============================================
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    clear.applyGravityInstantly();
                     safeCallFrameUpdate(logic);
-                    
+
+                    // 점수 추가
+                    logic.addScore(removeCount * 30);
+
+                    // 애니메이션 종료
                     if (animMgr != null) {
                         animMgr.finish(AnimationManager.AnimationType.ITEM_EFFECT);
                     }
-                    
-                    if (onComplete != null)
+
+                    // onComplete 호출 (연쇄 클리어 포함)
+                    if (onComplete != null) {
                         onComplete.run();
+                    }
                 });
 
             } catch (InterruptedException ignored) {
@@ -222,7 +224,7 @@ public class LightningItem extends ItemBlock {
     private void startLightningParticleAnimation(ParticleSystem particleSystem, BoardLogic logic) {
         javax.swing.Timer particleTimer = new javax.swing.Timer(16, null);
         final int[] frame = { 0 };
-        final int MAX_FRAMES = 15; // 약 240ms (짧게)
+        final int MAX_FRAMES = 10; //  15 → 10 (더 빠르게)
 
         particleTimer.addActionListener(e -> {
             frame[0]++;
@@ -243,55 +245,6 @@ public class LightningItem extends ItemBlock {
 
         particleTimer.setRepeats(true);
         particleTimer.start();
-    }
-
-    /** ⚡ 빠른 셀 단위 중력 */
-    private void applyCellGravityFast(BoardLogic logic, ClearService clear, Runnable onComplete) {
-        new Thread(() -> {
-            try {
-                Color[][] board = logic.getBoard();
-                Color[][] fade = logic.getFadeLayer();
-                boolean moved = true;
-
-                while (moved) {
-                    moved = false;
-
-                    for (int y = 0; y < GameState.HEIGHT; y++)
-                        for (int x = 0; x < GameState.WIDTH; x++)
-                            fade[y][x] = null;
-
-                    for (int y = GameState.HEIGHT - 2; y >= 0; y--) {
-                        for (int x = 0; x < GameState.WIDTH; x++) {
-                            if (board[y][x] != null && board[y + 1][x] == null) {
-                                fade[y + 1][x] = new Color(
-                                    board[y][x].getRed(),
-                                    board[y][x].getGreen(),
-                                    board[y][x].getBlue(), 100
-                                );
-
-                                board[y + 1][x] = board[y][x];
-                                board[y][x] = null;
-                                moved = true;
-                            }
-                        }
-                    }
-
-                    safeCallFrameUpdate(logic);
-                    Thread.sleep(20);
-                }
-
-                for (int y = 0; y < GameState.HEIGHT; y++)
-                    for (int x = 0; x < GameState.WIDTH; x++)
-                        fade[y][x] = null;
-
-                safeCallFrameUpdate(logic);
-
-                if (onComplete != null)
-                    onComplete.run();
-
-            } catch (InterruptedException ignored) {
-            }
-        }).start();
     }
 
     /** 💥 부드러운 진동 */
@@ -328,11 +281,6 @@ public class LightningItem extends ItemBlock {
 
     public void runPostGravityTestHook(BoardLogic logic, ClearService clear, int removeCount, Runnable onComplete) {
         logic.addScore(removeCount * 30);
-        clear.setSkipDuringItem(false);
-
-        int combo = clear.clearLines(safeGetFrameUpdate(logic), null);
-        if (combo > 0)
-            logic.addScore(combo * 100);
 
         safeCallFrameUpdate(logic);
         if (onComplete != null)

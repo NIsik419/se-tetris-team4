@@ -13,7 +13,7 @@ import logic.ParticleSystem;
  * LineClearItem (부스러기 파티클 버전)
  * - 한 줄 전체 제거
  * - 양끝에서 부스러기가 떨어짐
- * - 중력 + 연쇄 처리
+ * - 즉시 중력 + 연쇄 처리
  */
 public class LineClearItem extends ItemBlock {
 
@@ -85,7 +85,7 @@ public class LineClearItem extends ItemBlock {
             for (int x = 0; x < BoardLogic.WIDTH; x++)
                 board[targetY][x] = null;
 
-            clear.applyLineGravity();
+            clear.applyGravityInstantly();
 
             int lines = clear.clearLines(logic.getOnFrameUpdate(), null);
             if (lines > 0) logic.addScore(lines * 100);
@@ -111,9 +111,9 @@ public class LineClearItem extends ItemBlock {
      *  실행 순서:
      *  1) 양끝 블록에 부스러기 파티클 생성
      *  2) targetY 줄 전체 삭제
-     *  3) 파티클 애니메이션 (백그라운드)
-     *  4) 중력 적용
-     *  5) 연쇄 클리어
+     *  3) 즉시 중력 적용
+     *  4) 연쇄 클리어
+     *  5) 파티클 애니메이션 (백그라운드)
      */
     private void runLineClearDebris(
             BoardLogic logic,
@@ -125,7 +125,7 @@ public class LineClearItem extends ItemBlock {
         var board = logic.getBoard();
         ParticleSystem particleSystem = clear.getParticleSystem();
 
-        // ⭐ 1) 양끝 블록에만 부스러기 파티클 생성
+        //  1) 양끝 블록에만 부스러기 파티클 생성
         final int CELL_SIZE = 25;
         if (particleSystem != null) {
             for (int x = 0; x < BoardLogic.WIDTH; x++) {
@@ -137,7 +137,6 @@ public class LineClearItem extends ItemBlock {
                     
                     if (isEdge) {
                         Color blockColor = board[targetY][x];
-                        // ⭐ 부스러기 파티클 사용 (간단하게)
                         particleSystem.createDebrisParticles(x, targetY, blockColor, CELL_SIZE);
                     }
                 }
@@ -146,41 +145,40 @@ public class LineClearItem extends ItemBlock {
             System.out.println("[LineClearItem] Created " + particleSystem.getParticleCount() + " debris particles");
         }
 
-        // 2) 줄 전체 삭제
+        //  2) 줄 전체 즉시 삭제
         for (int x = 0; x < BoardLogic.WIDTH; x++) {
             board[targetY][x] = null;
         }
 
-        // 3) 화면 갱신
+        // 3) 즉시 화면 갱신
         if (logic.getOnFrameUpdate() != null) {
-            logic.getOnFrameUpdate().run();
+            javax.swing.SwingUtilities.invokeLater(logic.getOnFrameUpdate());
         }
 
-        // ⭐ 4) 파티클 애니메이션 (백그라운드)
+        //  4) 파티클 애니메이션 (백그라운드)
         if (particleSystem != null) {
             startDebrisAnimation(particleSystem, logic);
         }
 
-        // 5) 중력 즉시 적용
+        //  5) 즉시 중력 적용
         clear.applyGravityInstantly();
 
-        // 6) 화면 갱신
+        //  6) 화면 갱신
         if (logic.getOnFrameUpdate() != null) {
-            logic.getOnFrameUpdate().run();
+            javax.swing.SwingUtilities.invokeLater(logic.getOnFrameUpdate());
         }
 
-        // 7) 연쇄 클리어
-        int lines = clear.clearLines(logic.getOnFrameUpdate(), () -> {
-            if (animMgr != null)
-                animMgr.finish(AnimationManager.AnimationType.ITEM_EFFECT);
+        //  7) 연쇄 클리어
+        clear.clearLines(
+            logic.getOnFrameUpdate(),
+            () -> {
+                if (animMgr != null)
+                    animMgr.finish(AnimationManager.AnimationType.ITEM_EFFECT);
 
-            if (onComplete != null)
-                onComplete.run();
-        });
-
-        if (lines > 0) {
-            logic.addScore(lines * 100);
-        }
+                if (onComplete != null)
+                    onComplete.run();
+            }
+        );
     }
 
     /**
@@ -189,7 +187,7 @@ public class LineClearItem extends ItemBlock {
     private void startDebrisAnimation(ParticleSystem particleSystem, BoardLogic logic) {
         javax.swing.Timer particleTimer = new javax.swing.Timer(16, null);
         final int[] frame = { 0 };
-        final int MAX_FRAMES = 20; // 약 320ms (짧게)
+        final int MAX_FRAMES = 12; //  20 → 12 (더 빠르게)
 
         particleTimer.addActionListener(e -> {
             frame[0]++;

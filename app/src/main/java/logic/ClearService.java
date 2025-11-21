@@ -135,9 +135,10 @@ public class ClearService {
         animating = true;
 
         var board = state.getBoard();
+        var pid = state.getPieceId();
 
         // 1. 파티클 생성 (각 블록마다)
-        final int CELL_SIZE = 25; // BoardView의 CELL_SIZE와 동일하게 설정
+        final int CELL_SIZE = 25;
         for (int row : rows) {
             particleSystem.createLineParticles(row, board, CELL_SIZE, GameState.WIDTH);
         }
@@ -145,16 +146,17 @@ public class ClearService {
         // 2. 블록 즉시 삭제 (잔상 없음)
         for (int row : rows) {
             Arrays.fill(board[row], null);
+            Arrays.fill(pid[row], 0); // ← pieceId도 함께 초기화
         }
 
-        animating = false;
+        // 3. 즉시 화면 갱신 (블록이 사라진 상태를 바로 보여줌)
         if (onFrameUpdate != null)
             onFrameUpdate.run();
 
-        // 3. 파티클 애니메이션
-        Timer particleTimer = new Timer(8, null);
+        // 4. 파티클 애니메이션 (더 빠르게)
+        Timer particleTimer = new Timer(16, null); // ← 12ms → 16ms (60fps)
         final int[] frame = { 0 };
-        final int MAX_FRAMES = 5;
+        final int MAX_FRAMES = 12; // ← 20 → 12 (약 200ms)
 
         particleTimer.addActionListener(e -> {
             frame[0]++;
@@ -165,13 +167,56 @@ public class ClearService {
             if (onFrameUpdate != null)
                 onFrameUpdate.run();
 
-            // 30프레임 또는 파티클이 모두 사라지면 종료
+            // 12프레임 또는 파티클이 모두 사라지면 종료
             if (frame[0] >= MAX_FRAMES || particleSystem.getParticles().isEmpty()) {
                 ((Timer) e.getSource()).stop();
                 particleSystem.clear();
                 animating = false;
                 if (onComplete != null)
                     onComplete.run();
+            }
+        });
+        particleTimer.start();
+    }
+
+    //  clearing 상태를 외부에서 제어할 수 있도록 setter 추가
+    public void setClearing(boolean clearing) {
+        this.clearing = clearing;
+        System.out.println("[DEBUG] ClearService.clearing = " + clearing);
+    }
+
+    /** 파티클 애니메이션만 실행 (블록은 이미 삭제된 상태) */
+    public void animateParticlesOnly(Runnable onFrameUpdate, Runnable onComplete) {
+        if (animating) {
+            System.out.println("[WARN] animateParticlesOnly() called while already animating");
+            return;
+        }
+        animating = true;
+
+        // 파티클 애니메이션
+        Timer particleTimer = new Timer(16, null);
+        final int[] frame = { 0 };
+        final int MAX_FRAMES = 12;
+
+        particleTimer.addActionListener(e -> {
+            frame[0]++;
+
+            // 파티클 업데이트
+            particleSystem.update();
+
+            if (onFrameUpdate != null)
+                onFrameUpdate.run();
+
+            // 12프레임 또는 파티클이 모두 사라지면 종료
+            if (frame[0] >= MAX_FRAMES || particleSystem.getParticles().isEmpty()) {
+                ((Timer) e.getSource()).stop();
+                particleSystem.clear();
+                animating = false;
+
+                // 완료 콜백 실행
+                if (onComplete != null) {
+                    onComplete.run();
+                }
             }
         });
         particleTimer.start();
@@ -509,7 +554,7 @@ public class ClearService {
      */
     private void compressBoardByRowsAnimated(Runnable onFrameUpdate,
             Runnable onComplete) {
-        final int TICK_MS = 100; // ⬅️ 줄 내려오는 속도(작을수록 빠름)
+        final int TICK_MS = 100; // 줄 내려오는 속도(작을수록 빠름)
 
         Timer timer = new Timer(TICK_MS, null);
         timer.addActionListener(e -> {
