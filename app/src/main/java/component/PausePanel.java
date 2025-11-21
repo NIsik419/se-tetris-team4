@@ -118,7 +118,17 @@ public class PausePanel extends JPanel {
         btn.setOpaque(false);
         btn.setPreferredSize(new Dimension(220, 60));
         btn.setMaximumSize(new Dimension(220, 60));
-        btn.addActionListener(e -> onClick.run());
+        
+        btn.addActionListener(e -> {
+            // 먼저 PausePanel 숨기기
+            PausePanel.this.hidePanel();
+
+            // 원래 콜백 실행
+            if (onClick != null) {
+                onClick.run();
+            }
+        });
+
         return btn;
     }
 

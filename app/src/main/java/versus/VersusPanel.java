@@ -1,10 +1,14 @@
 package versus;
 
 import component.GameConfig;
+import component.GameFrame;
 import component.PausePanel;
 
 import javax.swing.*;
+
 import java.awt.*;
+
+import component.MenuPanel;
 
 /**
  * VersusPanel
@@ -19,28 +23,54 @@ public class VersusPanel extends JPanel {
     private final JLabel p1Queue = new JLabel("0");
     private final JLabel p2Queue = new JLabel("0");
 
-    public VersusPanel(boolean itemMode) {
+    // 타이머 라벨 & 남은 시간
+    private final JLabel timerLabel = new JLabel("02:00", SwingConstants.CENTER);
+    private javax.swing.Timer timeAttackTimer;
+    private int remainingSeconds = 120; // 2분 고정
+
+    private final GameConfig p1Config;   
+    private final GameConfig p2Config;  
+    private final Runnable backToMenu;
+
+    public VersusPanel(GameConfig p1Config, GameConfig p2Config) {
+        this.p1Config = p1Config;
+        this.p2Config = p2Config;
+
         setLayout(new BorderLayout(12, 0));
         setBackground(new Color(18, 22, 30));
 
         // 상단 HUD
-        JPanel top = new JPanel(new GridLayout(1, 2));
+        JPanel top = new JPanel(new BorderLayout());
         top.setBackground(new Color(18, 22, 30));
-        top.add(buildSmallHud("P1 Incoming", p1Queue));
-        top.add(buildSmallHud("P2 Incoming", p2Queue));
+
+        top.add(buildSmallHud("P1 Incoming", p1Queue), BorderLayout.WEST);
+        top.add(buildSmallHud("P2 Incoming", p2Queue), BorderLayout.EAST);
+
+        // TIME 모드일 때만 중앙에 타이머 추가
+        boolean isTimeAttack =
+                p1Config.mode() == GameConfig.Mode.TIME_ATTACK
+            || p2Config.mode() == GameConfig.Mode.TIME_ATTACK;
+
+        if (isTimeAttack) {
+            timerLabel.setForeground(Color.WHITE);
+            timerLabel.setFont(timerLabel.getFont().deriveFont(20f));
+            top.add(buildSmallHud("TIME", timerLabel), BorderLayout.CENTER);
+        }
+
         add(top, BorderLayout.NORTH);
 
-        var mode = itemMode ? GameConfig.Mode.ITEM : GameConfig.Mode.CLASSIC;
-
-        // 매니저 생성(이벤트 배선 + HUD 콜백)
-        Runnable backToMenu = () -> SwingUtilities.getWindowAncestor(this).dispose();
+        // 필드에 저장
+        this.backToMenu = () -> {
+            JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
+            if (frame != null) frame.dispose();
+        };
 
         manager = new VersusGameManager(
-                new GameConfig(mode, GameConfig.Difficulty.NORMAL, false),
-                new GameConfig(mode, GameConfig.Difficulty.NORMAL, false),
+                p1Config,
+                p2Config,
                 backToMenu,
-                pending -> p1Queue.setText(String.valueOf(pending)), // P1 라벨 갱신
-                pending -> p2Queue.setText(String.valueOf(pending))  // P2 라벨 갱신
+                pending -> p1Queue.setText(String.valueOf(pending)),
+                pending -> p2Queue.setText(String.valueOf(pending))
         );
 
         // 보드 2개 배치
@@ -54,6 +84,10 @@ public class VersusPanel extends JPanel {
         p1Queue.setText(String.valueOf(manager.getP1Pending()));
         p2Queue.setText(String.valueOf(manager.getP2Pending()));
 
+        if (isTimeAttack) {
+            startTimeAttackTimer();
+        }
+
         SwingUtilities.invokeLater(() -> {
             JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
             if (frame == null) return;
@@ -62,15 +96,18 @@ public class VersusPanel extends JPanel {
                     frame,
                     () -> { // CONTINUE
                         manager.resumeBoth();
+                        resumeTimeAttackTimer(); 
                         pausePanel.hidePanel();
                     },
                     () -> { // RESTART 
                         manager.pauseBoth();
-                        frame.setContentPane(new VersusPanel(itemMode));
+                        stopTimeAttackTimer();
+                        frame.setContentPane(new VersusPanel(p1Config, p2Config)); 
                         frame.revalidate();
                     },
                     () -> { // EXIT
                         manager.pauseBoth();
+                        stopTimeAttackTimer();    
                         backToMenu.run();
                     }
             );
@@ -93,9 +130,11 @@ public class VersusPanel extends JPanel {
 
                 if (pausePanel.isVisible()) {
                     manager.resumeBoth();
+                    resumeTimeAttackTimer(); 
                     pausePanel.hidePanel();
                 } else {
                     manager.pauseBoth();
+                    pauseTimeAttackTimer(); 
                     pausePanel.showPanel();
                 }
             }
@@ -122,16 +161,49 @@ public class VersusPanel extends JPanel {
         return p;
     }
 
-    // 실행용
-    public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> {
-            boolean itemMode = false;
-            JFrame f = new JFrame(itemMode ? "Versus Test (Item)" : "Versus Test");
-            f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-            f.setContentPane(new VersusPanel(itemMode));
-            f.setSize(1100, 800);
-            f.setLocationRelativeTo(null);
-            f.setVisible(true);
+    private void startTimeAttackTimer() {
+        updateTimerLabel();
+
+        timeAttackTimer = new javax.swing.Timer(1000, e -> {
+            if (remainingSeconds > 0) {
+                remainingSeconds--;
+                updateTimerLabel();
+            } else {
+                ((javax.swing.Timer) e.getSource()).stop();
+                onTimeUp(); 
+            }
         });
+        timeAttackTimer.start();
+    }
+
+    private void updateTimerLabel() {
+        int m = remainingSeconds / 60;
+        int s = remainingSeconds % 60;
+        timerLabel.setText(String.format("%02d:%02d", m, s));
+    }
+
+    private void stopTimeAttackTimer() {
+        if (timeAttackTimer != null) {
+            timeAttackTimer.stop();
+            timeAttackTimer = null;
+        }
+    }
+
+    private void onTimeUp() {
+        stopTimeAttackTimer();
+        manager.pauseBoth();
+        manager.finishByTimeAttack(); 
+    }
+
+    private void pauseTimeAttackTimer() {
+        if (timeAttackTimer != null && timeAttackTimer.isRunning()) {
+            timeAttackTimer.stop();
+        }
+    }
+
+    private void resumeTimeAttackTimer() {
+        if (timeAttackTimer != null && !timeAttackTimer.isRunning()) {
+            timeAttackTimer.start();
+        }
     }
 }

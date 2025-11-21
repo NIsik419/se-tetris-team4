@@ -541,15 +541,13 @@ public class MenuPanel extends JPanel {
 
     private VersusFrame openVersus() {
         JFrame f = (JFrame) SwingUtilities.getWindowAncestor(MenuPanel.this);
-        VersusFrame row = new VersusFrame(false); 
         if (f != null) f.dispose();
-        row.add(makeGlassSmallButton("SMALL",
-               () -> onStart.accept(new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.EASY, false))));
-        row.add(makeGlassSmallButton("MEDIUM",
-                () -> onStart.accept(new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.NORMAL, false))));
-        row.add(makeGlassSmallButton("HARD",
-                () -> onStart.accept(new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.HARD, false))));
-        return row;
+
+        // NORMAL 난이도 고정 
+        GameConfig p1 = new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.NORMAL, false);
+        GameConfig p2 = new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.NORMAL, false);
+
+        return new VersusFrame(p1, p2);
     }
     
     private JPanel makeOnlineP2PRowFor(GameConfig.Mode modeIgnored) {
@@ -594,25 +592,45 @@ public class MenuPanel extends JPanel {
     private JPanel makeLocal2PRowFor(boolean itemMode) {
         JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         row.setOpaque(false);
-        row.setAlignmentX(LEFT_ALIGNMENT);
+
         row.add(makeGlassSmallButton("START", () -> {
-            JFrame f = (JFrame) SwingUtilities.getWindowAncestor(MenuPanel.this);
-            new VersusFrame(itemMode); // 오프라인 2인용 대전
-            if (f != null)
-                f.dispose();
+            GameConfig.Mode mode = itemMode ? GameConfig.Mode.ITEM : GameConfig.Mode.CLASSIC;
+
+            GameConfig p1 = new GameConfig(mode, GameConfig.Difficulty.NORMAL, false);
+            GameConfig p2 = new GameConfig(mode, GameConfig.Difficulty.NORMAL, false);
+
+            new VersusFrame(p1, p2);  
         }));
+
         return row;
     }
 
     // Local 2P TIME row - launches TIME_ATTACK mode
     private JPanel makeLocal2PTimeRow() {
-        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        JPanel row = new JPanel();
         row.setOpaque(false);
-        row.setAlignmentX(LEFT_ALIGNMENT);
-        row.add(makeGlassSmallButton("START", () -> onStart
-                .accept(new GameConfig(GameConfig.Mode.TIME_ATTACK, GameConfig.Difficulty.NORMAL, false))));
+
+        JButton startBtn = makeSubButton("Start", () -> {
+
+            GameConfig p1 = new GameConfig(
+                    GameConfig.Mode.TIME_ATTACK,
+                    GameConfig.Difficulty.NORMAL,
+                    false  
+            );
+
+            GameConfig p2 = new GameConfig(
+                    GameConfig.Mode.TIME_ATTACK,
+                    GameConfig.Difficulty.NORMAL,
+                    false
+            );
+
+            new versus.VersusFrame(p1, p2);  // TIME 모드로 대전 시작
+        });
+
+        row.add(startBtn);
         return row;
     }
+
 
     // NAV LIST management
     private void rebuildNavOrder() {

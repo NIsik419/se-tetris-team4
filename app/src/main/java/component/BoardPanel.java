@@ -38,7 +38,7 @@ public class BoardPanel extends JPanel {
 
     private final GameConfig config;
     private Settings settings;
-    private boolean isRestarting = false;
+    private boolean restarting = false;
     private final Runnable onExitToMenu;
     private java.util.function.Consumer<Integer> onGameOver;
 
@@ -179,6 +179,8 @@ public class BoardPanel extends JPanel {
         } else {
             installer.install(boardView, deps, KeyBindingInstaller.KeySet.ARROWS, true, false); // P2 (방향키)
         }
+
+        bindPauseKey();
     }
 
 
@@ -285,12 +287,16 @@ public class BoardPanel extends JPanel {
                                     pausePanel.hidePanel();
                                 },
                                 () -> {
-                                    isRestarting = true;
+                                    restarting = true;
                                     loop.stopLoop();
-                                    frame.dispose();
-                                    new GameFrame(config, false, false);
+                                    onExitToMenu.run();
                                 },
-                                onExitToMenu);
+                                () -> { // EXIT
+                                    restarting = false;    
+                                    loop.stopLoop();
+                                    onExitToMenu.run();
+                                }
+                        );
                         removeHierarchyListener(this);
                     }
                 }
@@ -337,7 +343,7 @@ public class BoardPanel extends JPanel {
                 scoreBoard,
                 () -> {
                     hideOverlay();
-                    isRestarting = true;
+                    restarting = true;
                     loop.stopLoop();
                     JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
                     if (frame != null)
@@ -406,6 +412,23 @@ public class BoardPanel extends JPanel {
         });
     }
 
+    private void bindPauseKey() {
+        // boardView 기준으로 WHEN_IN_FOCUSED_WINDOW에 바인딩
+        InputMap im = boardView.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        ActionMap am = boardView.getActionMap();
+
+        im.put(KeyStroke.getKeyStroke("P"), "togglePause");
+        // 원하면 ESC도 같이 묶을 수 있음
+        // im.put(KeyStroke.getKeyStroke("ESCAPE"), "togglePause");
+
+        am.put("togglePause", new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                togglePause();
+            }
+        });
+    }
+
     // === Pause 토글 ===
     private void togglePause() {
         if (pausePanel == null) {
@@ -428,7 +451,10 @@ public class BoardPanel extends JPanel {
     }
 
     public boolean isRestarting() {
-        return isRestarting;
+        return restarting;
+    }
+    public void markRestarting() {
+        restarting = true;
     }
 
     public void applySettings(Settings s) {
