@@ -19,10 +19,8 @@ public class NextBlockPanel extends JPanel {
     private Block block;
     private final int box; // side length
     private ColorBlindPalette.Mode colorMode = ColorBlindPalette.Mode.NORMAL;
+    
 
-    public NextBlockPanel() {
-        this(96);
-    }
 
     public NextBlockPanel(int sizePx) {
         this.box = sizePx;
@@ -31,30 +29,25 @@ public class NextBlockPanel extends JPanel {
         setBackground(new Color(0x191E28));
         setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(new Color(0x303540), 2),
-                BorderFactory.createEmptyBorder(6, 10, 6, 10)));
+                BorderFactory.createEmptyBorder(6,10,6,10)
+        ));
     }
 
-    public void setShape(char[][] s) {
-        this.shape = s;
-        this.block = null;
-        repaint();
-    }
+    public void setShape(char[][] s) { this.shape = s; this.block = null; repaint(); }
 
-    public void setBlock(Block b) {
-        this.block = b;
-        this.shape = null;
-        repaint();
-    }
-
+    public void setBlock(Block b) { this.block = b; this.shape = null; repaint(); }
+    
     public void setBlocks(List<Block> blocks) {
         if (blocks == null || blocks.isEmpty()) {
             this.block = null;
         } else {
-            this.block = blocks.get(0);
+            this.block = blocks.get(0); 
         }
         this.shape = null;
         repaint();
     }
+
+    
 
     @Override
     protected void paintComponent(Graphics g) {

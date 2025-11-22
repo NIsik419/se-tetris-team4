@@ -1,18 +1,21 @@
 package logic;
 
 import java.awt.Color;
-import java.util.*;
-
-import javax.swing.SwingUtilities;
-import javax.swing.Timer;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Queue;
 import java.util.function.Consumer;
 
-import blocks.Block;
-import component.*;
-import component.GameConfig.Difficulty;
-import component.items.ItemBlock;
+import javax.swing.SwingUtilities;
 
-import component.network.websocket.*;
+import blocks.Block;
+import component.BlockBag;
+import component.GameConfig;
+import component.GameConfig.Difficulty;
+import component.SpeedManager;
+import component.items.ItemBlock;
 
 /**
  * BoardLogic (대전 모드 완성)
@@ -87,6 +90,7 @@ public class BoardLogic {
     private final LinkedList<Block> previewQueue = new LinkedList<>();
     private Consumer<List<Block>> onNextQueueUpdate;
 
+     
     /** 기본 생성자 (NORMAL) */
     public BoardLogic(Consumer<Integer> onGameOver) {
         this(onGameOver, GameConfig.Difficulty.NORMAL);
@@ -367,6 +371,7 @@ public class BoardLogic {
 
         refillPreview();
         fireNextQueueChanged();
+        
 
         if (!move.canMove(next, state.getX(), state.getY())) {
             gameOver();
