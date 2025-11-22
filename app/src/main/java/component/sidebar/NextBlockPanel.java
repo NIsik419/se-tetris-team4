@@ -6,6 +6,9 @@ import java.awt.GradientPaint;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.awt.Font;
+import java.awt.FontMetrics;
+import java.awt.BasicStroke;
 import java.util.List;
 
 import javax.swing.BorderFactory;
@@ -13,14 +16,18 @@ import javax.swing.JPanel;
 
 import blocks.Block;
 import component.ColorBlindPalette;
+import component.items.ItemBlock;
+import component.items.LineClearItem;
+import component.items.WeightItem;
+import component.items.SpinLockItem;
+import component.items.ColorBombItem;
+import component.items.LightningItem;
 
 public class NextBlockPanel extends JPanel {
-    private char[][] shape; // 4x4, 'O' filled
-    private Block block;
-    private final int box; // side length
+    private char[][] shape; // maintained
+    private Block block;    // maintained
+    private final int box;
     private ColorBlindPalette.Mode colorMode = ColorBlindPalette.Mode.NORMAL;
-    
-
 
     public NextBlockPanel(int sizePx) {
         this.box = sizePx;
@@ -29,25 +36,35 @@ public class NextBlockPanel extends JPanel {
         setBackground(new Color(0x191E28));
         setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(new Color(0x303540), 2),
-                BorderFactory.createEmptyBorder(6,10,6,10)
-        ));
+                BorderFactory.createEmptyBorder(6, 10, 6, 10)));
     }
 
-    public void setShape(char[][] s) { this.shape = s; this.block = null; repaint(); }
+    public void setShape(char[][] s) {
+        this.shape = s;
+        this.block = null;
+        repaint();
+    }
 
-    public void setBlock(Block b) { this.block = b; this.shape = null; repaint(); }
-    
+    public void setBlock(Block b) {
+        this.block = b;
+        this.shape = null;
+        repaint();
+    }
+
     public void setBlocks(List<Block> blocks) {
         if (blocks == null || blocks.isEmpty()) {
             this.block = null;
         } else {
-            this.block = blocks.get(0); 
+            this.block = blocks.get(0);
         }
         this.shape = null;
         repaint();
     }
 
-    
+    public void setColorMode(ColorBlindPalette.Mode mode) {
+        this.colorMode = mode;
+        repaint();
+    }
 
     @Override
     protected void paintComponent(Graphics g) {
@@ -56,46 +73,102 @@ public class NextBlockPanel extends JPanel {
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
         int cell = Math.min((getWidth() - 20) / 4, (getHeight() - 20) / 4);
-        int offX = (getWidth() - cell * 4) / 2, offY = (getHeight() - cell * 4) / 2;
+        int offX = (getWidth() - cell * 4) / 2;
+        int offY = (getHeight() - cell * 4) / 2;
 
-        // inner rounded board
+        // inner board
         g2.setColor(new Color(0x232937));
         g2.fillRoundRect(6, 6, getWidth() - 12, getHeight() - 12, 16, 16);
 
+        // 1) 블록 기반 렌더링
         if (block != null) {
-            // Block을 4x4에 중앙 배치
-            int bw = block.width(), bh = block.height();
-            int ox = offX + (4 - bw) / 2 * cell;
-            int oy = offY + (4 - bh) / 2 * cell;
+            drawBlock(g2, cell, offX, offY);
+        }
 
-            for (int r = 0; r < bh; r++) {
-                for (int c = 0; c < bw; c++) {
-                    if (block.getShape(c, r) == 1) {
-                        int x = ox + c * cell + 2;
-                        int y = oy + r * cell + 2;
-                        int s = cell - 4;
+        // 2) shape 기반 렌더링
+        else if (shape != null) {
+            drawShape(g2, cell, offX, offY);
+        }
 
-                        Color base = ColorBlindPalette.convert(block.getColor(), colorMode);
-                        g2.setPaint(new GradientPaint(x, y, base.brighter(), x, y + s, base.darker()));
-                        g2.fillRoundRect(x, y, s, s, 10, 10);
-                    }
-                }
-            }
-        } else if (shape != null) {
-            for (int r = 0; r < shape.length; r++) {
-                for (int c = 0; c < shape[r].length; c++) {
-                    if (shape[r][c] != ' ') {
-                        int x = offX + c * cell + 2;
-                        int y = offY + r * cell + 2;
-                        int s = cell - 4;
-                        Color base = new Color(0xFFD764);
-                        g2.setPaint(new GradientPaint(x, y, base.brighter(), x, y + s, base.darker()));
-                        g2.fillRoundRect(x, y, s, s, 10, 10);
+        g2.dispose();
+    }
+
+    /** Block 기반 렌더링 */
+    private void drawBlock(Graphics2D g2, int cell, int offX, int offY) {
+        int bw = block.width();
+        int bh = block.height();
+
+        int ox = offX + (4 - bw) / 2 * cell;
+        int oy = offY + (4 - bh) / 2 * cell;
+
+        for (int r = 0; r < bh; r++) {
+            for (int c = 0; c < bw; c++) {
+                if (block.getShape(c, r) == 1) {
+                    int x = ox + c * cell + 2;
+                    int y = oy + r * cell + 2;
+                    int s = cell - 4;
+
+                    Color base = ColorBlindPalette.convert(block.getColor(), colorMode);
+                    g2.setPaint(new GradientPaint(x, y, base.brighter(), x, y + s, base.darker()));
+                    g2.fillRoundRect(x, y, s, s, 10, 10);
+
+                    // 아이템 심볼 표시
+                    if (block instanceof ItemBlock item) {
+                        drawItemSymbol(g2, item, x, y, s);
                     }
                 }
             }
         }
+    }
 
-        g2.dispose();
+    /** shape 기반 렌더링 */
+    private void drawShape(Graphics2D g2, int cell, int offX, int offY) {
+        for (int r = 0; r < shape.length; r++) {
+            for (int c = 0; c < shape[r].length; c++) {
+                if (shape[r][c] != ' ') {
+                    int x = offX + c * cell + 2;
+                    int y = offY + r * cell + 2;
+                    int s = cell - 4;
+
+                    Color base = new Color(0xFFD764);
+                    g2.setPaint(new GradientPaint(x, y, base.brighter(), x, y + s, base.darker()));
+                    g2.fillRoundRect(x, y, s, s, 10, 10);
+                }
+            }
+        }
+    }
+
+    /** 아이템 심볼 */
+    private void drawItemSymbol(Graphics2D g2, ItemBlock item, int px, int py, int size) {
+        g2.setFont(new Font("Segoe UI Emoji", Font.BOLD, 18));
+        FontMetrics fm = g2.getFontMetrics();
+
+        String symbol = switch (item) {
+            case LineClearItem l -> "L";
+            case WeightItem w -> "W";
+            case SpinLockItem s -> SpinLockItem.getSymbol();
+            case ColorBombItem b -> "💥";
+            case LightningItem l -> "⚡";
+            default -> null;
+        };
+
+        // 원형 강조(💥, ⚡)
+        if (item instanceof ColorBombItem) {
+            g2.setColor(new Color(255, 220, 100, 150));
+            g2.setStroke(new BasicStroke(2f));
+            g2.drawOval(px + 3, py + 3, size - 6, size - 6);
+        } else if (item instanceof LightningItem) {
+            g2.setColor(new Color(100, 180, 255, 150));
+            g2.setStroke(new BasicStroke(2f));
+            g2.drawOval(px + 3, py + 3, size - 6, size - 6);
+        }
+
+        // 텍스트 심볼
+        if (symbol != null) {
+            g2.setColor(Color.BLACK);
+            int tx = px + (size - fm.stringWidth(symbol)) / 2;
+            int ty = py + (size + fm.getAscent() - fm.getDescent()) / 2;
+            g2.drawString(symbol, tx, ty);
+        }
     }
 }

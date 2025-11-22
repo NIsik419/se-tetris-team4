@@ -16,6 +16,16 @@ import javax.swing.JPanel;
 
 import blocks.Block;
 import component.ColorBlindPalette;
+import component.items.ItemBlock;
+import component.items.LineClearItem;
+import component.items.WeightItem;
+import component.items.SpinLockItem;
+import component.items.ColorBombItem;
+import component.items.LightningItem;
+import java.awt.Font;
+import java.awt.FontMetrics;
+import java.awt.BasicStroke;
+
 
 public class NextPreviewPanel extends JPanel {
     private static final Color BG_PANEL = new Color(30, 35, 50);

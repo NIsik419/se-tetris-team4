@@ -178,7 +178,7 @@ public class ClearService {
         particleTimer.start();
     }
 
-    //  clearing 상태를 외부에서 제어할 수 있도록 setter 추가
+    // clearing 상태를 외부에서 제어할 수 있도록 setter 추가
     public void setClearing(boolean clearing) {
         this.clearing = clearing;
         System.out.println("[DEBUG] ClearService.clearing = " + clearing);
@@ -346,36 +346,76 @@ public class ClearService {
         }
     }
 
-    // =========================
-    // "즉시" 중력 (줄 압축 + 클러스터 중력)
+    // ========================= 
+    // "즉시" 중력 (줄 압축 + 칸 단위 중력)  -> 클러스터 잘 안되어서 임시변경
     // =========================
     public void applyGravityInstantly() {
         System.out.println("[DEBUG] applyGravityInstantly() called");
-        // if (skipDuringItem)
-        //     return;
 
         Color[][] board = state.getBoard();
+        int[][] pid = state.getPieceId();
 
-        // 1) 줄 단위 압축: 위 줄이 모두 한 번에 아래로 내려옴
+        // 1) 줄 단위 압축: 빈 줄 제거
         compressBoardByRows();
 
-        // 2) 압축 이후 떠 있는 블럭들에 대해, 클러스터 단위 중력을 즉시 반복
-        while (true) {
-            List<List<Point>> clusters = findConnectedClusters(board);
-            clusters.sort((a, b) -> Integer.compare(maxY(b), maxY(a)));
+        // 2) 칸 단위 중력: 각 블록을 아래로 떨어뜨림
+        boolean moved = true;
+        int iterations = 0;
+        final int MAX_ITERATIONS = 100; // 무한루프 방지
 
-            boolean movedAny = false;
-            for (List<Point> cluster : clusters) {
-                if (canClusterFallOneStep(cluster, board)) {
-                    moveClusterDownOneStep(cluster, board);
-                    movedAny = true;
+        while (moved && iterations < MAX_ITERATIONS) {
+            moved = false;
+            iterations++;
+
+            // 아래에서 위로 스캔하면서 각 칸을 아래로 이동
+            for (int y = GameState.HEIGHT - 2; y >= 0; y--) {
+                for (int x = 0; x < GameState.WIDTH; x++) {
+                    // 현재 칸에 블록이 있고, 바로 아래가 비어있으면
+                    if (board[y][x] != null && board[y + 1][x] == null) {
+                        // 한 칸 아래로 이동
+                        board[y + 1][x] = board[y][x];
+                        pid[y + 1][x] = pid[y][x];
+                        board[y][x] = null;
+                        pid[y][x] = 0;
+                        moved = true;
+                    }
                 }
             }
-
-            if (!movedAny)
-                break;
         }
+
+        System.out.println("[DEBUG] Gravity completed after " + iterations + " iterations");
     }
+
+    // // =========================
+    // // "즉시" 중력 (줄 압축 + 클러스터 중력)
+    // // =========================
+    // public void applyGravityInstantly() {
+    //     System.out.println("[DEBUG] applyGravityInstantly() called");
+    //     // if (skipDuringItem)
+    //     // return;
+
+    //     Color[][] board = state.getBoard();
+
+    //     // 1) 줄 단위 압축: 위 줄이 모두 한 번에 아래로 내려옴
+    //     compressBoardByRows();
+
+    //     // 2) 압축 이후 떠 있는 블럭들에 대해, 클러스터 단위 중력을 즉시 반복
+    //     while (true) {
+    //         List<List<Point>> clusters = findConnectedClusters(board);
+    //         clusters.sort((a, b) -> Integer.compare(maxY(b), maxY(a)));
+
+    //         boolean movedAny = false;
+    //         for (List<Point> cluster : clusters) {
+    //             if (canClusterFallOneStep(cluster, board)) {
+    //                 moveClusterDownOneStep(cluster, board);
+    //                 movedAny = true;
+    //             }
+    //         }
+
+    //         if (!movedAny)
+    //             break;
+    //     }
+    // }
 
     /** 줄 단위 중력 (예전 API 호환용 이름) */
     public void applyLineGravity() {
