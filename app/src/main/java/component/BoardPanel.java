@@ -22,8 +22,10 @@ import javax.swing.JLayeredPane;
 import javax.swing.JPanel;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
+import javax.swing.Timer;
 import javax.swing.border.EmptyBorder;
-
+import javax.swing.InputMap;
+import javax.swing.ActionMap;
 import component.board.KeyBindingInstaller;
 import component.config.Settings;
 import component.items.ColorBombItem;
