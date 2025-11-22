@@ -347,6 +347,11 @@ public class BoardLogic {
 
         applyIncomingGarbage();
 
+         if (clear.countFullLines() > 0) {
+            clearLinesAndThen(this::spawnNext);
+            return; 
+        }
+
         refillPreview();
 
         Block next;
@@ -396,14 +401,21 @@ public class BoardLogic {
                 isGarbageRow[y] = isGarbageRow[y + 1];
             }
 
+            int garbagePid = state.allocatePieceId();
+
             // 맨 아래에 가비지 라인 추가
             Color[] last = new Color[WIDTH];
-            int[] lastPid = new int[WIDTH];
+            int[] lastPid = new int[WIDTH];    
 
             for (int x = 0; x < WIDTH; x++) {
                 boolean filled = ((mask >> x) & 1) != 0;
-                last[x] = filled ? GARBAGE_COLOR : null;
-                lastPid[x] = 0;
+                if (filled) {
+                    last[x]    = GARBAGE_COLOR;
+                    lastPid[x] = garbagePid;   
+                } else {
+                    last[x]    = null;
+                    lastPid[x] = 0;
+                }
             }
             board[HEIGHT - 1] = last;
             isGarbageRow[HEIGHT - 1] = true;

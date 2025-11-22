@@ -83,7 +83,6 @@ public class GameLauncher {
      * [1] 게임 모드 선택 시 (CLASSIC / ITEM)
      */
     private void onGameConfigSelect(GameConfig config) {
-        frame.setVisible(false);
 
         boolean p2pMode = (config.mode() == GameConfig.Mode.VERSUS); // 예시: 메뉴에서 VERSUS 모드 선택 시
 
@@ -95,25 +94,31 @@ public class GameLauncher {
             isServer = (res == JOptionPane.YES_OPTION);
         }
 
-        // 새 구조로 변경
+        startGame(config, p2pMode, isServer);
+    }
+
+    private void startGame(GameConfig config, boolean p2pMode, boolean isServer) {
+        // 메뉴 프레임 가리기
+        frame.setVisible(false);
+
         GameFrame game = new GameFrame(config, p2pMode, isServer);
 
+        // ✅ BoardPanel의 Settings 반영
         try {
-            // ✅ BoardPanel의 Settings 반영
             if (game.getActivePanel() instanceof BoardPanel panel) {
                 panel.applySettings(settings);
             }
-        } catch (Exception ignore) {
+        } catch (Exception ignore) {}
+
+        // ✅ 아이템 모드 활성화 (필요하다면)
+        if (config.mode() == GameConfig.Mode.ITEM &&
+                game.getActivePanel() instanceof BoardPanel panel) {
+            panel.getLogic().setItemMode(true);
         }
 
         game.setTitle("TETRIS – " + config.mode() + " / " + config.difficulty());
         game.setLocationRelativeTo(null);
         game.setVisible(true);
-
-        // ✅ 아이템 모드 활성화
-        if (config.mode() == GameConfig.Mode.ITEM && game.getActivePanel() instanceof BoardPanel panel) {
-            panel.getLogic().setItemMode(true);
-        }
 
         SwingUtilities.invokeLater(() -> {
             game.requestFocusInWindow();
@@ -125,19 +130,20 @@ public class GameLauncher {
             frame.removeWindowListener(wl);
         }
 
-        // ✅ 새 창 종료 시 메뉴 복귀
+        // 창이 닫힐 때: RESTART 인지, 그냥 종료인지 구분
         game.addWindowListener(new WindowAdapter() {
             @Override
-            // public void windowClosed(WindowEvent e) {
-            // // Restart 중이라면 메뉴 복귀 X
-            // if (game.getBoardPanel() != null && game.getBoardPanel().isRestarting()) {
-            // return;
-            // }
-            // frame.setVisible(true);
-            // showScreen(Screen.MENU);
-            // }
-        
             public void windowClosed(WindowEvent e) {
+
+                JPanel p = game.getActivePanel();
+
+                if (p instanceof BoardPanel bp && bp.isRestarting()) {
+                    // 🔁 RESTART로 닫힌 경우 → 메뉴 안 띄우고 게임만 다시 시작
+                    startGame(config, p2pMode, isServer);
+                    return;
+                }
+
+                // 🔚 그냥 종료(EXIТ / X) → 메뉴 복귀
                 frame.setVisible(true);
                 showScreen(Screen.MENU);
             }

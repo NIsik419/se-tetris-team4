@@ -101,14 +101,8 @@ public class LineClearItem extends ItemBlock {
          * 실제 게임
          * 1) 먼저 일반 줄이 있으면 clearLines() 먼저 처리
          * =============================== */
-        if (clear.countFullLines() > 0) {
-            clear.clearLines(
-                    logic.getOnFrameUpdate(),
-                    () -> runLineClearDebris(logic, targetY, clear, animMgr, onComplete)
-            );
-        } else {
-            runLineClearDebris(logic, targetY, clear, animMgr, onComplete);
-        }
+
+        runLineClearDebris(logic, targetY, clear, animMgr, onComplete);
     }
 
     /** ----------------------------------------

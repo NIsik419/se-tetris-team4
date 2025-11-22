@@ -1,5 +1,6 @@
 package versus;
 
+import component.BoardPanel;
 import component.GameConfig;
 
 import java.util.function.IntConsumer;
@@ -93,6 +94,44 @@ public class VersusGameManager {
         if (backToMenu != null) backToMenu.run();
     }
 
+    public void finishByTimeAttack() {
+        if (finished) return;
+
+        int p1Score = p1.getScore();
+        int p2Score = p2.getScore();
+
+        if (p1Score > p2Score) {
+            onPlayerOver(Player.Id.P2);  // P1 승리
+            return;
+        }
+        if (p2Score > p1Score) {
+            onPlayerOver(Player.Id.P1);  // P2 승리
+            return;
+        }
+
+        // === 무승부 (DRAW) ===
+        // 팝업 없이 종료 + 메뉴 복귀만 수행
+        p1.stop();
+        p2.stop();
+
+
+        Component any = p1.getComponent();
+        JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(any);
+
+        JOptionPane.showMessageDialog(
+                frame,
+                "Time's up!\nDRAW",
+                "무승부입니다",
+                JOptionPane.INFORMATION_MESSAGE
+        );
+
+        if (frame != null) frame.dispose();
+        if (backToMenu != null) backToMenu.run();
+
+        finished = true;
+    }
+
+
     private void safeHudUpdateP1() {
         if (onP1PendingChanged != null) onP1PendingChanged.accept(getP1Pending());
     }
@@ -119,5 +158,13 @@ public class VersusGameManager {
     public void resumeBoth() {
         p1.start();
         p2.start();
+    }
+
+    public int getP1Score() {
+        return p1.getScore();
+    }
+
+    public int getP2Score() {
+        return p2.getScore();
     }
 }
