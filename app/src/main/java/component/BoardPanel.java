@@ -98,13 +98,17 @@ public class BoardPanel extends JPanel {
         }
 
         this.boardView = new BoardView(logic);
-        this.loop = new GameLoop(logic, this::drawBoard);
+        this.loop = new GameLoop(logic, boardView::repaint);
 
         // 루프 제어 콜백 연결
         logic.setLoopControl(loop::pauseLoop, loop::resumeLoop);
 
-        // 프레임 업데이트 콜백(사용 중이면 유지)
-        logic.setOnFrameUpdate(this::drawBoard);
+        // ClearService 애니메이션용: 가벼운 repaint만
+        logic.setOnFrameUpdate(() -> {
+            SwingUtilities.invokeLater(() -> {
+                boardView.repaint(); // ← 보드만 빠르게 갱신
+            });
+        });
 
         // NEXT 큐 변경 시 HUD 갱신
         logic.setOnNextQueueUpdate(blocks -> {
@@ -126,8 +130,17 @@ public class BoardPanel extends JPanel {
         initPausePanel();
         initOverlay();
 
-        // === (중복 방지) 디버그 아이템 키는 KeyBindingInstaller에서 설치하므로 비활성화 ===
-        // bindDebugKeys();
+        // === HUD 업데이트 타이머 (기존 drawBoard 역할) ===
+        Timer hudUpdateTimer = new Timer(100, e -> {
+            if (!logic.isGameOver()) {
+                SwingUtilities.invokeLater(() -> {
+                    scoreLabel.setText(String.valueOf(logic.getScore()));
+                    levelLabel.setText(String.valueOf(logic.getLevel()));
+                    linesLabel.setText(String.valueOf(logic.getLinesCleared()));
+                });
+            }
+        });
+        hudUpdateTimer.start();
 
         // === 초기 포커스 및 루프 시작 ===
         boardView.setFocusable(true);
@@ -146,7 +159,7 @@ public class BoardPanel extends JPanel {
 
         KeyBindingInstaller.Deps deps = new KeyBindingInstaller.Deps(
                 logic,
-                this::drawBoard, // 보드 갱신
+                boardView::repaint, // 보드 갱신
                 () -> { // 풀스크린 (현재 없음)
                     JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
                     if (frame != null)
@@ -385,16 +398,11 @@ public class BoardPanel extends JPanel {
         overlay.setVisible(false);
     }
 
-    // === 보드 갱신 ===
+    // 기존 drawBoard는 외부 호출용으로만 사용
     private void drawBoard() {
         SwingUtilities.invokeLater(() -> {
-            System.out.println("[DEBUG] drawBoard() called - repainting BoardView");
-            scoreLabel.setText(String.valueOf(logic.getScore()));
-            levelLabel.setText(String.valueOf(logic.getLevel()));
-            linesLabel.setText(String.valueOf(logic.getLinesCleared()));
             boardView.repaint();
         });
-
     }
 
     // === 디버그 키 ===

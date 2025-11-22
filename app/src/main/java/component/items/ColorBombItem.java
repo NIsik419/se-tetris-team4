@@ -5,21 +5,20 @@ import java.awt.Color;
 import blocks.Block;
 import logic.BoardLogic;
 import logic.ClearService;
+import logic.ParticleSystem;
 
 /**
- * 💥 ColorBombItem
- * -----------------
- * - 같은 색상의 모든 블록 제거
- * - 제거된 칸에 잔상(fadeLayer) 남기고 번쩍 효과
- * - 중력 처리 + 라인 클리어
- * 
- * ✅ testMode: 테스트 모드일 경우 Timer/Thread 대신 즉시 효과를 적용
+ * 💥 ColorBombItem (색 폭탄)
+ *
+ * - 자기와 같은 색의 모든 블록 제거
+ * - 테두리 부분만 폭발 파티클
+ * - 점수 증가 (삭제 블록 × 10)
+ * - **새 중력 시스템 적용: applyGravityInstantly() → clearLines()**
  */
 public class ColorBombItem extends ItemBlock {
 
     private boolean testMode = false;
 
-    /** 테스트용: 비동기 대신 즉시 적용할지 여부 */
     public void setTestMode(boolean testMode) {
         this.testMode = testMode;
     }
@@ -31,50 +30,127 @@ public class ColorBombItem extends ItemBlock {
     @Override
     public void activate(BoardLogic logic, Runnable onComplete) {
         var board = logic.getBoard();
-        var fade = logic.getFadeLayer();
-        var clearService = logic.getClearService();
-        Color target = getColor();
+        var clear = logic.getClearService();
 
-        // === 1️⃣ 대상 색상 제거 + fade 잔상 남기기 ===
+        if (clear != null) {
+            clear.setSkipDuringItem(true); // 아이템 중력 스킵 활성화
+        }
+
+        ParticleSystem ps = (clear != null ? clear.getParticleSystem() : null);
+        Color targetColor = this.color;
         int removed = 0;
-        for (int y = 0; y < board.length; y++) {
-            for (int x = 0; x < board[y].length; x++) {
-                if (target.equals(board[y][x])) {
+        final int CELL_SIZE = 25;
+
+        // ===========================================
+        // 1) 색상 일치하는 모든 블록 삭제 + 파티클 생성
+        // ===========================================
+        for (int y = 0; y < BoardLogic.HEIGHT; y++) {
+            for (int x = 0; x < BoardLogic.WIDTH; x++) {
+                if (board[y][x] != null && board[y][x].equals(targetColor)) {
+
+                    boolean isEdge = (x == 0 || x == BoardLogic.WIDTH - 1
+                            || (x > 0 && !targetColor.equals(board[y][x - 1]))
+                            || (x < BoardLogic.WIDTH - 1 && !targetColor.equals(board[y][x + 1])));
+
+                    if (isEdge && ps != null) {
+                        ps.createExplosionParticles(x, y, targetColor, CELL_SIZE);
+                    }
+
                     board[y][x] = null;
-                    fade[y][x] = new Color(
-                            target.getRed(),
-                            target.getGreen(),
-                            target.getBlue(),
-                            80); // 잔상 투명도
                     removed++;
                 }
             }
         }
 
-        // === 2️⃣ 점수 반영 ===
+        // 점수 증가
         if (removed > 0) {
             logic.addScore(removed * 10);
         }
 
-        // === 3️⃣ 중력 및 클리어 처리 ===
+        // ===========================================
+        // 2) testMode: 모든 것을 즉시 처리
+        // ===========================================
         if (testMode) {
-            // 테스트 환경 → 즉시 실행
-            clearService.applyGravityInstantly();
-            onComplete.run();
+            if (clear != null) {
+                clear.setSkipDuringItem(false);
+                clear.applyGravityInstantly();
+                clear.clearLines(() -> {
+                }, onComplete);
+            } else if (onComplete != null) {
+                onComplete.run();
+            }
             return;
         }
 
-        // 실제 게임 환경 → 비동기 Thread 처리
-        new Thread(() -> {
-            try {
-                // 순서: 중력 → 라인 클리어 → 완료 콜백
-                clearService.applyGravityStepwise(() -> {}, () -> {
-                    clearService.clearLines(() -> {}, onComplete);
-                });
-            } catch (Exception e) {
-                // 예외 시에도 테스트가 죽지 않게 안전하게 콜백 호출
-                onComplete.run();
+        // ===========================================
+        // 3) 파티클 애니메이션 (있으면)
+        // ===========================================
+        if (ps != null && logic.getOnFrameUpdate() != null) {
+            startParticleAnimation(ps, logic);
+        }
+
+        // ===========================================
+        // 4) 흔들림 효과 (Shake)
+        // ===========================================
+        if (logic.getOnFrameUpdate() != null) {
+            new Thread(() -> {
+                try {
+                    for (int i = 0; i < 4; i++) {
+                        logic.setShakeOffset((i % 2 == 0) ? 2 : -2);
+                        logic.getOnFrameUpdate().run();
+                        Thread.sleep(50);
+                    }
+                    logic.setShakeOffset(0);
+                    logic.getOnFrameUpdate().run();
+                } catch (InterruptedException ignored) {
+                }
+            }).start();
+        }
+
+        if (clear != null) {
+            clear.setSkipDuringItem(false);
+
+            // 1) 즉시 중력 (클러스터 중력 + 라인 압축)
+            clear.applyGravityInstantly();
+
+            // 화면 갱신
+            if (logic.getOnFrameUpdate() != null) {
+                javax.swing.SwingUtilities.invokeLater(logic.getOnFrameUpdate());
             }
-        }).start();
+
+            //  추가로 만들어진 줄이 있으면 지우기
+            clear.clearLines(
+                    logic.getOnFrameUpdate(),
+                    () -> {
+                        if (onComplete != null)
+                            onComplete.run();
+                    });
+        } else {
+            if (onComplete != null)
+                onComplete.run();
+        }
+    }
+
+    // ==================================================
+    // 파티클 애니메이션
+    // ==================================================
+    private void startParticleAnimation(ParticleSystem ps, BoardLogic logic) {
+        javax.swing.Timer timer = new javax.swing.Timer(16, null);
+        final int[] frame = { 0 };
+        final int MAX_FRAMES = 20;
+
+        timer.addActionListener(e -> {
+            frame[0]++;
+            ps.update();
+
+            if (logic.getOnFrameUpdate() != null)
+                logic.getOnFrameUpdate().run();
+
+            if (frame[0] >= MAX_FRAMES || ps.getParticles().isEmpty()) {
+                ((javax.swing.Timer) e.getSource()).stop();
+            }
+        });
+
+        timer.start();
     }
 }
