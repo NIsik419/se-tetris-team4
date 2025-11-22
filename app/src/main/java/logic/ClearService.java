@@ -46,7 +46,6 @@ public class ClearService {
     /** 메인 라인 클리어 로직 */
     public int clearLines(Runnable onFrameUpdate, Runnable onComplete) {
         if (clearing) {
-            System.out.println("[WARN] clearLines() called while already clearing");
             return 0;
         }
 
@@ -352,8 +351,8 @@ public class ClearService {
     // =========================
     public void applyGravityInstantly() {
         System.out.println("[DEBUG] applyGravityInstantly() called");
-        if (skipDuringItem)
-            return;
+        // if (skipDuringItem)
+        //     return;
 
         Color[][] board = state.getBoard();
 

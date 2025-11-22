@@ -198,13 +198,117 @@ public class BoardLogic {
         }
 
         if (itemMode && b instanceof ItemBlock ib) {
-            // 아이템 activate 후 clearLinesAndThen + spawnNext 실행
+            // 아이템 activate 후 clearLinesAfterItem
             ib.activate(this, () -> {
-                clearLinesAndThen(this::spawnNext);
+                clearLinesAfterItem(this::spawnNext);
             });
         } else {
             clearLinesAndThen(this::spawnNext);
         }
+    }
+
+    /** 아이템 전용: 이미 중력이 적용된 상태에서 줄만 클리어 */
+    private void clearLinesAfterItem(Runnable afterClear) {
+        var board = state.getBoard();
+        var pid = state.getPieceId();
+
+        java.util.List<Integer> clearedRows = new java.util.ArrayList<>();
+        for (int y = 0; y < HEIGHT; y++) {
+            boolean full = true;
+            for (int x = 0; x < WIDTH; x++) {
+                if (board[y][x] == null) {
+                    full = false;
+                    break;
+                }
+            }
+            if (full)
+                clearedRows.add(y);
+        }
+
+        int lines = clearedRows.size();
+        if (lines == 0) {
+            // 줄이 없으면 바로 다음 블록
+            comboCount = 0;
+            if (afterClear != null)
+                afterClear.run();
+            return;
+        }
+
+        updateGarbageFlagsOnClear(clearedRows);
+
+        // 공격 전송
+        if (lines >= 2 && onLinesClearedWithMasks != null) {
+            int[] masks = new int[lines];
+            for (int i = 0; i < lines; i++) {
+                int y = clearedRows.get(i);
+                int mask = 0;
+                for (int x = 0; x < WIDTH; x++) {
+                    if (board[y][x] != null && !recentPlaced[y][x]) {
+                        mask |= (1 << x);
+                    }
+                }
+                masks[i] = mask;
+            }
+            onLinesClearedWithMasks.accept(masks);
+            System.out.println("[ATTACK] " + lines + "줄 클리어 → " + lines + "줄 공격 전송");
+        }
+
+        //  파티클 생성
+        final int CELL_SIZE = 25;
+        for (int row : clearedRows) {
+            clear.getParticleSystem().createLineParticles(row, board, CELL_SIZE, WIDTH);
+        }
+
+        //  블록 삭제
+        for (int row : clearedRows) {
+            java.util.Arrays.fill(board[row], null);
+            java.util.Arrays.fill(pid[row], 0);
+        }
+
+        recentPlacedInitialize();
+
+        //  점수/콤보
+        clearedLines += lines;
+        deletedLinesTotal += lines;
+
+        if (onLineCleared != null)
+            onLineCleared.accept(lines);
+        addScore(lines * 100);
+
+        long now = System.currentTimeMillis();
+        comboCount = (now - lastClearTime < 3000) ? (comboCount + 1) : 1;
+        lastClearTime = now;
+
+        if (comboCount > 1) {
+            int comboBonus = comboCount * 50;
+            addScore(comboBonus);
+            System.out.println("Combo! x" + comboCount + " (+" + comboBonus + ")");
+        }
+
+        if (clearedLines % 10 == 0) {
+            speedManager.increaseLevel();
+        }
+        if (itemMode && deletedLinesTotal > 0 && deletedLinesTotal % 2 == 0) {
+            nextIsItem = true;
+        }
+
+        //  중력 다시 적용 (줄 삭제 후 떠있는 블록 처리)
+        clear.applyGravityInstantly();
+
+        // 화면 갱신
+        if (onFrameUpdate != null)
+            javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
+
+        //  파티클 백그라운드
+        clear.animateParticlesOnly(
+                () -> {
+                    if (onFrameUpdate != null)
+                        javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
+                },
+                null);
+
+        //  연쇄 체크
+        checkChainClear(afterClear);
     }
 
     /** 라인 클리어 처리 - 중력 즉시 적용 버전 */
@@ -251,13 +355,13 @@ public class BoardLogic {
             System.out.println("[ATTACK] " + lines + "줄 클리어 → " + lines + "줄 공격 전송");
         }
 
-        //  1. 파티클 생성 (삭제 전 색상 저장)
+        // 1. 파티클 생성 (삭제 전 색상 저장)
         final int CELL_SIZE = 25;
         for (int row : clearedRows) {
             clear.getParticleSystem().createLineParticles(row, board, CELL_SIZE, WIDTH);
         }
 
-        //  2. 블록 즉시 삭제
+        // 2. 블록 즉시 삭제
         for (int row : clearedRows) {
             java.util.Arrays.fill(board[row], null);
             java.util.Arrays.fill(pid[row], 0);
@@ -293,11 +397,11 @@ public class BoardLogic {
         // 4. 중력 즉시 적용 (파티클 기다리지 않음!)
         clear.applyGravityInstantly();
 
-        //  5. 화면 갱신
+        // 5. 화면 갱신
         if (onFrameUpdate != null)
             javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
 
-        //  6. 파티클은 백그라운드에서 재생
+        // 6. 파티클은 백그라운드에서 재생
         clear.animateParticlesOnly(
                 () -> {
                     if (onFrameUpdate != null)
@@ -306,7 +410,7 @@ public class BoardLogic {
                 null);
 
         // 7. 연쇄 클리어 체크 (약간의 지연 후)
-        SwingUtilities.invokeLater(() -> checkChainClear(afterClear));
+        checkChainClear(afterClear);
     }
 
     /** 연쇄 클리어 체크 */

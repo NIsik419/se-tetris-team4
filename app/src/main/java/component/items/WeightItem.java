@@ -26,9 +26,9 @@ public class WeightItem extends ItemBlock {
     }
 
     public WeightItem() {
-        super(Color.ORANGE, new int[][]{
-            {1, 1, 1, 1},
-            {1, 1, 1, 1}
+        super(Color.ORANGE, new int[][] {
+                { 1, 1, 1, 1 },
+                { 1, 1, 1, 1 }
         });
         this.canRotate = false; // 회전 금지
     }
@@ -51,22 +51,23 @@ public class WeightItem extends ItemBlock {
         final int CELL_SIZE = 25;
         for (int dx = 0; dx < w; dx++) {
             int bx = startX + dx;
-            if (bx < 0 || bx >= BoardLogic.WIDTH) continue;
-            
+            if (bx < 0 || bx >= BoardLogic.WIDTH)
+                continue;
+
             for (int by = 0; by < BoardLogic.HEIGHT; by++) {
                 // 블록이 있으면 파티클 생성
                 if (board[by][bx] != null && particleSystem != null) {
                     Color blockColor = board[by][bx];
                     // 테두리 블록만 파티클 생성
                     boolean isEdge = (bx == 0 || bx == BoardLogic.WIDTH - 1 ||
-                                     (bx > 0 && board[by][bx - 1] == null) ||
-                                     (bx < BoardLogic.WIDTH - 1 && board[by][bx + 1] == null));
-                    
+                            (bx > 0 && board[by][bx - 1] == null) ||
+                            (bx < BoardLogic.WIDTH - 1 && board[by][bx + 1] == null));
+
                     if (isEdge) {
                         particleSystem.createExplosionParticles(bx, by, blockColor, CELL_SIZE);
                     }
                 }
-                
+
                 // 블록 제거
                 board[by][bx] = null;
             }
@@ -85,7 +86,7 @@ public class WeightItem extends ItemBlock {
             }
         }
 
-        // ✅ 즉시 화면 갱신
+        // 즉시 화면 갱신
         if (logic.getOnFrameUpdate() != null) {
             javax.swing.SwingUtilities.invokeLater(logic.getOnFrameUpdate());
         }
@@ -123,7 +124,8 @@ public class WeightItem extends ItemBlock {
                     }
                     logic.setShakeOffset(0);
                     logic.getOnFrameUpdate().run();
-                } catch (InterruptedException ignored) {}
+                } catch (InterruptedException ignored) {
+                }
             }).start();
         }
 
@@ -139,13 +141,23 @@ public class WeightItem extends ItemBlock {
             javax.swing.SwingUtilities.invokeLater(logic.getOnFrameUpdate());
         }
 
-        // ============================================
-        // 7) ✅ BoardLogic의 clearLinesAndThen 사용 (연쇄 처리)
-        // ============================================
-        // WeightItem은 BoardLogic의 private 메서드에 접근할 수 없으므로
-        // 대신 onComplete를 바로 호출해서 spawnNext가 실행되도록 함
-        // spawnNext 전에 clearLinesAndThen이 자동으로 호출됨
-        
+        java.util.List<Integer> newFullRows = new java.util.ArrayList<>();
+        for (int y = 0; y < BoardLogic.HEIGHT; y++) {
+            boolean full = true;
+            for (int x = 0; x < BoardLogic.WIDTH; x++) {
+                if (board[y][x] == null) {
+                    full = false;
+                    break;
+                }
+            }
+            if (full)
+                newFullRows.add(y);
+        }
+
+        if (!newFullRows.isEmpty()) {
+            System.out.println("[WeightItem] Found " + newFullRows.size() + " lines after gravity");
+        }
+
         if (onComplete != null) {
             javax.swing.SwingUtilities.invokeLater(onComplete);
         }
