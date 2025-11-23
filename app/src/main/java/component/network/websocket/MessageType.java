@@ -21,6 +21,8 @@ public enum MessageType {
     BOARD_DELTA,           // 델타: 변경사항만 전송
     BOARD_DELTA_COMPRESSED, // 압축된 델타 (RLE)
     BOARD_FULL_SYNC,       // 주기적 전체 동기화 (패킷 손실 대비)
+    NEXT_BLOCKS,         // 다음 블록 정보 전송
+    PLAYER_STATS,       // 플레이어 상태 정보 전송
     
     // === 타임 리밋 모드 (NEW!) ===
     TIME_LIMIT_START,      // 타임 리밋 시작 (서버 시간 전송)

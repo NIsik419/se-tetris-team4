@@ -5,27 +5,25 @@ import java.awt.*;
 
 public class GameFrame extends JFrame {
 
-    // 단일 필드로 통합 (BoardPanel 또는 OnlineVersusPanel)
     private final JPanel activePanel;
 
     /**
-     * @param config  게임 설정
-     * @param p2pMode true면 온라인 대전 모드, false면 싱글 모드
-     * @param isServer true면 서버로 실행, false면 클라이언트
+     * @param config   게임 설정
+     * @param p2pMode  true면 온라인 대전 모드
+     * @param isServer true면 서버
+     * @param gameRule P2P 게임 룰 ("Normal", "Item", "Time Limit (3min)")
      */
-    public GameFrame(GameConfig config, boolean p2pMode, boolean isServer) {
+    public GameFrame(GameConfig config, boolean p2pMode, boolean isServer, String gameRule) {
         super("SeoulTech SE Tetris");
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setLayout(new BorderLayout());
 
-        // 모드 분기
         if (p2pMode) {
-            // 🧩 온라인 대전 모드
-            this.activePanel = new component.network.websocket.OnlineVersusPanel(isServer);
-            setTitle("Tetris Online Battle");
+            //  게임 룰 전달
+            this.activePanel = new component.network.websocket.OnlineVersusPanel(isServer, gameRule);
+            setTitle("Tetris Online Battle - " + gameRule);
             setSize(950, 750);
         } else {
-            // 🎮 싱글 모드
             this.activePanel = new BoardPanel(config, this::returnToMenu);
             setSize(720, 800);
         }
@@ -48,7 +46,6 @@ public class GameFrame extends JFrame {
         dispose();
     }
 
-    // BoardPanel 접근자 (싱글모드일 때만 유효)
     public JPanel getActivePanel() {
         return activePanel;
     }
@@ -71,7 +68,6 @@ public class GameFrame extends JFrame {
                 gd.setFullScreenWindow(this);
             }
 
-            // 포커스 복구
             SwingUtilities.invokeLater(() -> {
                 setVisible(true);
                 activePanel.requestFocusInWindow();

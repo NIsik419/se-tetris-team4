@@ -371,7 +371,7 @@ public class BoardPanel extends JPanel {
                     JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
                     if (frame != null)
                         frame.dispose();
-                    new GameFrame(config, false, false);
+                    new GameFrame(config, false, false, null); // 싱글 모드 새 게임 시작
                 },
                 onExitToMenu);
 
