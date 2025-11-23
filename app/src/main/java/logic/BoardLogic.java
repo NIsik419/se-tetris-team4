@@ -33,6 +33,11 @@ public class BoardLogic {
     private Runnable pauseCallback;
     private Runnable resumeCallback;
     private Runnable onGameOverCallback;
+    private Runnable onGarbageApplied;
+
+    public void setOnGarbageApplied(Runnable callback) {
+        this.onGarbageApplied = callback;
+    }
 
     public void setLoopControl(Runnable pause, Runnable resume) {
         this.pauseCallback = pause;
@@ -90,7 +95,6 @@ public class BoardLogic {
     private final LinkedList<Block> previewQueue = new LinkedList<>();
     private Consumer<List<Block>> onNextQueueUpdate;
 
-     
     /** 기본 생성자 (NORMAL) */
     public BoardLogic(Consumer<Integer> onGameOver) {
         this(onGameOver, GameConfig.Difficulty.NORMAL);
@@ -253,13 +257,13 @@ public class BoardLogic {
             System.out.println("[ATTACK] " + lines + "줄 클리어 → " + lines + "줄 공격 전송");
         }
 
-        //  파티클 생성
+        // 파티클 생성
         final int CELL_SIZE = 25;
         for (int row : clearedRows) {
             clear.getParticleSystem().createLineParticles(row, board, CELL_SIZE, WIDTH);
         }
 
-        //  블록 삭제
+        // 블록 삭제
         for (int row : clearedRows) {
             java.util.Arrays.fill(board[row], null);
             java.util.Arrays.fill(pid[row], 0);
@@ -267,7 +271,7 @@ public class BoardLogic {
 
         recentPlacedInitialize();
 
-        //  점수/콤보
+        // 점수/콤보
         clearedLines += lines;
         deletedLinesTotal += lines;
 
@@ -292,14 +296,14 @@ public class BoardLogic {
             nextIsItem = true;
         }
 
-        //  중력 다시 적용 (줄 삭제 후 떠있는 블록 처리)
+        // 중력 다시 적용 (줄 삭제 후 떠있는 블록 처리)
         clear.applyGravityInstantly();
 
         // 화면 갱신
         if (onFrameUpdate != null)
             javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
 
-        //  파티클 백그라운드
+        // 파티클 백그라운드
         clear.animateParticlesOnly(
                 () -> {
                     if (onFrameUpdate != null)
@@ -307,7 +311,7 @@ public class BoardLogic {
                 },
                 null);
 
-        //  연쇄 체크
+        // 연쇄 체크
         checkChainClear(afterClear);
     }
 
@@ -455,9 +459,13 @@ public class BoardLogic {
 
         applyIncomingGarbage();
 
-         if (clear.countFullLines() > 0) {
+        if (onGarbageApplied != null) {
+            onGarbageApplied.run();
+        }
+
+        if (clear.countFullLines() > 0) {
             clearLinesAndThen(this::spawnNext);
-            return; 
+            return;
         }
 
         refillPreview();
@@ -475,7 +483,6 @@ public class BoardLogic {
 
         refillPreview();
         fireNextQueueChanged();
-        
 
         if (!move.canMove(next, state.getX(), state.getY())) {
             gameOver();
@@ -514,15 +521,15 @@ public class BoardLogic {
 
             // 맨 아래에 가비지 라인 추가
             Color[] last = new Color[WIDTH];
-            int[] lastPid = new int[WIDTH];    
+            int[] lastPid = new int[WIDTH];
 
             for (int x = 0; x < WIDTH; x++) {
                 boolean filled = ((mask >> x) & 1) != 0;
                 if (filled) {
-                    last[x]    = GARBAGE_COLOR;
-                    lastPid[x] = garbagePid;   
+                    last[x] = GARBAGE_COLOR;
+                    lastPid[x] = garbagePid;
                 } else {
-                    last[x]    = null;
+                    last[x] = null;
                     lastPid[x] = 0;
                 }
             }
@@ -531,9 +538,26 @@ public class BoardLogic {
 
             addedLines++;
             garbageCount++; // 필드에 깔린 회색줄 개수 증가
+
+            // 가비지 추가 완료 후 알림
+            if (onIncomingChanged != null) {
+                onIncomingChanged.accept(incomingGarbageQueue.size());
+            }
+
+            // 가비지가 추가되었음을 알리는 플래그
+            if (beforeSpawnHook != null) {
+                beforeSpawnHook.run();
+            }
+
+            // 가비지 추가 직후 즉시 콜백 (지연 없음!)
+            if (onGarbageApplied != null) {
+                onGarbageApplied.run();
+            }
+
         }
     }
 
+    /** 상대에게서 가비지 라인 수신 (큐에 추가) */
     /** 상대에게서 가비지 라인 수신 (큐에 추가) */
     public void addGarbageMasks(int[] masks) {
         if (masks == null || masks.length == 0)
@@ -541,6 +565,11 @@ public class BoardLogic {
 
         for (int mask : masks) {
             incomingGarbageQueue.offer(mask);
+        }
+
+        // Incoming 변경 알림 추가!
+        if (onIncomingChanged != null) {
+            onIncomingChanged.accept(incomingGarbageQueue.size());
         }
     }
 

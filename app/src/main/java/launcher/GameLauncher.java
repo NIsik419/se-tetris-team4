@@ -30,15 +30,14 @@ import component.config.SettingsScreen;
 import component.score.ScoreBoard;
 import component.score.ScoreboardPanel;
 
-
 public class GameLauncher {
 
-   public static void main(String[] args) {
-    System.out.println("[DEBUG] main started");
-    SwingUtilities.invokeLater(() -> {
-        System.out.println("[DEBUG] creating GameLauncher");
-        new GameLauncher().show();
-    });
+    public static void main(String[] args) {
+        System.out.println("[DEBUG] main started");
+        SwingUtilities.invokeLater(() -> {
+            System.out.println("[DEBUG] creating GameLauncher");
+            new GameLauncher().show();
+        });
     }
 
     enum Screen {
@@ -111,33 +110,57 @@ public class GameLauncher {
      */
     private void onGameConfigSelect(GameConfig config) {
 
-        boolean p2pMode = (config.mode() == GameConfig.Mode.VERSUS); // 예시: 메뉴에서 VERSUS 모드 선택 시
+        boolean p2pMode = (config.mode() == GameConfig.Mode.VERSUS);
 
         boolean isServer = false;
+        String selectedGameRule = "Normal"; // 기본값
+
         if (p2pMode) {
-            // 🔹 서버 / 클라이언트 선택 창
-            int res = JOptionPane.showConfirmDialog(null, "서버로 시작하시겠습니까?", "P2P 대전 모드",
+            // 서버/클라이언트 선택
+            int res = JOptionPane.showConfirmDialog(null,
+                    "서버로 시작하시겠습니까?",
+                    "P2P 대전 모드",
                     JOptionPane.YES_NO_OPTION);
             isServer = (res == JOptionPane.YES_OPTION);
+
+            // ⭐ 서버만 게임 룰 선택
+            if (isServer) {
+                String[] gameRules = { "Normal", "Item", "Time Limit (3min)" };
+                selectedGameRule = (String) JOptionPane.showInputDialog(
+                        null,
+                        "게임 룰을 선택하세요:",
+                        "게임 룰 선택",
+                        JOptionPane.QUESTION_MESSAGE,
+                        null,
+                        gameRules,
+                        gameRules[0]);
+
+                if (selectedGameRule == null) {
+                    selectedGameRule = "Normal";
+                }
+
+                System.out.println("[LAUNCHER] Selected game rule: " + selectedGameRule);
+            }
         }
 
-        startGame(config, p2pMode, isServer);
+        startGame(config, p2pMode, isServer, selectedGameRule);
     }
 
-    private void startGame(GameConfig config, boolean p2pMode, boolean isServer) {
+    private void startGame(GameConfig config, boolean p2pMode, boolean isServer, String gameRule) {
         // 메뉴 프레임 가리기
         frame.setVisible(false);
 
-        GameFrame game = new GameFrame(config, p2pMode, isServer);
+        GameFrame game = new GameFrame(config, p2pMode, isServer,gameRule);
 
-        // ✅ BoardPanel의 Settings 반영
+        // BoardPanel의 Settings 반영
         try {
             if (game.getActivePanel() instanceof BoardPanel panel) {
                 panel.applySettings(settings);
             }
-        } catch (Exception ignore) {}
+        } catch (Exception ignore) {
+        }
 
-        // ✅ 아이템 모드 활성화 (필요하다면)
+        // 아이템 모드 활성화 (필요하다면)
         if (config.mode() == GameConfig.Mode.ITEM &&
                 game.getActivePanel() instanceof BoardPanel panel) {
             panel.getLogic().setItemMode(true);
@@ -166,7 +189,7 @@ public class GameLauncher {
 
                 if (p instanceof BoardPanel bp && bp.isRestarting()) {
                     // 🔁 RESTART로 닫힌 경우 → 메뉴 안 띄우고 게임만 다시 시작
-                    startGame(config, p2pMode, isServer);
+                    startGame(config, p2pMode, isServer, gameRule);
                     return;
                 }
 
