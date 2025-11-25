@@ -42,45 +42,30 @@ public class ClearService {
         return particleSystem;
     }
 
-    // ============================================
-    // 파티클 애니메이션 - 중복 실행 방지 강화
-    // ============================================
+    // animateWithParticles도 수정 (플래그 제거)
     public void animateWithParticles(List<Integer> rows, Runnable onFrameUpdate, Runnable onComplete) {
-        if (animating) {
-            System.out.println("[WARN] animateWithParticles skipped - already animating");
-            // 이미 애니메이션 중이면 즉시 완료 콜백 실행
-            if (onComplete != null) onComplete.run();
-            return;
-        }
-        animating = true;
-
         var board = state.getBoard();
         var pid = state.getPieceId();
 
-        // 1. 파티클 생성
         final int CELL_SIZE = 25;
         for (int row : rows) {
             particleSystem.createLineParticles(row, board, CELL_SIZE, GameState.WIDTH);
         }
 
-        // 2. 블록 즉시 삭제
         for (int row : rows) {
             Arrays.fill(board[row], null);
             Arrays.fill(pid[row], 0);
         }
 
-        // 3. 즉시 화면 갱신
         if (onFrameUpdate != null)
             onFrameUpdate.run();
 
-        // 4. 파티클 애니메이션
         Timer particleTimer = new Timer(16, null);
         final int[] frame = { 0 };
         final int MAX_FRAMES = 12;
 
         particleTimer.addActionListener(e -> {
             frame[0]++;
-
             particleSystem.update();
 
             if (onFrameUpdate != null)
@@ -89,7 +74,6 @@ public class ClearService {
             if (frame[0] >= MAX_FRAMES || particleSystem.getParticles().isEmpty()) {
                 ((Timer) e.getSource()).stop();
                 particleSystem.clear();
-                animating = false;
                 if (onComplete != null)
                     onComplete.run();
             }
@@ -103,23 +87,15 @@ public class ClearService {
     }
 
     // ============================================
-    // 파티클만 재생 - 중복 실행 방지 강화
+    // 논블로킹 파티클 애니메이션 (새로 추가)
     // ============================================
-    public void animateParticlesOnly(Runnable onFrameUpdate, Runnable onComplete) {
-        if (animating) {
-            System.out.println("[WARN] animateParticlesOnly skipped - already animating");
-            // 이미 애니메이션 중이면 바로 완료
-            if (onComplete != null) onComplete.run();
-            return;
-        }
-        
-        // 파티클이 없으면 바로 완료
+    public void animateParticlesAsync(Runnable onFrameUpdate) {
         if (particleSystem.getParticles().isEmpty()) {
-            if (onComplete != null) onComplete.run();
+            System.out.println("[ClearService] No particles to animate");
             return;
         }
-        
-        animating = true;
+
+        System.out.println("[ClearService] Starting async particle animation");
 
         Timer particleTimer = new Timer(16, null);
         final int[] frame = { 0 };
@@ -127,7 +103,6 @@ public class ClearService {
 
         particleTimer.addActionListener(e -> {
             frame[0]++;
-
             particleSystem.update();
 
             if (onFrameUpdate != null)
@@ -136,7 +111,38 @@ public class ClearService {
             if (frame[0] >= MAX_FRAMES || particleSystem.getParticles().isEmpty()) {
                 ((Timer) e.getSource()).stop();
                 particleSystem.clear();
-                animating = false;
+                System.out.println("[ClearService] Async particle animation complete");
+            }
+        });
+
+        particleTimer.start();
+    }
+
+    // ============================================
+    // 기존 animateParticlesOnly - animating 플래그 제거
+    // ============================================
+    public void animateParticlesOnly(Runnable onFrameUpdate, Runnable onComplete) {
+        // 파티클이 없으면 바로 완료
+        if (particleSystem.getParticles().isEmpty()) {
+            if (onComplete != null)
+                onComplete.run();
+            return;
+        }
+
+        Timer particleTimer = new Timer(16, null);
+        final int[] frame = { 0 };
+        final int MAX_FRAMES = 12;
+
+        particleTimer.addActionListener(e -> {
+            frame[0]++;
+            particleSystem.update();
+
+            if (onFrameUpdate != null)
+                onFrameUpdate.run();
+
+            if (frame[0] >= MAX_FRAMES || particleSystem.getParticles().isEmpty()) {
+                ((Timer) e.getSource()).stop();
+                particleSystem.clear();
 
                 if (onComplete != null) {
                     onComplete.run();

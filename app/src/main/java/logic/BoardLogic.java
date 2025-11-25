@@ -18,6 +18,7 @@ import component.SpeedManager;
 import component.items.ItemBlock;
 
 public class BoardLogic {
+    private final SoundManager sound = SoundManager.getInstance();
     public static final int WIDTH = GameState.WIDTH;
     public static final int HEIGHT = GameState.HEIGHT;
     private static final int MAX_GARBAGE = 10;
@@ -199,7 +200,7 @@ public class BoardLogic {
     }
 
     // ============================================
-    // clearLinesAfterItem - 아이템 전용 (중력 없이 줄만 체크)
+    // clearLinesAfterItem - 아이템 전용 (타이머 제거)
     // ============================================
     private void clearLinesAfterItem(Runnable afterClear) {
         var board = state.getBoard();
@@ -226,24 +227,18 @@ public class BoardLogic {
             return;
         }
 
-        System.out.println("[DEBUG clearLinesAfterItem] Clearing " + lines + " lines");
-
         updateGarbageFlagsOnClear(clearedRows);
 
-        // 2줄 이상만 공격 전송
         if (lines >= 2 && onLinesClearedWithMasks != null) {
             int[] masks = buildAttackMasks(clearedRows);
             onLinesClearedWithMasks.accept(masks);
-            System.out.println("[ATTACK] " + lines + "줄 클리어 → " + lines + "줄 공격 전송");
         }
 
-        // 파티클 생성
         final int CELL_SIZE = 25;
         for (int row : clearedRows) {
             clear.getParticleSystem().createLineParticles(row, board, CELL_SIZE, WIDTH);
         }
 
-        // 블록 삭제
         for (int row : clearedRows) {
             for (int x = 0; x < WIDTH; x++) {
                 board[row][x] = null;
@@ -252,28 +247,24 @@ public class BoardLogic {
         }
 
         recentPlacedInitialize();
-
-        // 점수/콤보 처리
         processScoreAndCombo(lines);
-
-        // ✅ 줄 중력 적용 (줄 단위로만 내림)
         applyLineGravityOnly();
 
         if (onFrameUpdate != null)
             javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
 
-        clear.animateParticlesOnly(
+        clear.animateParticlesAsync(
                 () -> {
                     if (onFrameUpdate != null)
                         javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
-                },
-                null);
+                });
 
-        checkChainClear(afterClear);
+        // ✅ 즉시 연쇄 체크
+        checkChainClearImmediate(afterClear);
     }
 
     // ============================================
-    // clearLinesAndThen - 일반 라인 클리어 (줄 중력)
+    // clearLinesAndThen - 일반 라인 클리어 (타이머 제거)
     // ============================================
     private void clearLinesAndThen(Runnable afterClear) {
         var board = state.getBoard();
@@ -292,8 +283,6 @@ public class BoardLogic {
                 clearedRows.add(y);
         }
 
-        System.out.println("[DEBUG clearLinesAndThen] Full rows: " + clearedRows);
-
         int lines = clearedRows.size();
         if (lines == 0) {
             comboCount = 0;
@@ -310,7 +299,7 @@ public class BoardLogic {
             System.out.println("[ATTACK] " + lines + "줄 클리어 → " + lines + "줄 공격 전송");
         }
 
-        // 파티클 생성
+        // 파티클 생성 (논블로킹)
         final int CELL_SIZE = 25;
         for (int row : clearedRows) {
             clear.getParticleSystem().createLineParticles(row, board, CELL_SIZE, WIDTH);
@@ -325,30 +314,51 @@ public class BoardLogic {
         }
 
         recentPlacedInitialize();
-
-        // 점수/콤보 처리
         processScoreAndCombo(lines);
 
-        // ✅ 줄 중력 적용 (줄 단위로만 내림)
+        // ✅ 줄 중력 적용
         applyLineGravityOnly();
 
         if (onFrameUpdate != null)
             javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
 
-        clear.animateParticlesOnly(
+        // ✅ 파티클 애니메이션 시작 (백그라운드)
+        clear.animateParticlesAsync(
                 () -> {
                     if (onFrameUpdate != null)
                         javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
-                },
-                null);
+                });
 
-        // ✅ 약간의 지연 후 연쇄 체크
-        javax.swing.Timer delayTimer = new javax.swing.Timer(100, e -> {
-            ((javax.swing.Timer) e.getSource()).stop();
-            checkChainClear(afterClear);
-        });
-        delayTimer.setRepeats(false);
-        delayTimer.start();
+        // ✅ 즉시 연쇄 체크 (타이머 제거)
+        checkChainClearImmediate(afterClear);
+    }
+
+    // ============================================
+    // 즉시 연쇄 체크 (타이머 없음)
+    // ============================================
+    private void checkChainClearImmediate(Runnable afterClear) {
+        var board = state.getBoard();
+        java.util.List<Integer> newFullRows = new java.util.ArrayList<>();
+
+        for (int y = 0; y < HEIGHT; y++) {
+            boolean full = true;
+            for (int x = 0; x < WIDTH; x++) {
+                if (board[y][x] == null) {
+                    full = false;
+                    break;
+                }
+            }
+            if (full)
+                newFullRows.add(y);
+        }
+
+        if (!newFullRows.isEmpty()) {
+            System.out.println("[CHAIN] " + newFullRows.size() + " more lines found! (instant)");
+            clearLinesAndThen(afterClear);
+        } else {
+            if (afterClear != null)
+                afterClear.run();
+        }
     }
 
     // ============================================
@@ -357,7 +367,7 @@ public class BoardLogic {
     private int[] buildAttackMasks(List<Integer> clearedRows) {
         var board = state.getBoard();
         int[] masks = new int[clearedRows.size()];
-        
+
         for (int i = 0; i < clearedRows.size(); i++) {
             int y = clearedRows.get(i);
             int mask = 0;
@@ -383,6 +393,8 @@ public class BoardLogic {
             onLineCleared.accept(lines);
         addScore(lines * 100);
 
+        playLineClearSound(lines);
+
         long now = System.currentTimeMillis();
         comboCount = (now - lastClearTime < 3000) ? (comboCount + 1) : 1;
         lastClearTime = now;
@@ -391,6 +403,8 @@ public class BoardLogic {
             int comboBonus = comboCount * 50;
             addScore(comboBonus);
             System.out.println("Combo! x" + comboCount + " (+" + comboBonus + ")");
+
+            playComboSound(comboBonus);
         }
 
         if (clearedLines % 10 == 0) {
@@ -584,7 +598,8 @@ public class BoardLogic {
             onIncomingChanged.accept(incomingGarbageQueue.size());
         }
 
-        System.out.println("[DEBUG] Enqueued " + masks.length + " garbage masks, total pending: " + incomingGarbageQueue.size());
+        System.out.println(
+                "[DEBUG] Enqueued " + masks.length + " garbage masks, total pending: " + incomingGarbageQueue.size());
     }
 
     private void updateGarbageFlagsOnClear(List<Integer> clearedRows) {
@@ -612,6 +627,7 @@ public class BoardLogic {
             return;
         if (move.canMove(state.getCurr(), state.getX() - 1, state.getY()))
             move.moveLeft();
+            sound.play(SoundManager.Sound.MOVE,0.2f);
     }
 
     public void moveRight() {
@@ -619,6 +635,7 @@ public class BoardLogic {
             return;
         if (move.canMove(state.getCurr(), state.getX() + 1, state.getY()))
             move.moveRight();
+            sound.play(SoundManager.Sound.MOVE,0.2f);
     }
 
     public void rotateBlock() {
@@ -628,6 +645,8 @@ public class BoardLogic {
         state.getCurr().rotate();
         if (!move.canMove(state.getCurr(), state.getX(), state.getY()))
             state.setCurr(backup);
+        else
+            sound.play(SoundManager.Sound.ROTATE,0.3f);
     }
 
     public void hardDrop() {
@@ -637,6 +656,7 @@ public class BoardLogic {
             move.moveDown();
             score += 2;
         }
+        sound.play(SoundManager.Sound.HARD_DROP,0.5f);
         moveDown();
     }
 
@@ -750,6 +770,7 @@ public class BoardLogic {
 
     public void onOpponentGameOver() {
         System.out.println("[INFO] Opponent Game Over - YOU WIN!");
+        sound.play(SoundManager.Sound.VICTORY);
         if (pauseCallback != null)
             pauseCallback.run();
     }
@@ -761,6 +782,7 @@ public class BoardLogic {
     private void gameOver() {
         this.gameOver = true;
         System.out.println("[GAME OVER] Your Score: " + score);
+        sound.play(SoundManager.Sound.GAME_OVER); //  추가
         if (onGameOverCallback != null)
             onGameOverCallback.run();
         if (onGameOver != null)
@@ -836,5 +858,41 @@ public class BoardLogic {
 
     public boolean isLineClearing() {
         return clear != null && clear.isClearing();
+    }
+
+    
+
+    // ============================================
+    // 라인 클리어 사운드
+    // ============================================
+    private void playLineClearSound(int lines) {
+        switch (lines) {
+            case 1:
+                sound.play(SoundManager.Sound.LINE_CLEAR_1);
+                break;
+            case 2:
+                sound.play(SoundManager.Sound.LINE_CLEAR_2);
+                break;
+            case 3:
+                sound.play(SoundManager.Sound.LINE_CLEAR_3);
+                break;
+            case 4:
+            default:
+                sound.play(SoundManager.Sound.LINE_CLEAR_4);
+                break;
+        }
+    }
+
+    // ============================================
+    // 콤보 사운드
+    // ============================================
+    private void playComboSound(int combo) {
+        if (combo >= 5) {
+            sound.play(SoundManager.Sound.COMBO_5, 0.8f);
+        } else if (combo >= 3) {
+            sound.play(SoundManager.Sound.COMBO_3, 0.7f);
+        } else if (combo >= 2) {
+            sound.play(SoundManager.Sound.COMBO_2, 0.6f);
+        }
     }
 }
