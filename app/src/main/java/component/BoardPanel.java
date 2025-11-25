@@ -496,6 +496,7 @@ public class BoardPanel extends JPanel {
     public boolean isRestarting() {
         return restarting;
     }
+
     public void markRestarting() {
         restarting = true;
     }
@@ -505,7 +506,7 @@ public class BoardPanel extends JPanel {
         if (s == null)
             return;
         boardView.setColorMode(s.colorBlindMode);
-        
+
     }
 
     public void startLoop() {
@@ -521,5 +522,45 @@ public class BoardPanel extends JPanel {
         if (loop != null)
             loop.pauseLoop();
     }
+    // BoardPanel.java
 
+    public void pauseGame() {
+        // 1. 렌더링 타이머 정지
+        if (boardView != null) {
+            boardView.pauseRendering();
+        }
+
+        // 2. 게임 루프 정지
+        if (loop != null) {
+            loop.pauseLoop();
+        }
+
+        System.out.println("[PAUSE] Game paused");
+    }
+
+    public void resumeGame() {
+        // 1. 렌더링 타이머 재개
+        if (boardView != null) {
+            boardView.resumeRendering();
+        }
+
+        // 2. 게임 루프 재개
+        if (loop != null && !logic.isGameOver()) {
+            loop.resumeLoop();
+        }
+
+        System.out.println("[RESUME] Game resumed");
+    }
+
+    public void stopGame() {
+        if (boardView != null) {
+            boardView.stopRendering();
+            boardView.cleanup();
+        }
+        if (loop != null) {
+            loop.stopLoop();
+        }
+        
+        System.out.println("[STOP] Game stopped");
+    }
 }

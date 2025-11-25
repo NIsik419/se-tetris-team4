@@ -4,6 +4,7 @@ import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
@@ -70,7 +71,52 @@ public class GameLauncher {
         frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         frame.setSize(720, 720);
         frame.setLocationRelativeTo(null);
+        // 메뉴 프레임 종료 리스너 추가 
+        frame.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                System.out.println("[MENU] Window closing event...");
+            }
 
+            @Override
+            public void windowClosed(WindowEvent e) {
+                System.out.println("[MENU] Main menu closed");
+                
+                // // MenuPanel 정리
+                // if (menuPanel != null) {
+                //     menuPanel.cleanup();
+                // }
+                
+                // 잠시 대기 후 모든 창 확인
+                SwingUtilities.invokeLater(() -> {
+                    try {
+                        Thread.sleep(100);
+                    } catch (InterruptedException ex) {
+                        ex.printStackTrace();
+                    }
+                    
+                    Window[] windows = Window.getWindows();
+                    boolean allClosed = true;
+                    
+                    for (Window w : windows) {
+                        if (w.isVisible()) {
+                            allClosed = false;
+                            System.out.println("[INFO] Window still visible: " + 
+                                            w.getClass().getSimpleName());
+                            break;
+                        }
+                    }
+                    
+                    if (allClosed) {
+                        System.out.println("[EXIT] All windows closed, exiting application...");
+                        //  모든 타이머 정리 후 종료
+                        System.exit(0);
+                    } else {
+                        System.out.println("[INFO] Some windows still open, not exiting");
+                    }
+                });
+            }
+        });
         root.add(menuPanel, Screen.MENU.name());
         root.add(settingsPanel, Screen.SETTINGS.name());
         root.add(scoreboardPanel, Screen.SCOREBOARD.name());
@@ -164,26 +210,34 @@ public class GameLauncher {
         GameConfig p1Config = new GameConfig(
                 GameConfig.Mode.CLASSIC,
                 GameConfig.Difficulty.NORMAL,
-                false
-        );
+                false);
 
         // AI 설정 (난이도는 playerConfig에서 가져옴)
         GameConfig p2Config = new GameConfig(
                 GameConfig.Mode.AI,
                 playerConfig.difficulty(),
-                false
-        );
+                false);
 
         // VersusFrame으로 AI 대전 시작
         VersusFrame aiGame = new VersusFrame(p1Config, p2Config);
 
         // 창 닫힘 리스너
-        aiGame.addWindowListener(new WindowAdapter() {
+         aiGame.addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosed(WindowEvent e) {
-                // AI 게임 종료 → 메뉴 복귀
+                // 🔚 그냥 종료 → 메뉴 복귀
                 frame.setVisible(true);
                 showScreen(Screen.MENU);
+                
+                SwingUtilities.invokeLater(() -> {
+                    frame.toFront();
+                    frame.requestFocusInWindow();
+                });
+            }
+
+            @Override
+            public void windowClosing(WindowEvent e) {
+                aiGame.dispose();
             }
         });
     }
@@ -195,7 +249,7 @@ public class GameLauncher {
         // 메뉴 프레임 가리기
         frame.setVisible(false);
 
-        GameFrame game = new GameFrame(config, p2pMode, isServer,gameRule);
+        GameFrame game = new GameFrame(config, p2pMode, isServer, gameRule);
 
         // BoardPanel의 Settings 반영
         try {
@@ -220,10 +274,10 @@ public class GameLauncher {
             game.toFront();
         });
 
-        // 기존 리스너 제거
-        for (WindowListener wl : frame.getWindowListeners()) {
-            frame.removeWindowListener(wl);
-        }
+        // // 기존 리스너 제거
+        // for (WindowListener wl : frame.getWindowListeners()) {
+        //     frame.removeWindowListener(wl);
+        // }
 
         // 창이 닫힐 때: RESTART 인지, 그냥 종료인지 구분
         game.addWindowListener(new WindowAdapter() {
@@ -231,6 +285,10 @@ public class GameLauncher {
             public void windowClosed(WindowEvent e) {
 
                 JPanel p = game.getActivePanel();
+
+                // if (menuPanel != null) {
+                //     menuPanel.cleanup();
+                // }
 
                 if (p instanceof BoardPanel bp && bp.isRestarting()) {
                     // 🔁 RESTART로 닫힌 경우 → 메뉴 안 띄우고 게임만 다시 시작
@@ -241,6 +299,11 @@ public class GameLauncher {
                 // 🔚 그냥 종료(EXIТ / X) → 메뉴 복귀
                 frame.setVisible(true);
                 showScreen(Screen.MENU);
+                // 메뉴로 돌아온 후 포커스 설정
+                SwingUtilities.invokeLater(() -> {
+                    frame.toFront();
+                    frame.requestFocusInWindow();
+                });
             }
 
             @Override

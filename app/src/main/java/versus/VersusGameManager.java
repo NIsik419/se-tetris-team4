@@ -169,7 +169,7 @@ public class VersusGameManager {
 
         // 창 닫고 메뉴 복귀
         if (frame != null) frame.dispose();
-        if (backToMenu != null) backToMenu.run();
+        // if (backToMenu != null) backToMenu.run();
     }
 
     /**
@@ -208,7 +208,7 @@ public class VersusGameManager {
                 JOptionPane.INFORMATION_MESSAGE);
 
         if (frame != null) frame.dispose();
-        if (backToMenu != null) backToMenu.run();
+        // if (backToMenu != null) backToMenu.run();
 
         finished = true;
     }

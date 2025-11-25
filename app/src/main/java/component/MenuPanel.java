@@ -558,7 +558,7 @@ public class MenuPanel extends JPanel {
                     GameConfig.Mode.AI,
                     GameConfig.Difficulty.AI_EASY,
                     false);
-            openAIBattle(aiConfig);
+            onStart.accept(aiConfig);
         }));
 
         row.add(makeGlassSmallButton("MEDIUM", () -> {
@@ -566,7 +566,7 @@ public class MenuPanel extends JPanel {
                     GameConfig.Mode.AI,
                     GameConfig.Difficulty.AI_NORMAL,
                     false);
-            openAIBattle(aiConfig);
+            onStart.accept(aiConfig);
         }));
 
         row.add(makeGlassSmallButton("HARD", () -> {
@@ -574,24 +574,10 @@ public class MenuPanel extends JPanel {
                     GameConfig.Mode.AI,
                     GameConfig.Difficulty.AI_HARD,
                     false);
-            openAIBattle(aiConfig);
+            onStart.accept(aiConfig);
         }));
 
         return row;
-    }
-
-    private void openAIBattle(GameConfig playerConfig) {
-        JFrame f = (JFrame) SwingUtilities.getWindowAncestor(MenuPanel.this);
-        if (f != null)
-            f.dispose();
-
-        // AI의 설정 (플레이어와 동일한 난이도)
-        GameConfig aiConfig = new GameConfig(
-                GameConfig.Mode.AI,
-                playerConfig.difficulty(),
-                false);
-
-        new VersusFrame(playerConfig, aiConfig);
     }
 
     private VersusFrame openVersus() {
@@ -1043,7 +1029,12 @@ public class MenuPanel extends JPanel {
             }
         }
     }
-
+    // public void cleanup() {
+    //     if (anim != null && anim.isRunning()) {
+    //         anim.stop();
+    //         System.out.println("[CLEANUP] MenuPanel animation timer stopped");
+    //     }
+    // }
 
     private void stepBlocks() {
     int w = getWidth(), h = getHeight();
