@@ -588,7 +588,9 @@ public class MenuPanel extends JPanel {
         GameConfig p1 = new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.NORMAL, false);
         GameConfig p2 = new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.NORMAL, false);
 
-        return new VersusFrame(p1, p2);
+        String gameRule = "ITEM"; 
+
+        return new VersusFrame(p1, p2, gameRule);
     }
     
     private JPanel makeOnlineP2PRowFor(GameConfig.Mode modeIgnored) {
@@ -640,7 +642,9 @@ public class MenuPanel extends JPanel {
             GameConfig p1 = new GameConfig(mode, GameConfig.Difficulty.NORMAL, false);
             GameConfig p2 = new GameConfig(mode, GameConfig.Difficulty.NORMAL, false);
 
-            new VersusFrame(p1, p2);  
+            String gameRule = "Normal"; 
+            
+            new VersusFrame(p1, p2, gameRule);  
         }));
 
         return row;
@@ -665,7 +669,9 @@ public class MenuPanel extends JPanel {
                     false
             );
 
-            new versus.VersusFrame(p1, p2);  // TIME 모드로 대전 시작
+             String gameRule = "TIME_ATTACK"; 
+
+            new versus.VersusFrame(p1, p2, gameRule);  // TIME 모드로 대전 시작
         });
 
         row.add(startBtn);

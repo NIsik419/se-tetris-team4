@@ -5,9 +5,14 @@ import component.GameConfig;
 import component.ai.AIPlayer;
 import logic.BoardLogic;
 
+import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 import java.awt.*;
 import javax.swing.*;
+import java.util.List;
+
+
+import blocks.Block;
 
 /**
  * VersusGameManager
@@ -31,6 +36,9 @@ public class VersusGameManager {
     private final IntConsumer onP1PendingChanged; // P1 라벨 값 갱신
     private final IntConsumer onP2PendingChanged; // P2 라벨 값 갱신
 
+    private final Consumer<List<Block>> onP1Next;
+    private final Consumer<List<Block>> onP2Next;
+
     private final Runnable backToMenu;
     private boolean finished = false;
 
@@ -42,9 +50,14 @@ public class VersusGameManager {
             Runnable backToMenu,
             // HUD 갱신 콜백
             IntConsumer onP1PendingChanged,
-            IntConsumer onP2PendingChanged) {
+            IntConsumer onP2PendingChanged,
+            Consumer<List<Block>> onP1Next,
+            Consumer<List<Block>> onP2Next) {
+
         this.onP1PendingChanged = onP1PendingChanged;
         this.onP2PendingChanged = onP2PendingChanged;
+        this.onP1Next = onP1Next;
+        this.onP2Next = onP2Next;
         this.backToMenu = backToMenu;
 
         // P2가 AI인지 체크
@@ -79,6 +92,13 @@ public class VersusGameManager {
         // AI 초기화
         if (isAIMode) {
             initializeAI(p2Config);
+        }
+
+        if (onP1Next != null) {
+            p1.events.onNext = blocks -> onP1Next.accept(blocks);
+        }
+        if (onP2Next != null) {
+            p2.events.onNext = blocks -> onP2Next.accept(blocks);
         }
 
         // 초기 HUD 갱신
@@ -281,6 +301,14 @@ public class VersusGameManager {
 
     public int getP2Score() {
         return p2.getScore();
+    }
+
+    public List<Block> getP1NextBlocks() {
+        return p1.getNextBlocks();
+    }
+
+    public List<Block> getP2NextBlocks() {
+        return p2.getNextBlocks();
     }
     
     public boolean isAIMode() {

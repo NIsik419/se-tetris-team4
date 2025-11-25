@@ -55,6 +55,10 @@ public class BoardPanel extends JPanel {
     private final JLabel linesLabel = new JLabel("0");
     private final NextBlockPanel nextPanel = new NextBlockPanel(95);
 
+    private boolean showHUD;
+    private boolean enableControls = true;
+    private boolean wasMode;
+
     private final ScoreBoard scoreBoard = ScoreBoard.createDefault();
     private PausePanel pausePanel;
     private JPanel overlay;
@@ -70,21 +74,28 @@ public class BoardPanel extends JPanel {
 
     /** 기본 생성자: 키맵(화살표/Space/P) 사용 */
     public BoardPanel(GameConfig config, Runnable onExitToMenu) {
-        this(config, onExitToMenu,false, true, null);
+        this(config, onExitToMenu,false,true, null, true);
     }
     // WASD 모드 / P1용 생성자
     public BoardPanel(GameConfig config,
                     Runnable onExitToMenu,
                     boolean wasMode,
-                    Consumer<Integer> onGameOver) {
-        this(config, onExitToMenu, wasMode, true, onGameOver);
+                    java.util.function.Consumer<Integer> onGameOver) {
+        this(config, onExitToMenu, wasMode, true, onGameOver, true);
     }
     /** 오버로드: wasMode=true면 키맵(WASD/F/R) 사용 */
-    public BoardPanel(GameConfig config, Runnable onExitToMenu, boolean wasMode,
-            boolean enableControls, java.util.function.Consumer<Integer> onGameOver) {
+    public BoardPanel(GameConfig config,
+                    Runnable onExitToMenu,
+                    boolean wasMode,
+                    boolean enableControls,
+                    java.util.function.Consumer<Integer> onGameOver,
+                    boolean showHUD) {
         this.config = config;
         this.onExitToMenu = onExitToMenu;
+        this.wasMode = wasMode;
+        this.enableControls = enableControls;
         this.onGameOver = onGameOver;
+        this.showHUD = showHUD;
 
         // === 기본 패널 설정 ===
         setLayout(new BorderLayout(10, 0));
@@ -133,7 +144,10 @@ public class BoardPanel extends JPanel {
 
         // === 레이아웃 구성 ===
         add(centerBoard(boardView), BorderLayout.CENTER);
-        add(createHUDPanel(), BorderLayout.EAST);
+
+        if (showHUD) {
+            add(createHUDPanel(), BorderLayout.EAST);
+        }
 
         // === 보조 UI 초기화 ===
         initPausePanel();

@@ -79,8 +79,14 @@ public class HUDSidebar extends JPanel {
 
     // Block 리스트를 직접 받는 메서드 추가
     public void setNextBlocks(List<Block> blocks) {
-        next1.setBlock(blocks.size() > 0 ? blocks.get(0) : null);
-        
+        if (blocks == null || blocks.isEmpty()) {
+            next1.setBlock(null);
+            next1.repaint();
+            return;
+        }
+
+        next1.setBlock(blocks.get(0));
+        next1.repaint();
     }
 
     public void reset() {
