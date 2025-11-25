@@ -19,6 +19,7 @@ public class VersusFrame extends JFrame {
         return switch (config.mode()) {
             case TIME_ATTACK -> "TETRIS - Time Attack Battle";
             case ITEM        -> "TETRIS - Item Battle";
+            case AI          -> "TETRIS - AI Battle";
             default          -> "TETRIS - Versus";
         };
     }

@@ -115,6 +115,7 @@ public class MenuPanel extends JPanel {
     private JPanel individualItemRow;
     private JPanel multiplayerSub;
     private JPanel multiplayerItemRow;
+    private JPanel individualAIRow;
 
     private JPanel onlineP2PSub;
     private JPanel onlineNormalRow;
@@ -458,6 +459,14 @@ public class MenuPanel extends JPanel {
         local2PSub.add(makeSubButton("TIME", () -> togglePanel(localTimeRow)));
         local2PSub.add(Box.createVerticalStrut(7));
 
+        individualSub.add(makeSubButton("AI Battle", () -> togglePanel(individualAIRow)));
+        individualSub.add(Box.createVerticalStrut(9));
+
+        individualAIRow = makeAIDifficultyRow();
+        individualAIRow.setVisible(false);
+        individualSub.add(individualAIRow);
+        individualSub.add(Box.createVerticalStrut(9));
+
         localTimeRow = makeLocal2PTimeRow();
         localTimeRow.setVisible(false);
         local2PSub.add(localTimeRow);
@@ -537,6 +546,52 @@ public class MenuPanel extends JPanel {
         row.add(makeGlassSmallButton("MEDIUM", () -> openVersus()));
         row.add(makeGlassSmallButton("HARD",   () -> openVersus()));
         return row;
+    }
+
+    private JPanel makeAIDifficultyRow() {
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        row.setOpaque(false);
+        row.setAlignmentX(LEFT_ALIGNMENT);
+
+        row.add(makeGlassSmallButton("EASY", () -> {
+            GameConfig aiConfig = new GameConfig(
+                    GameConfig.Mode.AI,
+                    GameConfig.Difficulty.AI_EASY,
+                    false);
+            openAIBattle(aiConfig);
+        }));
+
+        row.add(makeGlassSmallButton("MEDIUM", () -> {
+            GameConfig aiConfig = new GameConfig(
+                    GameConfig.Mode.AI,
+                    GameConfig.Difficulty.AI_NORMAL,
+                    false);
+            openAIBattle(aiConfig);
+        }));
+
+        row.add(makeGlassSmallButton("HARD", () -> {
+            GameConfig aiConfig = new GameConfig(
+                    GameConfig.Mode.AI,
+                    GameConfig.Difficulty.AI_HARD,
+                    false);
+            openAIBattle(aiConfig);
+        }));
+
+        return row;
+    }
+
+    private void openAIBattle(GameConfig playerConfig) {
+        JFrame f = (JFrame) SwingUtilities.getWindowAncestor(MenuPanel.this);
+        if (f != null)
+            f.dispose();
+
+        // AI의 설정 (플레이어와 동일한 난이도)
+        GameConfig aiConfig = new GameConfig(
+                GameConfig.Mode.AI,
+                playerConfig.difficulty(),
+                false);
+
+        new VersusFrame(playerConfig, aiConfig);
     }
 
     private VersusFrame openVersus() {

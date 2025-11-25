@@ -29,6 +29,7 @@ import component.config.Settings;
 import component.config.SettingsScreen;
 import component.score.ScoreBoard;
 import component.score.ScoreboardPanel;
+import versus.VersusFrame;
 
 public class GameLauncher {
 
@@ -106,10 +107,16 @@ public class GameLauncher {
     }
 
     /**
-     * [1] 게임 모드 선택 시 (CLASSIC / ITEM)
+     * 게임 모드 선택 시 호출
      */
     private void onGameConfigSelect(GameConfig config) {
+        // AI 모드 체크
+        if (config.mode() == GameConfig.Mode.AI) {
+            startAIGame(config);
+            return;
+        }
 
+        // P2P 대전 모드 체크
         boolean p2pMode = (config.mode() == GameConfig.Mode.VERSUS);
 
         boolean isServer = false;
@@ -146,6 +153,44 @@ public class GameLauncher {
         startGame(config, p2pMode, isServer, selectedGameRule);
     }
 
+    /**
+     * AI 대전 시작
+     */
+    private void startAIGame(GameConfig playerConfig) {
+        // 메뉴 프레임 숨김
+        frame.setVisible(false);
+
+        // 플레이어 설정
+        GameConfig p1Config = new GameConfig(
+                GameConfig.Mode.CLASSIC,
+                GameConfig.Difficulty.NORMAL,
+                false
+        );
+
+        // AI 설정 (난이도는 playerConfig에서 가져옴)
+        GameConfig p2Config = new GameConfig(
+                GameConfig.Mode.AI,
+                playerConfig.difficulty(),
+                false
+        );
+
+        // VersusFrame으로 AI 대전 시작
+        VersusFrame aiGame = new VersusFrame(p1Config, p2Config);
+
+        // 창 닫힘 리스너
+        aiGame.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosed(WindowEvent e) {
+                // AI 게임 종료 → 메뉴 복귀
+                frame.setVisible(true);
+                showScreen(Screen.MENU);
+            }
+        });
+    }
+
+    /**
+     * 일반 게임 시작 (싱글/멀티)
+     */
     private void startGame(GameConfig config, boolean p2pMode, boolean isServer, String gameRule) {
         // 메뉴 프레임 가리기
         frame.setVisible(false);

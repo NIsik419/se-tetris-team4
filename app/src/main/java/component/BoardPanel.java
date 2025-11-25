@@ -11,6 +11,7 @@ import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.awt.event.HierarchyEvent;
 import java.awt.event.HierarchyListener;
+import java.util.function.Consumer;
 
 import javax.swing.AbstractAction;
 import javax.swing.Box;
@@ -69,12 +70,18 @@ public class BoardPanel extends JPanel {
 
     /** 기본 생성자: 키맵(화살표/Space/P) 사용 */
     public BoardPanel(GameConfig config, Runnable onExitToMenu) {
-        this(config, onExitToMenu, false, null);
+        this(config, onExitToMenu,false, true, null);
     }
-
+    // WASD 모드 / P1용 생성자
+    public BoardPanel(GameConfig config,
+                    Runnable onExitToMenu,
+                    boolean wasMode,
+                    Consumer<Integer> onGameOver) {
+        this(config, onExitToMenu, wasMode, true, onGameOver);
+    }
     /** 오버로드: wasMode=true면 키맵(WASD/F/R) 사용 */
     public BoardPanel(GameConfig config, Runnable onExitToMenu, boolean wasMode,
-            java.util.function.Consumer<Integer> onGameOver) {
+            boolean enableControls, java.util.function.Consumer<Integer> onGameOver) {
         this.config = config;
         this.onExitToMenu = onExitToMenu;
         this.onGameOver = onGameOver;
@@ -145,15 +152,23 @@ public class BoardPanel extends JPanel {
         hudUpdateTimer.start();
 
         // === 초기 포커스 및 루프 시작 ===
-        boardView.setFocusable(true);
-        boardView.requestFocusInWindow();
-        SwingUtilities.invokeLater(() -> {
+        if (enableControls) {
             boardView.setFocusable(true);
             boardView.requestFocusInWindow();
-            boardView.requestFocus();
-            System.out.println("[DEBUG] Focus forced on boardView → " + boardView.isFocusOwner());
-        });
-        System.out.println("[DEBUG] Focus requested on boardView");
+            SwingUtilities.invokeLater(() -> {
+                boardView.setFocusable(true);
+                boardView.requestFocusInWindow();
+                boardView.requestFocus();
+            });
+            System.out.println("[DEBUG] Focus requested on boardView");
+        } else {
+            // AI는 절대 포커스 금지
+            boardView.setFocusable(false);
+            boardView.setRequestFocusEnabled(false);
+
+            boardView.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).clear();
+            boardView.getActionMap().clear();
+        }
         loop.startLoop();
 
         // === 키 바인딩 통합 ===
@@ -198,14 +213,19 @@ public class BoardPanel extends JPanel {
                         settings.colorBlindMode = mode;
                     }
                 });
-
-        if (wasMode) {
-            installer.install(boardView, deps, KeyBindingInstaller.KeySet.WASD, false, false); // P1 (WASD)
+        if (enableControls) {
+            if (wasMode) {
+                installer.install(boardView, deps, KeyBindingInstaller.KeySet.WASD, false, false); 
+            } else {
+                installer.install(boardView, deps, KeyBindingInstaller.KeySet.ARROWS, true, false);
+            } 
         } else {
-            installer.install(boardView, deps, KeyBindingInstaller.KeySet.ARROWS, true, false); // P2 (방향키)
+            boardView.setFocusable(false);
         }
 
-        bindPauseKey();
+        if (enableControls) {
+            bindPauseKey();
+        }
     }
      // 중앙에 BoardView를 넣고 비율 유지
     private Component centerBoard(JComponent view) {
