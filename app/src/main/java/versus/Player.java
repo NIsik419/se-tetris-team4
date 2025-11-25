@@ -33,12 +33,13 @@ public class Player {
     // 대전용: 상대에게서 받은 garbage(마스크) 대기열 (맨 앞 = 가장 오래된 = 아래쪽부터 들어갈 줄)
     private final ArrayDeque<Integer> pendingMasks = new ArrayDeque<>();
 
-    public Player(Id id, GameConfig config, Events events, Runnable onExitToMenu) {
+    public Player(Id id, GameConfig config, Events events, Runnable onExitToMenu, boolean isAI) {
         this.id = id;
         this.config = config;
         this.events = (events != null) ? events : new Events();
 
         boolean useWASD = (id == Id.P1);
+        
 
         // BoardPanel 내부에서 BoardLogic/Loop/HUD/키바인딩까지 초기화됨
         this.panel = new BoardPanel(

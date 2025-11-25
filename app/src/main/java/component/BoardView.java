@@ -23,7 +23,7 @@ public class BoardView extends JPanel {
     public static final int HEIGHT = BoardLogic.HEIGHT;
     private static final Color GRID_LINE = new Color(50, 55, 70);
     private static final Color BG_GAME = new Color(25, 30, 42);
-    private final Timer renderTimer;
+    public Timer renderTimer;
 
     public BoardView(BoardLogic logic) {
         this.logic = logic;
@@ -278,4 +278,30 @@ public class BoardView extends JPanel {
         this.visibleDuringStandby = visible;
         repaint();
     }
+
+    // 렌더링 제어
+    public void pauseRendering() {
+        if (renderTimer != null && renderTimer.isRunning()) {
+            renderTimer.stop();
+        }
+    }
+
+    public void resumeRendering() {
+        if (renderTimer != null && !renderTimer.isRunning()) {
+            renderTimer.start();
+        }
+    }
+
+    public void stopRendering() {
+        if (renderTimer != null) {
+            renderTimer.stop();
+        }
+    }
+    public void cleanup() {
+    if (renderTimer != null) {
+        renderTimer.stop();
+        renderTimer = null; //  참조 해제
+    }
+    System.out.println("[CLEANUP] BoardView resources released");
+}
 }
