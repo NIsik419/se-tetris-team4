@@ -1011,8 +1011,9 @@ public class BoardLogic {
             return;
         }
         this.gameOver = true;
+        sound.play(SoundManager.Sound.GAME_OVER, 0.4f); // 추가
         System.out.println("[GAME OVER] Your Score: " + score);
-        sound.play(SoundManager.Sound.GAME_OVER); // 추가
+        
         state.setCurr(null);
         if (onGameOverCallback != null)
             onGameOverCallback.run();
@@ -1097,17 +1098,17 @@ public class BoardLogic {
     private void playLineClearSound(int lines) {
         switch (lines) {
             case 1:
-                sound.play(SoundManager.Sound.LINE_CLEAR_1, 0.5f);
+                sound.play(SoundManager.Sound.LINE_CLEAR_1, 0.3f);
                 break;
             case 2:
-                sound.play(SoundManager.Sound.LINE_CLEAR_2);
+                sound.play(SoundManager.Sound.LINE_CLEAR_2, 0.35f);
                 break;
             case 3:
-                sound.play(SoundManager.Sound.LINE_CLEAR_3, 0.6f);
+                sound.play(SoundManager.Sound.LINE_CLEAR_3, 0.4f);
                 break;
             case 4:
             default:
-                sound.play(SoundManager.Sound.LINE_CLEAR_4, 0.7f);
+                sound.play(SoundManager.Sound.LINE_CLEAR_4, 0.4f);
                 break;
         }
     }
@@ -1117,11 +1118,11 @@ public class BoardLogic {
     // ============================================
     private void playComboSound(int combo) {
         if (combo >= 5) {
-            sound.play(SoundManager.Sound.COMBO_5, 0.7f);
+            sound.play(SoundManager.Sound.COMBO_5, 0.4f);
         } else if (combo >= 3) {
-            sound.play(SoundManager.Sound.COMBO_3, 0.7f);
+            sound.play(SoundManager.Sound.COMBO_3, 0.4f);
         } else if (combo >= 2) {
-            sound.play(SoundManager.Sound.COMBO_2, 0.6f);
+            sound.play(SoundManager.Sound.COMBO_2, 0.4f);
         }
     }
 }

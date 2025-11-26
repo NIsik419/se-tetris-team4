@@ -18,6 +18,7 @@ import java.util.concurrent.Executors;
 public class SoundManager {
     
     public enum Sound {
+        // 게임 효과음
         LINE_CLEAR_1,    // 1줄 클리어 (짧은 띵)
         LINE_CLEAR_2,    // 2줄 클리어 (더블 띵)
         LINE_CLEAR_3,    // 3줄 클리어 (트리플 띵)
@@ -32,16 +33,35 @@ public class SoundManager {
         EXPLOSION,       // 폭발 효과
         LIGHTNING,       // 번개 효과
         GAME_OVER,       // 게임 오버
-        VICTORY          // 승리
+        VICTORY,         // 승리
+        
+        // 메뉴 효과음
+        MENU_HOVER,      // 버튼 호버
+        MENU_CLICK,      // 버튼 클릭 (서브)
+        MENU_SELECT,     // 메뉴 선택 (메인)
+        MENU_MOVE,       // 커서 이동
+        MENU_EXPAND,     // 메뉴 확장
+        MENU_COLLAPSE,   // 메뉴 축소
+        MENU_BACK        // 뒤로가기
     }
-    
+    public enum BGM {
+        MENU,            // 메뉴 BGM
+        GAME_NORMAL,     // 일반 게임 BGM
+        GAME_INTENSE,    // 긴장감 있는 BGM (고속)
+        GAME_ITEM,       // 아이템 모드 BGM
+        VERSUS           // 대전 모드 BGM
+    }
     private static SoundManager instance;
     private final Map<Sound, Clip> soundCache = new HashMap<>();
     private final ExecutorService executor = Executors.newCachedThreadPool();
     
     private boolean enabled = true;
-    private float masterVolume = 0.7f; // 0.0 ~ 1.0
+    private float masterVolume = 0.6f; // 0.0 ~ 1.0
+    private float bgmVolume = 0.2f; // BGM 전용 볼륨
     
+    private Clip currentBGM = null;
+    private BGM currentBGMType = null;
+
     private SoundManager() {
         preloadSounds();
     }
@@ -181,7 +201,7 @@ public class SoundManager {
         }
     }
     
-    /**
+     /**
      * 사운드별 주파수 설정
      */
     private int getFrequency(Sound sound) {
@@ -201,6 +221,16 @@ public class SoundManager {
             case LIGHTNING: return 1000;    // 높은 찌릿음
             case GAME_OVER: return 196;     // G3 (낮은 음)
             case VICTORY: return 1047;      // C6 (높은 음)
+            
+            // 메뉴 사운드
+            case MENU_HOVER: return 600;    // 부드러운 호버음
+            case MENU_CLICK: return 523;    // C5 (클릭)
+            case MENU_SELECT: return 659;   // E5 (선택)
+            case MENU_MOVE: return 440;     // A4 (이동)
+            case MENU_EXPAND: return 698;   // F5 (확장)
+            case MENU_COLLAPSE: return 392; // G4 (축소)
+            case MENU_BACK: return 349;     // F4 (뒤로)
+            
             default: return 440;
         }
     }
@@ -225,6 +255,16 @@ public class SoundManager {
             case LIGHTNING: return 150;
             case GAME_OVER: return 500;
             case VICTORY: return 400;
+            
+            // 메뉴 사운드 (짧고 경쾌하게)
+            case MENU_HOVER: return 40;
+            case MENU_CLICK: return 60;
+            case MENU_SELECT: return 100;
+            case MENU_MOVE: return 50;
+            case MENU_EXPAND: return 80;
+            case MENU_COLLAPSE: return 70;
+            case MENU_BACK: return 90;
+            
             default: return 100;
         }
     }
@@ -249,6 +289,16 @@ public class SoundManager {
             case LIGHTNING: return "lightning.wav";
             case GAME_OVER: return "gameover.wav";
             case VICTORY: return "victory.wav";
+
+             // 메뉴 사운드
+            case MENU_HOVER: return "cursor.wav";
+            case MENU_CLICK: return "menu_click.wav";
+            case MENU_SELECT: return "menu_select.wav";
+            case MENU_MOVE: return "cursor.wav";
+            case MENU_EXPAND: return "menu_expand.wav";
+            case MENU_COLLAPSE: return "menu_collapse.wav";
+            case MENU_BACK: return "menu_back.wav";
+            
             default: return "victory.wav";
         }
     }
@@ -300,5 +350,199 @@ public class SoundManager {
         soundCache.values().forEach(Clip::close);
         soundCache.clear();
         executor.shutdown();
+    }
+     /**
+     * BGM 재생 (루프)
+     */
+    public void playBGM(BGM bgm) {
+        if (!enabled) return;
+        
+        // 같은 BGM이 재생 중이면 무시
+        if (currentBGM != null && currentBGMType == bgm && currentBGM.isRunning()) {
+            return;
+        }
+        
+        // 기존 BGM 정지
+        stopBGM();
+        
+        executor.submit(() -> {
+            try {
+                currentBGM = loadBGMClip(bgm);
+                if (currentBGM == null) return;
+                
+                setVolume(currentBGM, bgmVolume);
+                currentBGM.loop(Clip.LOOP_CONTINUOUSLY);
+                currentBGM.start();
+                currentBGMType = bgm;
+                
+                System.out.println("[SoundManager] BGM started: " + bgm);
+                
+            } catch (Exception e) {
+                System.err.println("[SoundManager] Error playing BGM " + bgm + ": " + e.getMessage());
+            }
+        });
+    }
+    
+    /**
+     * BGM 정지
+     */
+    public void stopBGM() {
+        if (currentBGM != null) {
+            currentBGM.stop();
+            currentBGM.close();
+            currentBGM = null;
+            currentBGMType = null;
+            System.out.println("[SoundManager] BGM stopped");
+        }
+    }
+    
+    /**
+     * BGM 일시정지
+     */
+    public void pauseBGM() {
+        if (currentBGM != null && currentBGM.isRunning()) {
+            currentBGM.stop();
+        }
+    }
+    
+    /**
+     * BGM 재개
+     */
+    public void resumeBGM() {
+        if (currentBGM != null && !currentBGM.isRunning()) {
+            currentBGM.start();
+        }
+    }
+    
+    /**
+     * BGM 볼륨 설정
+     */
+    public void setBGMVolume(float volume) {
+        this.bgmVolume = Math.max(0.0f, Math.min(1.0f, volume));
+        if (currentBGM != null) {
+            setVolume(currentBGM, bgmVolume);
+        }
+    }
+    
+    public float getBGMVolume() {
+        return bgmVolume;
+    }
+    
+    /**
+     * BGM Clip 로드
+     */
+    private Clip loadBGMClip(BGM bgm) {
+        try {
+            String filename = getBGMFilename(bgm);
+            URL url = getClass().getResource("/sounds/bgm/" + filename);
+            
+            if (url == null) {
+                // 파일이 없으면 합성 BGM 생성
+                return generateSyntheticBGM(bgm);
+            }
+            
+            AudioInputStream audioStream = AudioSystem.getAudioInputStream(url);
+            Clip clip = AudioSystem.getClip();
+            clip.open(audioStream);
+            return clip;
+            
+        } catch (Exception e) {
+            return generateSyntheticBGM(bgm);
+        }
+    }
+    
+    /**
+     * BGM 파일명 매핑
+     */
+    private String getBGMFilename(BGM bgm) {
+        switch (bgm) {
+            case MENU: return "Menu.wav";
+            case GAME_NORMAL: return "Menu.wav";
+            case GAME_INTENSE: return "Menu.wav";
+            case GAME_ITEM: return "Menu.wav";
+            case VERSUS: return "Menu.wav";
+            default: return "Menu.wav";
+        }
+    }
+    
+    /**
+     * 합성 BGM 생성 (간단한 루프)
+     */
+    private Clip generateSyntheticBGM(BGM bgm) {
+        try {
+            int sampleRate = 22050;
+            int duration = 4000; // 4초 루프
+            int samples = sampleRate * duration / 1000;
+            
+            byte[] buffer = new byte[samples * 2];
+            
+            // BGM 타입별 멜로디 패턴
+            int[] melody = getMelodyPattern(bgm);
+            int noteLength = samples / melody.length;
+            
+            for (int i = 0; i < samples; i++) {
+                int noteIndex = i / noteLength;
+                if (noteIndex >= melody.length) noteIndex = melody.length - 1;
+                
+                int frequency = melody[noteIndex];
+                double angle = 2.0 * Math.PI * i * frequency / sampleRate;
+                
+                // 사인파 + 약간의 하모닉
+                double amplitude = 80 * (
+                    Math.sin(angle) * 0.6 + 
+                    Math.sin(angle * 2) * 0.3 + 
+                    Math.sin(angle * 3) * 0.1
+                );
+                
+                // 부드러운 엔벨로프
+                double envelope = 1.0;
+                int notePos = i % noteLength;
+                if (notePos < noteLength * 0.05) {
+                    envelope = notePos / (noteLength * 0.05);
+                } else if (notePos > noteLength * 0.9) {
+                    envelope = (noteLength - notePos) / (noteLength * 0.1);
+                }
+                
+                amplitude *= envelope;
+                
+                short value = (short) amplitude;
+                buffer[i * 2] = (byte) (value & 0xFF);
+                buffer[i * 2 + 1] = (byte) ((value >> 8) & 0xFF);
+            }
+            
+            AudioFormat format = new AudioFormat(sampleRate, 16, 1, true, false);
+            Clip clip = AudioSystem.getClip();
+            clip.open(format, buffer, 0, buffer.length);
+            return clip;
+            
+        } catch (Exception e) {
+            System.err.println("[SoundManager] Failed to generate BGM: " + e.getMessage());
+            return null;
+        }
+    }
+    
+    /**
+     * BGM별 멜로디 패턴 (주파수 배열)
+     */
+    private int[] getMelodyPattern(BGM bgm) {
+        switch (bgm) {
+            case MENU:
+                // 차분한 메뉴 테마 (C-E-G-E-C-G-E-C)
+                return new int[]{523, 659, 784, 659, 523, 784, 659, 523};
+            case GAME_NORMAL:
+                // 경쾌한 게임 테마 (C-D-E-G-E-D-C-G)
+                return new int[]{523, 587, 659, 784, 659, 587, 523, 784};
+            case GAME_INTENSE:
+                // 빠르고 긴장감 있는 테마 (E-G-A-B-A-G-E-D)
+                return new int[]{659, 784, 880, 988, 880, 784, 659, 587};
+            case GAME_ITEM:
+                // 재미있는 아이템 테마 (G-A-B-D-B-A-G-E)
+                return new int[]{784, 880, 988, 1175, 988, 880, 784, 659};
+            case VERSUS:
+                // 대결 테마 (A-B-D-E-D-B-A-G)
+                return new int[]{880, 988, 1175, 1319, 1175, 988, 880, 784};
+            default:
+                return new int[]{440, 494, 523, 587, 659, 698, 784, 880};
+        }
     }
 }
