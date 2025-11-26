@@ -31,8 +31,10 @@ public class NextBlockPanel extends JPanel {
 
     public NextBlockPanel(int sizePx) {
         this.box = sizePx;
+        Dimension d = new Dimension(box, box);
         setPreferredSize(new Dimension(box, box));
-        setMinimumSize(new Dimension(box, box));
+        setMinimumSize(d);
+        setMaximumSize(d); 
         setBackground(new Color(0x191E28));
         setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(new Color(0x303540), 2),
@@ -72,9 +74,16 @@ public class NextBlockPanel extends JPanel {
         Graphics2D g2 = (Graphics2D) g.create();
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-        int cell = Math.min((getWidth() - 20) / 4, (getHeight() - 20) / 4);
-        int offX = (getWidth() - cell * 4) / 2;
-        int offY = (getHeight() - cell * 4) / 2;
+        int w = getWidth();
+        int h = getHeight();
+        
+        // 최소 8픽셀은 보장
+        int cellW = Math.max(8, (w - 20) / 4);
+        int cellH = Math.max(8, (h - 20) / 4);
+        int cell = Math.min(cellW, cellH);
+
+        int offX = (w - cell * 4) / 2;
+        int offY = (h - cell * 4) / 2;
 
         // inner board
         g2.setColor(new Color(0x232937));
