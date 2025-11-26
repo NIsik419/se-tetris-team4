@@ -310,7 +310,9 @@ public class ClearService {
     public void applyLineGravity() {
         applyGravityInstantly();
     }
-
+    
+    
+    
     // ============================================
     // 클러스터 중력 애니메이션
     // ============================================
