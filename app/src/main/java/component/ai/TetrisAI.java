@@ -169,35 +169,75 @@ public class TetrisAI {
                 break;
                 
             case "hard":
-                // HARD: 공격 + 생존 밸런스
-                // 위험 상황 감지 (높이가 15 이상일 때)
-                boolean isDangerous = maxHeight >= 15;
+                // HARD: 공격 + 생존 밸런스 (고도화)
+                // 3단계 위험도 평가
+                boolean isCritical = maxHeight >= 16;     // 🔴 매우 위험 (16줄 이상)
+                boolean isDangerous = maxHeight >= 12;    // 🟡 위험 (12~15줄)
+                boolean isSafe = maxHeight < 10;          // 🟢 안전 (10줄 미만)
                 
-                if (isDangerous) {
-                    // 🚨 위험 상황: 생존 우선 (1줄 클리어도 OK)
+                if (isCritical) {
+                    // 🔴 매우 위험: 무조건 생존! (어떤 클리어든 환영)
                     score = 
-                        completedLines * 250.0 +       // 줄 클리어 큰 보너스 (살아야 함)
-                        (completedLines >= 2 ? 200.0 : 0) + // 2줄+ 추가 보너스
-                        holes * -100.0 +               // 구멍 큰 페널티
-                        bumpiness * -25.0 +            // 평평하게 유지
-                        maxHeight * -50.0 +            // 높이 매우 큰 페널티
-                        aggregateHeight * -3.0 +       // 전체 높이도 관리
-                        blockades * -80.0;             // 막힌 공간 큰 페널티
-                } else {
-                    // 😎 안전 상황: 공격 우선 (2줄 이상)
-                    if (completedLines < 2) {
-                        // 2줄 미만이면 페널티 (단, 위험할 때보단 약함)
-                        score = -500.0 + (completedLines * 100.0);
-                    } else {
+                        completedLines * 350.0 +           // 모든 클리어 큰 보너스
+                        (completedLines >= 2 ? 300.0 : 0) + // 2줄+ 추가
+                        (completedLines >= 3 ? 400.0 : 0) + // 3줄+ 추가
+                        holes * -120.0 +                   // 구멍 매우 큰 페널티
+                        bumpiness * -30.0 +                // 평평하게 필수
+                        maxHeight * -80.0 +                // 높이 감소 최우선
+                        aggregateHeight * -5.0 +           // 전체 높이 큰 페널티
+                        blockades * -100.0;                // 막힌 공간 절대 안됨
+                } else if (isDangerous) {
+                    // 🟡 위험: 생존 우선, 2줄 이상 선호
+                    if (completedLines >= 2) {
                         score = 
-                            completedLines * 250.0 +       // 줄 클리어 큰 보너스
-                            (completedLines >= 3 ? 400.0 : 0) + // 3줄+ 추가 보너스
-                            (completedLines >= 4 ? 600.0 : 0) + // 4줄 특별 보너스
-                            holes * -70.0 +                // 구멍 페널티
-                            bumpiness * -15.0 +            // 울퉁불퉁 페널티
-                            maxHeight * -20.0 +            // 높이 페널티
-                            aggregateHeight * -1.0 +       // 전체 높이 관리
-                            blockades * -60.0;             // 막힌 공간 페널티
+                            completedLines * 280.0 +       // 2줄+ 큰 보너스
+                            (completedLines >= 3 ? 350.0 : 0) +
+                            holes * -90.0 +
+                            bumpiness * -20.0 +
+                            maxHeight * -60.0 +
+                            aggregateHeight * -3.0 +
+                            blockades * -80.0;
+                    } else {
+                        // 1줄도 괜찮지만 페널티 있음
+                        score = 
+                            completedLines * 150.0 +
+                            holes * -90.0 +
+                            bumpiness * -20.0 +
+                            maxHeight * -60.0 +
+                            aggregateHeight * -3.0 +
+                            blockades * -80.0;
+                    }
+                } else if (isSafe) {
+                    // 🟢 안전 (10줄 미만): 공격적 플레이 (2줄 이상 필수)
+                    if (completedLines >= 2) {
+                        score = 
+                            completedLines * 300.0 +       // 2줄+ 큰 보너스
+                            (completedLines >= 3 ? 500.0 : 0) + // 3줄 특별 보너스
+                            (completedLines >= 4 ? 800.0 : 0) + // 4줄 엄청난 보너스
+                            holes * -60.0 +                // 구멍 관리
+                            bumpiness * -12.0 +            // 약간의 페널티
+                            maxHeight * -15.0 +            // 높이는 덜 중요
+                            aggregateHeight * -0.5 +       // 전체 높이 약간만 관리
+                            blockades * -50.0;             // 막힌 공간 중간 페널티
+                    } else {
+                        // 1줄은 큰 페널티
+                        score = -600.0 + (completedLines * 80.0);
+                    }
+                } else {
+                    // 🔵 중간 (10~11줄): 균형 잡힌 플레이
+                    if (completedLines >= 2) {
+                        score = 
+                            completedLines * 280.0 +
+                            (completedLines >= 3 ? 400.0 : 0) +
+                            (completedLines >= 4 ? 700.0 : 0) +
+                            holes * -70.0 +
+                            bumpiness * -15.0 +
+                            maxHeight * -30.0 +
+                            aggregateHeight * -2.0 +
+                            blockades * -65.0;
+                    } else {
+                        // 1줄은 페널티 (하지만 안전할 때보단 약함)
+                        score = -300.0 + (completedLines * 100.0);
                     }
                 }
                 break;
