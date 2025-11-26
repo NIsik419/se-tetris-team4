@@ -114,7 +114,7 @@ public class LightningItem extends ItemBlock {
             remaining.remove(next);
         }
 
-        // ⚡ 빠른 체인 애니메이션 + 즉시 중력
+        //  빠른 체인 애니메이션 + 즉시 중력
         new Thread(() -> {
             try {
                 Color[][] fadeLayer = logic.getFadeLayer();
@@ -196,21 +196,11 @@ public class LightningItem extends ItemBlock {
                 // 6) 즉시 중력 적용 (메인 스레드에서)
                 // ============================================
                 javax.swing.SwingUtilities.invokeLater(() -> {
-                    clear.applyGravityInstantly();
-                    safeCallFrameUpdate(logic);
-
-                    // 점수 추가
+                    logic.applySimpleCellGravity();
                     logic.addScore(removeCount * 30);
-
-                    // 애니메이션 종료
-                    if (animMgr != null) {
+                    if (animMgr != null)
                         animMgr.finish(AnimationManager.AnimationType.ITEM_EFFECT);
-                    }
-
-                    // onComplete 호출 (연쇄 클리어 포함)
-                    if (onComplete != null) {
-                        onComplete.run();
-                    }
+                    logic.checkAndClearLinesAfterItem(onComplete);
                 });
 
             } catch (InterruptedException ignored) {

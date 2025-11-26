@@ -110,40 +110,10 @@ public class ColorBombItem extends ItemBlock {
         if (clear != null) {
             clear.setSkipDuringItem(false);
 
-            //  즉시 중력 적용
-            clear.applyGravityInstantly();
-
-            // 화면 갱신
-            if (logic.getOnFrameUpdate() != null) {
-                javax.swing.SwingUtilities.invokeLater(logic.getOnFrameUpdate());
-            }
-
+            logic.applySimpleCellGravity();
             //  만들어진 줄이 있는지 확인
-            java.util.List<Integer> newFullRows = new java.util.ArrayList<>();
-            for (int y = 0; y < logic.HEIGHT; y++) {
-                boolean full = true;
-                for (int x = 0; x < logic.WIDTH; x++) {
-                    if (board[y][x] == null) {
-                        full = false;
-                        break;
-                    }
-                }
-                if (full)
-                    newFullRows.add(y);
-            }
-
-            if (!newFullRows.isEmpty()) {
-                // 줄이 있으면 BoardLogic의 clearLinesAndThen으로 처리
-                System.out.println("[ColorBomb] Found " + newFullRows.size() + " lines after gravity");
-                if (onComplete != null) {
-                    onComplete.run(); // clearLinesAndThen이 호출됨
-                }
-            } else {
-                // 줄이 없으면 바로 다음 블록
-                if (onComplete != null) {
-                    onComplete.run();
-                }
-            }
+            logic.checkAndClearLinesAfterItem(onComplete);
+    
         } else {
             if (onComplete != null)
                 onComplete.run();
