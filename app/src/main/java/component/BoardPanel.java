@@ -39,6 +39,8 @@ import component.score.ScoreBoard;
 import component.score.ScoreboardOverlay;
 import component.sidebar.NextBlockPanel;
 import logic.BoardLogic;
+import logic.SoundManager;
+import logic.SoundManager.BGM;
 
 /**
  * BoardPanel
@@ -61,6 +63,7 @@ public class BoardPanel extends JPanel {
     private JPanel dialogPanel;
     private NameInputOverlay nameInputOverlay;
     private ScoreboardOverlay scoreboardOverlay;
+    public SoundManager soundManager;
 
     private final GameConfig config;
     private Settings settings;
@@ -95,6 +98,7 @@ public class BoardPanel extends JPanel {
 
         // === 로직 초기화 ===
         this.logic = new BoardLogic(score -> {
+            soundManager.stopBGM();
             if (this.onGameOver != null) {
                 // 대전 모드: 외부 매니저로 승패 전달
                 this.onGameOver.accept(score);
@@ -116,6 +120,12 @@ public class BoardPanel extends JPanel {
             }
         });
 
+        this.soundManager = SoundManager.getInstance();
+        if (config.mode() == GameConfig.Mode.ITEM) {
+            soundManager.playBGM(BGM.GAME_ITEM);
+        } else {
+            soundManager.playBGM(BGM.GAME_NORMAL);
+        }
         if (config.mode() == GameConfig.Mode.ITEM) {
             logic.setItemMode(true);
         }
@@ -491,13 +501,16 @@ public class BoardPanel extends JPanel {
         if (pausePanel == null) {
             loop.pauseLoop(); // 최소한 루프는 멈추게
             System.out.println("[WARN] togglePause() called before PausePanel init");
+            soundManager.pauseBGM();
             return;
         }
         if (pausePanel.isVisible()) {
             loop.resumeLoop();
+            soundManager.resumeBGM();
             pausePanel.hidePanel();
         } else {
             loop.pauseLoop();
+            soundManager.pauseBGM();
             pausePanel.showPanel();
         }
     }
@@ -574,6 +587,7 @@ public class BoardPanel extends JPanel {
         if (loop != null) {
             loop.stopLoop();
         }
+        soundManager.stopBGM();
 
         System.out.println("[STOP] Game stopped");
     }
