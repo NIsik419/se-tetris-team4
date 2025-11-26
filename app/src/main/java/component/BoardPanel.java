@@ -46,9 +46,9 @@ import logic.BoardLogic;
  * - GameFrame 또는 VersusFrame 등 어디에도 붙일 수 있도록 독립형 구성
  */
 public class BoardPanel extends JPanel {
-    private final BoardLogic logic;
-    private final BoardView boardView;
-    private final GameLoop loop;
+    private BoardLogic logic;
+    private BoardView boardView = null;
+    private GameLoop loop = null;
 
     private final JLabel scoreLabel = new JLabel("0");
     private final JLabel levelLabel = new JLabel("1");
@@ -70,15 +70,17 @@ public class BoardPanel extends JPanel {
 
     /** 기본 생성자: 키맵(화살표/Space/P) 사용 */
     public BoardPanel(GameConfig config, Runnable onExitToMenu) {
-        this(config, onExitToMenu,false, true, null);
+        this(config, onExitToMenu, false, true, null);
     }
+
     // WASD 모드 / P1용 생성자
     public BoardPanel(GameConfig config,
-                    Runnable onExitToMenu,
-                    boolean wasMode,
-                    Consumer<Integer> onGameOver) {
+            Runnable onExitToMenu,
+            boolean wasMode,
+            Consumer<Integer> onGameOver) {
         this(config, onExitToMenu, wasMode, true, onGameOver);
     }
+
     /** 오버로드: wasMode=true면 키맵(WASD/F/R) 사용 */
     public BoardPanel(GameConfig config, Runnable onExitToMenu, boolean wasMode,
             boolean enableControls, java.util.function.Consumer<Integer> onGameOver) {
@@ -97,8 +99,20 @@ public class BoardPanel extends JPanel {
                 // 대전 모드: 외부 매니저로 승패 전달
                 this.onGameOver.accept(score);
             } else {
-                // 싱글 모드: 이름 입력/스코어보드
-                showNameInputOverlay(score);
+                loop.stopLoop();
+                SwingUtilities.invokeLater(() -> {
+                    boardView.triggerGameOverAnimation(() -> {
+                        // 애니메이션 끝 → 점수 표시
+                        boardView.showGameOverStats(
+                                logic.getScore(),
+                                logic.getLinesCleared(),
+                                logic.getLevel(),
+                                () -> {
+                                    // 점수 표시 끝 → 이름 입력창
+                                    showNameInputOverlay(score);
+                                });
+                    });
+                }); 
             }
         });
 
@@ -204,7 +218,7 @@ public class BoardPanel extends JPanel {
                 () -> settings != null ? settings.colorBlindMode : ColorBlindPalette.Mode.NORMAL, // 현재 색맹모드
                 mode -> {
                     boardView.setColorMode(mode);
-                    //nextPanel.setColorMode(mode);
+                    // nextPanel.setColorMode(mode);
                 },
 
                 // onColorModeChanged: Settings 에 저장
@@ -215,10 +229,10 @@ public class BoardPanel extends JPanel {
                 });
         if (enableControls) {
             if (wasMode) {
-                installer.install(boardView, deps, KeyBindingInstaller.KeySet.WASD, false, false); 
+                installer.install(boardView, deps, KeyBindingInstaller.KeySet.WASD, false, false);
             } else {
                 installer.install(boardView, deps, KeyBindingInstaller.KeySet.ARROWS, true, false);
-            } 
+            }
         } else {
             boardView.setFocusable(false);
         }
@@ -227,7 +241,8 @@ public class BoardPanel extends JPanel {
             bindPauseKey();
         }
     }
-     // 중앙에 BoardView를 넣고 비율 유지
+
+    // 중앙에 BoardView를 넣고 비율 유지
     private Component centerBoard(JComponent view) {
         JPanel wrapper = new JPanel(new GridBagLayout());
         wrapper.setBackground(new Color(20, 25, 35));
@@ -335,11 +350,10 @@ public class BoardPanel extends JPanel {
                                     onExitToMenu.run();
                                 },
                                 () -> { // EXIT
-                                    restarting = false;    
+                                    restarting = false;
                                     loop.stopLoop();
                                     onExitToMenu.run();
-                                }
-                        );
+                                });
                         removeHierarchyListener(this);
                     }
                 }
@@ -560,7 +574,7 @@ public class BoardPanel extends JPanel {
         if (loop != null) {
             loop.stopLoop();
         }
-        
+
         System.out.println("[STOP] Game stopped");
     }
 }

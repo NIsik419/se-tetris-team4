@@ -49,6 +49,7 @@ import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 
+import logic.SoundManager;
 import versus.VersusFrame;
 
 public class MenuPanel extends JPanel {
@@ -79,6 +80,8 @@ public class MenuPanel extends JPanel {
 
     private final Consumer<GameConfig> onStart;
     private final Consumer<MenuItem> onSelect;
+    private final SoundManager sound = SoundManager.getInstance();
+    private boolean bgmPlaying = false;
 
    // Falling Tetris blocks background
     private static final int BLOCKS = 40;
@@ -136,6 +139,8 @@ public class MenuPanel extends JPanel {
     public MenuPanel(Consumer<GameConfig> onStart, Consumer<MenuItem> onSelect) {
         this.onStart = onStart;
         this.onSelect = onSelect;
+
+        startMenuBGM();
 
         setOpaque(true);
         setBackground(new Color(0x0A0F18));
@@ -516,11 +521,11 @@ public class MenuPanel extends JPanel {
     row.setOpaque(false);
     row.setAlignmentX(LEFT_ALIGNMENT);
     row.add(makeGlassSmallButton("EASY",
-        () -> onStart.accept(new GameConfig(mode, GameConfig.Difficulty.EASY, false))));
+        () -> { stopMenuBGM(); onStart.accept(new GameConfig(mode, GameConfig.Difficulty.EASY, false)); }));
     row.add(makeGlassSmallButton("MEDIUM",
-        () -> onStart.accept(new GameConfig(mode, GameConfig.Difficulty.NORMAL, false))));
+        () -> { stopMenuBGM(); onStart.accept(new GameConfig(mode, GameConfig.Difficulty.NORMAL, false)); }));
     row.add(makeGlassSmallButton("HARD",
-        () -> onStart.accept(new GameConfig(mode, GameConfig.Difficulty.HARD, false))));
+        () -> { stopMenuBGM(); onStart.accept(new GameConfig(mode, GameConfig.Difficulty.HARD, false)); }));
     return row;
     }
 
@@ -698,6 +703,7 @@ public class MenuPanel extends JPanel {
     private void moveSelection(int delta) {
         if (navOrder.isEmpty())
             return;
+        sound.play(SoundManager.Sound.MENU_MOVE, 0.3f);
         navIndex = (navIndex + delta + navOrder.size()) % navOrder.size();
         setSelection(navIndex);
     }
@@ -719,6 +725,7 @@ public class MenuPanel extends JPanel {
     private void activateSelection() {
         if (navOrder.isEmpty())
             return;
+        sound.play(SoundManager.Sound.MENU_SELECT, 0.5f);
         navOrder.get(navIndex).doClick();
     }
 
@@ -810,7 +817,22 @@ public class MenuPanel extends JPanel {
                         over = false;
                     }
                 });
-                addActionListener(e -> action.run());
+                addMouseListener(new MouseAdapter() {
+                    @Override
+                    public void mouseEntered(MouseEvent e) {
+                        over = true;
+                        sound.play(SoundManager.Sound.MENU_HOVER, 0.2f); // 조용하게
+                    }
+
+                    @Override
+                    public void mouseExited(MouseEvent e) {
+                        over = false;
+                    }
+                });
+                addActionListener(e -> {
+                    sound.play(SoundManager.Sound.MENU_SELECT, 0.5f);
+                    action.run();
+                });
             }
 
             @Override
@@ -889,7 +911,23 @@ public class MenuPanel extends JPanel {
                         over = false;
                     }
                 });
-                addActionListener(e -> action.run());
+                addMouseListener(new MouseAdapter() {
+                    @Override
+                    public void mouseEntered(MouseEvent e) {
+                        over = true;
+                        sound.play(SoundManager.Sound.MENU_HOVER, 0.15f); // 더 조용하게
+                    }
+
+                    @Override
+                    public void mouseExited(MouseEvent e) {
+                        over = false;
+                    }
+                });
+                
+                addActionListener(e -> {
+                    sound.play(SoundManager.Sound.MENU_CLICK, 0.4f);
+                    action.run();
+                });
             }
 
             @Override
@@ -969,7 +1007,23 @@ public class MenuPanel extends JPanel {
                         over = false;
                     }
                 });
-                addActionListener(e -> action.run());
+                addMouseListener(new MouseAdapter() {
+                    @Override
+                    public void mouseEntered(MouseEvent e) {
+                        over = true;
+                        sound.play(SoundManager.Sound.MENU_HOVER, 0.15f);
+                    }
+
+                    @Override
+                    public void mouseExited(MouseEvent e) {
+                        over = false;
+                    }
+                });
+                
+                addActionListener(e -> {
+                    sound.play(SoundManager.Sound.MENU_CLICK, 0.4f);
+                    action.run();
+                });
             }
 
             @Override
@@ -1029,12 +1083,7 @@ public class MenuPanel extends JPanel {
             }
         }
     }
-    // public void cleanup() {
-    //     if (anim != null && anim.isRunning()) {
-    //         anim.stop();
-    //         System.out.println("[CLEANUP] MenuPanel animation timer stopped");
-    //     }
-    // }
+    
 
     private void stepBlocks() {
     int w = getWidth(), h = getHeight();
@@ -1053,6 +1102,22 @@ public class MenuPanel extends JPanel {
             bvy[i] = 1.5f + r.nextFloat() * 2.5f;
             bSize[i] = 18 + r.nextInt(16);
             }
+        }
+    }
+
+    private void startMenuBGM() {
+    if (!bgmPlaying) {
+        sound.playBGM(SoundManager.BGM.MENU);
+        bgmPlaying = true;
+        System.out.println("[MenuPanel] BGM started");
+        }
+    }
+
+    public void stopMenuBGM() {
+        if (bgmPlaying) {
+            sound.stopBGM();
+            bgmPlaying = false;
+            System.out.println("[MenuPanel] BGM stopped");
         }
     }
 }

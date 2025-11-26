@@ -1,11 +1,16 @@
 package logic;
 
 import java.awt.Color;
+import java.awt.Point;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Deque;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
+import java.util.Set;
 import java.util.function.Consumer;
 
 import javax.swing.SwingUtilities;
@@ -248,7 +253,9 @@ public class BoardLogic {
 
         recentPlacedInitialize();
         processScoreAndCombo(lines);
-        applyLineGravityOnly();
+
+        // 아이템은 단순 칸 중력
+        applySimpleCellGravity();
 
         if (onFrameUpdate != null)
             javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
@@ -259,8 +266,76 @@ public class BoardLogic {
                         javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
                 });
 
-        // ✅ 즉시 연쇄 체크
         checkChainClearImmediate(afterClear);
+    }
+
+    // 12. 아이템용 라인 체크 & 클리어 메서드
+    public void checkAndClearLinesAfterItem(Runnable onComplete) {
+        var board = state.getBoard();
+        java.util.List<Integer> newFullRows = new java.util.ArrayList<>();
+
+        for (int y = 0; y < HEIGHT; y++) {
+            boolean full = true;
+            for (int x = 0; x < WIDTH; x++) {
+                if (board[y][x] == null) {
+                    full = false;
+                    break;
+                }
+            }
+            if (full)
+                newFullRows.add(y);
+        }
+
+        if (!newFullRows.isEmpty()) {
+            System.out.println("[Item] Found " + newFullRows.size() + " lines after gravity");
+            clearLinesAfterItem(onComplete);
+        } else {
+            if (onComplete != null) {
+                onComplete.run();
+            }
+        }
+    }
+
+    public void applySimpleCellGravity() {
+        Color[][] board = state.getBoard();
+        int[][] pid = state.getPieceId();
+
+        boolean moved = true;
+        int iterations = 0;
+        final int MAX_ITERATIONS = 100;
+
+        while (moved && iterations < MAX_ITERATIONS) {
+            moved = false;
+            iterations++;
+
+            // 아래에서 위로 스캔
+            for (int y = HEIGHT - 2; y >= 0; y--) {
+                for (int x = 0; x < WIDTH; x++) {
+                    if (board[y][x] != null && board[y + 1][x] == null) {
+                        // 한 칸 아래로 이동
+                        board[y + 1][x] = board[y][x];
+                        pid[y + 1][x] = pid[y][x];
+
+                        if (isGarbageRow[y]) {
+                            isGarbageRow[y + 1] = true;
+                        }
+
+                        board[y][x] = null;
+                        pid[y][x] = 0;
+                        moved = true;
+                    }
+                }
+            }
+        }
+
+        // 가비지 플래그 정리
+        for (int y = 0; y < HEIGHT; y++) {
+            if (isRowEmpty(board[y])) {
+                isGarbageRow[y] = false;
+            }
+        }
+
+        System.out.println("[DEBUG] Simple cell gravity (item) applied after " + iterations + " iterations");
     }
 
     // ============================================
@@ -292,20 +367,17 @@ public class BoardLogic {
 
         updateGarbageFlagsOnClear(clearedRows);
 
-        // 2줄 이상만 공격 전송
         if (lines >= 2 && onLinesClearedWithMasks != null) {
             int[] masks = buildAttackMasks(clearedRows);
             onLinesClearedWithMasks.accept(masks);
             System.out.println("[ATTACK] " + lines + "줄 클리어 → " + lines + "줄 공격 전송");
         }
 
-        // 파티클 생성 (논블로킹)
         final int CELL_SIZE = 25;
         for (int row : clearedRows) {
             clear.getParticleSystem().createLineParticles(row, board, CELL_SIZE, WIDTH);
         }
 
-        // 블록 삭제
         for (int row : clearedRows) {
             for (int x = 0; x < WIDTH; x++) {
                 board[row][x] = null;
@@ -316,20 +388,18 @@ public class BoardLogic {
         recentPlacedInitialize();
         processScoreAndCombo(lines);
 
-        // ✅ 줄 중력 적용
-        applyLineGravityOnly();
+        // 클러스터 기반 중력 적용
+        applyClusterGravityInstant();
 
         if (onFrameUpdate != null)
             javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
 
-        // ✅ 파티클 애니메이션 시작 (백그라운드)
         clear.animateParticlesAsync(
                 () -> {
                     if (onFrameUpdate != null)
                         javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
                 });
 
-        // ✅ 즉시 연쇄 체크 (타이머 제거)
         checkChainClearImmediate(afterClear);
     }
 
@@ -372,7 +442,7 @@ public class BoardLogic {
             int y = clearedRows.get(i);
             int mask = 0;
             for (int x = 0; x < WIDTH; x++) {
-                // ✅ 방금 고정된 블록은 제외
+                // 방금 고정된 블록은 제외
                 if (board[y][x] != null && !recentPlaced[y][x]) {
                     mask |= (1 << x);
                 }
@@ -415,49 +485,206 @@ public class BoardLogic {
         }
     }
 
-    // ============================================
-    // 줄 단위 중력 (빈 줄을 제거하고 위 줄들을 한 번에 내림)
-    // ============================================
-    private void applyLineGravityOnly() {
+    // // ============================================
+    // // 줄 단위 중력 (빈 줄을 제거하고 위 줄들을 한 번에 내림)
+    // // ============================================
+    // private void applyLineGravityOnly() {
+    // Color[][] board = state.getBoard();
+    // int[][] pid = state.getPieceId();
+
+    // // 임시 배열 생성
+    // Color[][] tempBoard = new Color[HEIGHT][WIDTH];
+    // int[][] tempPid = new int[HEIGHT][WIDTH];
+    // boolean[] tempGarbage = new boolean[HEIGHT];
+
+    // int writeRow = HEIGHT - 1;
+
+    // // 아래에서 위로 스캔하면서 비어있지 않은 줄만 복사
+    // for (int readRow = HEIGHT - 1; readRow >= 0; readRow--) {
+    // if (!isRowEmpty(board[readRow])) {
+    // for (int x = 0; x < WIDTH; x++) {
+    // tempBoard[writeRow][x] = board[readRow][x];
+    // tempPid[writeRow][x] = pid[readRow][x];
+    // }
+    // tempGarbage[writeRow] = isGarbageRow[readRow];
+    // writeRow--;
+    // }
+    // }
+
+    // // 위쪽 빈 줄 초기화
+    // for (int y = writeRow; y >= 0; y--) {
+    // for (int x = 0; x < WIDTH; x++) {
+    // tempBoard[y][x] = null;
+    // tempPid[y][x] = 0;
+    // }
+    // tempGarbage[y] = false;
+    // }
+
+    // // 원본에 복사
+    // for (int y = 0; y < HEIGHT; y++) {
+    // board[y] = tempBoard[y];
+    // pid[y] = tempPid[y];
+    // isGarbageRow[y] = tempGarbage[y];
+    // }
+
+    // System.out.println("[DEBUG] Line gravity applied (row-based compression)");
+    // }
+
+    private void applyClusterGravityInstant() {
         Color[][] board = state.getBoard();
         int[][] pid = state.getPieceId();
 
-        // 임시 배열 생성
-        Color[][] tempBoard = new Color[HEIGHT][WIDTH];
-        int[][] tempPid = new int[HEIGHT][WIDTH];
-        boolean[] tempGarbage = new boolean[HEIGHT];
+        boolean moved = true;
+        int iterations = 0;
+        final int MAX_ITERATIONS = 100;
 
-        int writeRow = HEIGHT - 1;
+        while (moved && iterations < MAX_ITERATIONS) {
+            moved = false;
+            iterations++;
 
-        // 아래에서 위로 스캔하면서 비어있지 않은 줄만 복사
-        for (int readRow = HEIGHT - 1; readRow >= 0; readRow--) {
-            if (!isRowEmpty(board[readRow])) {
-                for (int x = 0; x < WIDTH; x++) {
-                    tempBoard[writeRow][x] = board[readRow][x];
-                    tempPid[writeRow][x] = pid[readRow][x];
+            // 현재 보드의 모든 클러스터 찾기
+            List<List<Point>> clusters = findConnectedClusters(board, pid);
+
+            // 아래쪽 클러스터부터 처리 (맨 아래 y 좌표 기준 정렬)
+            clusters.sort((a, b) -> Integer.compare(maxY(b), maxY(a)));
+
+            // 각 클러스터를 한 칸씩 떨어뜨리기
+            for (List<Point> cluster : clusters) {
+                if (canClusterFallOneStep(cluster, board, pid)) {
+                    moveClusterDownOneStep(cluster, board, pid);
+                    moved = true;
                 }
-                tempGarbage[writeRow] = isGarbageRow[readRow];
-                writeRow--;
             }
         }
 
-        // 위쪽 빈 줄 초기화
-        for (int y = writeRow; y >= 0; y--) {
-            for (int x = 0; x < WIDTH; x++) {
-                tempBoard[y][x] = null;
-                tempPid[y][x] = 0;
+        System.out.println("[DEBUG] Cluster gravity applied after " + iterations + " iterations");
+    }
+
+    // 2. 클러스터 찾기 (같은 pieceId끼리 연결된 블록들)
+    private List<List<Point>> findConnectedClusters(Color[][] board, int[][] pid) {
+        int h = HEIGHT;
+        int w = WIDTH;
+
+        boolean[][] visited = new boolean[h][w];
+        List<List<Point>> clusters = new ArrayList<>();
+
+        int[] dx = { 1, -1, 0, 0 };
+        int[] dy = { 0, 0, 1, -1 };
+
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                if (board[y][x] == null || visited[y][x])
+                    continue;
+
+                int id = pid[y][x];
+                if (id == 0) // pieceId가 0이면 개별 블록 (가비지 등)
+                    continue;
+
+                List<Point> cluster = new ArrayList<>();
+                Deque<Point> stack = new ArrayDeque<>();
+                stack.push(new Point(x, y));
+                visited[y][x] = true;
+
+                // DFS로 같은 pieceId 찾기
+                while (!stack.isEmpty()) {
+                    Point p = stack.pop();
+                    cluster.add(p);
+
+                    for (int dir = 0; dir < 4; dir++) {
+                        int nx = p.x + dx[dir];
+                        int ny = p.y + dy[dir];
+
+                        if (nx < 0 || nx >= w || ny < 0 || ny >= h)
+                            continue;
+                        if (visited[ny][nx])
+                            continue;
+                        if (board[ny][nx] == null)
+                            continue;
+                        if (pid[ny][nx] != id) // 같은 pieceId만
+                            continue;
+
+                        visited[ny][nx] = true;
+                        stack.push(new Point(nx, ny));
+                    }
+                }
+
+                clusters.add(cluster);
             }
-            tempGarbage[y] = false;
         }
 
-        // 원본에 복사
-        for (int y = 0; y < HEIGHT; y++) {
-            board[y] = tempBoard[y];
-            pid[y] = tempPid[y];
-            isGarbageRow[y] = tempGarbage[y];
+        return clusters;
+    }
+
+    // 3. 클러스터가 한 칸 떨어질 수 있는지 확인
+    private boolean canClusterFallOneStep(List<Point> cluster, Color[][] board, int[][] pid) {
+        Set<Point> clusterSet = new HashSet<>(cluster);
+
+        for (Point p : cluster) {
+            int x = p.x;
+            int y = p.y;
+
+            // 바닥에 닿았으면 못 떨어짐
+            if (y == HEIGHT - 1) {
+                return false;
+            }
+
+            Color below = board[y + 1][x];
+
+            // 아래가 비어있으면 OK
+            if (below == null) {
+                continue;
+            }
+
+            // 아래에 블록이 있는데 같은 클러스터면 OK (자기 자신의 일부)
+            Point belowPoint = new Point(x, y + 1);
+            if (clusterSet.contains(belowPoint)) {
+                continue;
+            }
+
+            // 아래에 다른 블록이 있으면 못 떨어짐
+            return false;
         }
 
-        System.out.println("[DEBUG] Line gravity applied (row-based compression)");
+        return true;
+    }
+
+    // 4. 클러스터를 한 칸 아래로 이동
+    private void moveClusterDownOneStep(List<Point> cluster, Color[][] board, int[][] pid) {
+        // 아래쪽 블록부터 이동 (덮어쓰기 방지)
+        cluster.sort((a, b) -> Integer.compare(b.y, a.y));
+
+        for (Point p : cluster) {
+            int x = p.x;
+            int y = p.y;
+
+            Color c = board[y][x];
+            int id = pid[y][x];
+
+            if (c == null)
+                continue;
+
+            // 한 칸 아래로 이동
+            board[y][x] = null;
+            pid[y][x] = 0;
+
+            board[y + 1][x] = c;
+            pid[y + 1][x] = id;
+
+            // 가비지 플래그도 이동
+            if (isGarbageRow[y]) {
+                isGarbageRow[y + 1] = true;
+            }
+        }
+    }
+
+    // 5. 클러스터의 최하단 y 좌표 찾기
+    private int maxY(List<Point> cluster) {
+        int max = -1;
+        for (Point p : cluster) {
+            if (p.y > max)
+                max = p.y;
+        }
+        return max;
     }
 
     // ============================================
@@ -552,7 +779,7 @@ public class BoardLogic {
 
             System.out.println("[DEBUG] Adding garbage line with mask: " + Integer.toBinaryString(mask));
 
-            // ✅ 보드 전체를 한 칸 위로 밀기
+            // 보드 전체를 한 칸 위로 밀기
             for (int y = 0; y < HEIGHT - 1; y++) {
                 for (int x = 0; x < WIDTH; x++) {
                     board[y][x] = board[y + 1][x];
@@ -561,7 +788,7 @@ public class BoardLogic {
                 isGarbageRow[y] = isGarbageRow[y + 1];
             }
 
-            // ✅ 맨 아래 줄에 가비지 추가
+            // 맨 아래 줄에 가비지 추가
             int garbagePid = state.allocatePieceId();
             for (int x = 0; x < WIDTH; x++) {
                 boolean filled = ((mask >> x) & 1) != 0;
@@ -627,7 +854,7 @@ public class BoardLogic {
             return;
         if (move.canMove(state.getCurr(), state.getX() - 1, state.getY()))
             move.moveLeft();
-            sound.play(SoundManager.Sound.MOVE,0.2f);
+        sound.play(SoundManager.Sound.MOVE, 0.2f);
     }
 
     public void moveRight() {
@@ -635,7 +862,7 @@ public class BoardLogic {
             return;
         if (move.canMove(state.getCurr(), state.getX() + 1, state.getY()))
             move.moveRight();
-            sound.play(SoundManager.Sound.MOVE,0.2f);
+        sound.play(SoundManager.Sound.MOVE, 0.2f);
     }
 
     public void rotateBlock() {
@@ -646,7 +873,7 @@ public class BoardLogic {
         if (!move.canMove(state.getCurr(), state.getX(), state.getY()))
             state.setCurr(backup);
         else
-            sound.play(SoundManager.Sound.ROTATE,0.3f);
+            sound.play(SoundManager.Sound.ROTATE, 0.3f);
     }
 
     public void hardDrop() {
@@ -656,7 +883,7 @@ public class BoardLogic {
             move.moveDown();
             score += 2;
         }
-        sound.play(SoundManager.Sound.HARD_DROP,0.5f);
+        sound.play(SoundManager.Sound.HARD_DROP, 0.2f);
         moveDown();
     }
 
@@ -780,9 +1007,13 @@ public class BoardLogic {
     }
 
     private void gameOver() {
+        if (this.gameOver) {
+            return;
+        }
         this.gameOver = true;
         System.out.println("[GAME OVER] Your Score: " + score);
-        sound.play(SoundManager.Sound.GAME_OVER); //  추가
+        sound.play(SoundManager.Sound.GAME_OVER); // 추가
+        state.setCurr(null);
         if (onGameOverCallback != null)
             onGameOverCallback.run();
         if (onGameOver != null)
@@ -860,25 +1091,23 @@ public class BoardLogic {
         return clear != null && clear.isClearing();
     }
 
-    
-
     // ============================================
     // 라인 클리어 사운드
     // ============================================
     private void playLineClearSound(int lines) {
         switch (lines) {
             case 1:
-                sound.play(SoundManager.Sound.LINE_CLEAR_1);
+                sound.play(SoundManager.Sound.LINE_CLEAR_1, 0.5f);
                 break;
             case 2:
                 sound.play(SoundManager.Sound.LINE_CLEAR_2);
                 break;
             case 3:
-                sound.play(SoundManager.Sound.LINE_CLEAR_3);
+                sound.play(SoundManager.Sound.LINE_CLEAR_3, 0.6f);
                 break;
             case 4:
             default:
-                sound.play(SoundManager.Sound.LINE_CLEAR_4);
+                sound.play(SoundManager.Sound.LINE_CLEAR_4, 0.7f);
                 break;
         }
     }
@@ -888,7 +1117,7 @@ public class BoardLogic {
     // ============================================
     private void playComboSound(int combo) {
         if (combo >= 5) {
-            sound.play(SoundManager.Sound.COMBO_5, 0.8f);
+            sound.play(SoundManager.Sound.COMBO_5, 0.7f);
         } else if (combo >= 3) {
             sound.play(SoundManager.Sound.COMBO_3, 0.7f);
         } else if (combo >= 2) {

@@ -285,10 +285,6 @@ public class ClearService {
         Color[][] board = state.getBoard();
         int[][] pid = state.getPieceId();
 
-        // 1) 먼저 줄 단위 압축 (빈 줄 제거)
-        compressBoardByRows();
-
-        // 2) 칸 단위 중력 (떠있는 블록 처리)
         boolean moved = true;
         int iterations = 0;
         final int MAX_ITERATIONS = 100;
@@ -297,17 +293,13 @@ public class ClearService {
             moved = false;
             iterations++;
 
-            // 아래에서 위로 스캔
-            for (int y = GameState.HEIGHT - 2; y >= 0; y--) {
-                for (int x = 0; x < GameState.WIDTH; x++) {
-                    if (board[y][x] != null && board[y + 1][x] == null) {
-                        // 한 칸 아래로 이동
-                        board[y + 1][x] = board[y][x];
-                        pid[y + 1][x] = pid[y][x];
-                        board[y][x] = null;
-                        pid[y][x] = 0;
-                        moved = true;
-                    }
+            List<List<Point>> clusters = findConnectedClusters(board);
+            clusters.sort((a, b) -> Integer.compare(maxY(b), maxY(a)));
+
+            for (List<Point> cluster : clusters) {
+                if (canClusterFallOneStep(cluster, board)) {
+                    moveClusterDownOneStep(cluster, board);
+                    moved = true;
                 }
             }
         }
@@ -318,7 +310,9 @@ public class ClearService {
     public void applyLineGravity() {
         applyGravityInstantly();
     }
-
+    
+    
+    
     // ============================================
     // 클러스터 중력 애니메이션
     // ============================================
