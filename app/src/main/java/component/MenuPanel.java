@@ -293,7 +293,7 @@ public class MenuPanel extends JPanel {
         gb.gridx = 0;
         gb.gridy = 0;
         gb.insets = new Insets(0, 0, 8, 0);
-        gb.anchor = GridBagConstraints.CENTER;
+        gb.anchor = GridBagConstraints.PAGE_START;
         gb.fill = GridBagConstraints.NONE;
         gb.weightx = 1.0;
         gb.weighty = 0.0;
@@ -341,7 +341,7 @@ public class MenuPanel extends JPanel {
 
         // MAIN COLUMN
         gb.gridy++;
-        gb.insets = new Insets(0, 0, 0, 0);
+        gb.insets = new Insets(40, 0, 0, 0);
         gb.weighty = 1.0;
         gb.fill = GridBagConstraints.BOTH;
 
