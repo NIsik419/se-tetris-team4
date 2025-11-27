@@ -27,6 +27,8 @@ public class BoardLogic {
     public static final int WIDTH = GameState.WIDTH;
     public static final int HEIGHT = GameState.HEIGHT;
     private static final int MAX_GARBAGE = 10;
+    private static final int ITEM_LINES_INTERVAL = 2; // ⭐ 아이템 등장 주기 (누적 라인)
+    private int deletedLinesTotal = 0;
     private final boolean[] isGarbageRow = new boolean[HEIGHT];
     private int garbageCount = 0;
 
@@ -84,7 +86,6 @@ public class BoardLogic {
     private boolean gameOver = false;
     private int score = 0;
     private int clearedLines = 0;
-    private int deletedLinesTotal = 0;
     private boolean nextIsItem = false;
     private boolean itemMode = false;
 
@@ -457,7 +458,9 @@ public class BoardLogic {
     // ============================================
     private void processScoreAndCombo(int lines) {
         clearedLines += lines;
-        deletedLinesTotal += lines;
+        // 이전 누적 줄 수 기억
+        int prevDeleted = deletedLinesTotal;
+        deletedLinesTotal += lines;  // 이번에 지운 줄 수 더함
 
         if (onLineCleared != null)
             onLineCleared.accept(lines);
@@ -480,8 +483,33 @@ public class BoardLogic {
         if (clearedLines % 10 == 0) {
             speedManager.increaseLevel();
         }
-        if (itemMode && deletedLinesTotal > 0 && deletedLinesTotal % 2 == 0) {
-            nextIsItem = true;
+        if (itemMode) {
+            int prevStep = prevDeleted / ITEM_LINES_INTERVAL;
+            int currStep = deletedLinesTotal / ITEM_LINES_INTERVAL;
+
+            if (currStep > prevStep) {
+                // 1) 프리뷰 큐 길이 확보
+                refillPreview();
+
+                // 2) 아이템 블록 생성
+                Block itemBlock = item.generateItemBlock();
+
+                // 3) 프리뷰 큐의 "두 번째" 위치에 넣기 (index 1)
+                if (previewQueue.size() >= 2) {
+                    // 기존 두 번째 블록은 버리고 아이템으로 교체
+                    previewQueue.remove(1);
+                    previewQueue.add(1, itemBlock);
+                } else if (previewQueue.size() == 1) {
+                    // 하나밖에 없으면 뒤에 붙이기
+                    previewQueue.add(itemBlock);
+                } else {
+                    // 이론상 잘 안 오겠지만, 큐가 비어 있으면 그냥 추가
+                    previewQueue.add(itemBlock);
+                }
+
+                // 4) HUD에 프리뷰 변경 알림
+                fireNextQueueChanged();
+            }
         }
     }
 
@@ -736,13 +764,8 @@ public class BoardLogic {
 
         refillPreview();
 
-        Block next;
-        if (itemMode && nextIsItem) {
-            next = item.generateItemBlock();
-            nextIsItem = false;
-        } else {
-            next = previewQueue.removeFirst();
-        }
+        // 이제는 무조건 프리뷰 큐의 맨 앞 블록을 사용
+        Block next = previewQueue.removeFirst();
 
         state.setCurr(next);
         state.setPosition(3, 0);
