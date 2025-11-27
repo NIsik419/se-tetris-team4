@@ -77,25 +77,25 @@ public class BoardPanel extends JPanel {
 
     /** 기본 생성자: 키맵(화살표/Space/P) 사용 */
     public BoardPanel(GameConfig config, Runnable onExitToMenu) {
-        this(config, onExitToMenu,false,true, null, true, true);
+        this(config, onExitToMenu, false, true, null, true, true);
     }
 
     // WASD 모드 / P1용 생성자
     public BoardPanel(GameConfig config,
-                    Runnable onExitToMenu,
-                    boolean wasMode,
-                    java.util.function.Consumer<Integer> onGameOver) {
-        this(config, onExitToMenu, wasMode, true, onGameOver, (onGameOver==null), true);
+            Runnable onExitToMenu,
+            boolean wasMode,
+            java.util.function.Consumer<Integer> onGameOver) {
+        this(config, onExitToMenu, wasMode, true, onGameOver, (onGameOver == null), true);
     }
 
     /** 오버로드: wasMode=true면 키맵(WASD/F/R) 사용 */
     public BoardPanel(GameConfig config,
-                    Runnable onExitToMenu,
-                    boolean wasMode,
-                    boolean enableControls,
-                    java.util.function.Consumer<Integer> onGameOver,
-                    boolean startBGM,
-                    boolean showHUD) {
+            Runnable onExitToMenu,
+            boolean wasMode,
+            boolean enableControls,
+            java.util.function.Consumer<Integer> onGameOver,
+            boolean startBGM,
+            boolean showHUD) {
         this.config = config;
         this.onExitToMenu = onExitToMenu;
         this.wasMode = wasMode;
@@ -129,7 +129,7 @@ public class BoardPanel extends JPanel {
                                     showNameInputOverlay(score);
                                 });
                     });
-                }); 
+                });
             }
         });
 
@@ -143,7 +143,14 @@ public class BoardPanel extends JPanel {
             logic.setItemMode(true);
         }
 
-        this.boardView = new BoardView(logic);
+        Settings loadedSettings = Settings.load();
+        this.settings = loadedSettings;
+        loadedSettings.onChange(updatedSettings -> {
+            SwingUtilities.invokeLater(() -> {
+                applySettings(updatedSettings);
+            });
+        });
+        this.boardView = new BoardView(logic, settings);
         this.loop = new GameLoop(logic, boardView::repaint);
 
         // 루프 제어 콜백 연결
@@ -548,8 +555,25 @@ public class BoardPanel extends JPanel {
         this.settings = s;
         if (s == null)
             return;
-        boardView.setColorMode(s.colorBlindMode);
 
+        // BoardView에 Settings 전달
+        if (boardView != null) {
+            boardView.updateSettings(s);
+            boardView.setColorMode(s.colorBlindMode);
+        }
+
+        // 부모 컨테이너 갱신
+        revalidate();
+        repaint();
+
+        // JFrame 리사이즈
+        SwingUtilities.invokeLater(() -> {
+            JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
+            if (frame != null) {
+                frame.pack();
+                frame.setLocationRelativeTo(null); // 화면 중앙 재배치
+            }
+        });
     }
 
     public void startLoop() {
