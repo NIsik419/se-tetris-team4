@@ -3,6 +3,7 @@ package versus;
 import component.GameConfig;
 import component.PausePanel;
 import component.sidebar.HUDSidebar;
+import logic.SoundManager;
 
 import javax.swing.*;
 import java.awt.*;
@@ -17,7 +18,7 @@ public class VersusPanel extends JPanel {
 
     private VersusGameManager manager;
     private PausePanel pausePanel;
-
+    private SoundManager soundManager;
     private final JLabel p1Queue = new JLabel("0");
     private final JLabel p2Queue = new JLabel("0");
 
@@ -43,9 +44,12 @@ public class VersusPanel extends JPanel {
         this.p1Config = p1Config;
         this.p2Config = p2Config;
         this.gameRule = (gameRule != null) ? gameRule : "Normal";
+        this.soundManager = SoundManager.getInstance();
 
         setLayout(new BorderLayout(0, 0));
         setBackground(new Color(18, 22, 30));
+
+        soundManager.playBGM(SoundManager.BGM.VERSUS);
 
         // ───── 상단 HUD ─────
         JPanel topHud = new JPanel(new GridLayout(1, 5, 15, 0));

@@ -77,7 +77,7 @@ public class BoardPanel extends JPanel {
 
     /** 기본 생성자: 키맵(화살표/Space/P) 사용 */
     public BoardPanel(GameConfig config, Runnable onExitToMenu) {
-        this(config, onExitToMenu,false,true, null, true);
+        this(config, onExitToMenu,false,true, null, true, true);
     }
 
     // WASD 모드 / P1용 생성자
@@ -85,7 +85,7 @@ public class BoardPanel extends JPanel {
                     Runnable onExitToMenu,
                     boolean wasMode,
                     java.util.function.Consumer<Integer> onGameOver) {
-        this(config, onExitToMenu, wasMode, true, onGameOver, true);
+        this(config, onExitToMenu, wasMode, true, onGameOver, (onGameOver==null), true);
     }
 
     /** 오버로드: wasMode=true면 키맵(WASD/F/R) 사용 */
@@ -94,12 +94,14 @@ public class BoardPanel extends JPanel {
                     boolean wasMode,
                     boolean enableControls,
                     java.util.function.Consumer<Integer> onGameOver,
+                    boolean startBGM,
                     boolean showHUD) {
         this.config = config;
         this.onExitToMenu = onExitToMenu;
         this.wasMode = wasMode;
         this.enableControls = enableControls;
         this.onGameOver = onGameOver;
+        this.soundManager = SoundManager.getInstance();
         this.showHUD = showHUD;
 
         // === 기본 패널 설정 ===

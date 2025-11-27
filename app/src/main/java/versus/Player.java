@@ -53,6 +53,7 @@ public class Player {
                     this.events.onGameOver.accept(score);
                 }
             },
+            false,
             false        
         );
         this.logic = panel.getLogic();

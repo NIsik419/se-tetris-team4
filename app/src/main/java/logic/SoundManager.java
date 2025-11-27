@@ -56,7 +56,7 @@ public class SoundManager {
     private final ExecutorService executor = Executors.newCachedThreadPool();
     
     private boolean enabled = true;
-    private float masterVolume = 0.6f; // 0.0 ~ 1.0
+    private float masterVolume = 0.5f; // 0.0 ~ 1.0
     private float bgmVolume = 0.2f; // BGM 전용 볼륨
     
     private Clip currentBGM = null;
@@ -456,11 +456,11 @@ public class SoundManager {
      */
     private String getBGMFilename(BGM bgm) {
         switch (bgm) {
-            case MENU: return "Menu.wav";
+            case MENU: return "MainMenu.wav";
             case GAME_NORMAL: return "Menu.wav";
             case GAME_INTENSE: return "Menu.wav";
-            case GAME_ITEM: return "Menu.wav";
-            case VERSUS: return "Menu.wav";
+            case GAME_ITEM: return "game.wav";
+            case VERSUS: return "Versus.wav";
             default: return "Menu.wav";
         }
     }
