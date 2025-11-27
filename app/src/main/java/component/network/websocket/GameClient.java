@@ -13,6 +13,7 @@ public class GameClient {
     private Session session;
     private final Consumer<Message> onMessageHandler;
     private Runnable onConnected;
+    private Runnable onDisconnected;
 
     public GameClient(Consumer<Message> onMessageHandler) {
         this.onMessageHandler = onMessageHandler;
@@ -86,7 +87,9 @@ public class GameClient {
     public void setOnConnected(Runnable callback) {
         this.onConnected = callback;
     }
-
+    public void setOnDisconnected(Runnable callback) {
+        this.onDisconnected = callback;
+    }
     public void disconnect() {
         if (session != null && session.isOpen()) {
             try {
@@ -123,6 +126,12 @@ public class GameClient {
     public void onClose() {
         System.out.println("[Client] Disconnected from server.");
         this.session = null;
+        if (onDisconnected != null) {
+            System.out.println("[Client] Calling onDisconnected callback");
+            javax.swing.SwingUtilities.invokeLater(onDisconnected);
+        } else {
+            System.out.println("[Client] WARNING: onDisconnected callback is null!");
+        }
     }
 
     @OnError
@@ -131,6 +140,9 @@ public class GameClient {
         System.err.println("[Client] Error type: " + t.getClass().getName());
         System.err.println("[Client] Error message: " + t.getMessage());
         t.printStackTrace();
+        if (onDisconnected != null) {
+            javax.swing.SwingUtilities.invokeLater(onDisconnected);
+        }
     }
 
     public void send(Message msg) {

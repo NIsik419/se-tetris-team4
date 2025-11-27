@@ -159,8 +159,8 @@ public class OnlineVersusPanel extends JPanel {
         oppLogic.setOnIncomingChanged(
                 count -> SwingUtilities.invokeLater(() -> oppIncoming.setText(String.valueOf(count))));
 
-        myView = new BoardView(myLogic,null);
-        oppView = new BoardView(oppLogic,null);
+        myView = new BoardView(myLogic, null);
+        oppView = new BoardView(oppLogic, null);
 
         /* 중앙 컨테이너 - 사이드바 + 보드들 */
         JPanel centerContainer = new JPanel(new BorderLayout(0, 0));
@@ -227,6 +227,12 @@ public class OnlineVersusPanel extends JPanel {
             client.send(new Message(MessageType.PLAYER_READY, "ready"));
             updateOverlay("Connected! Waiting for opponent...");
             checkReadyState();
+        });
+        client.setOnDisconnected(() -> {
+            System.out.println("[DEBUG] onDisconnected callback!");
+            if (gameStarted) {
+                onConnectionLost(); // 이미 있는 메서드 활용
+            }
         });
 
         try {
@@ -729,11 +735,11 @@ public class OnlineVersusPanel extends JPanel {
                 myLogic.addGarbageMasks(masks);
 
                 // 가비지 추가 후 즉시 보드 상태 전송!
-               
+
                 adapter.sendBoardStateImmediate(); // Full Sync 강제
                 myView.repaint();
-                
-                break; 
+
+                break;
             }
 
             default:
@@ -998,14 +1004,34 @@ public class OnlineVersusPanel extends JPanel {
     }
 
     private void onConnectionLost() {
-        cleanup();
+        System.out.println("[Connection] Lost connection to opponent!");
+
+        // 게임 중이면 일시정지
+        if (gameStarted && loop != null) {
+            loop.pause();
+        }
+
+        // 타이머들 정지
+        if (heartbeatTimer != null && heartbeatTimer.isRunning()) {
+            heartbeatTimer.stop();
+        }
 
         SwingUtilities.invokeLater(() -> {
-            lagLabel.setText("RECONNECTING...");
-            lagLabel.setForeground(Color.YELLOW);
+            lagLabel.setText("DISCONNECTED");
+            lagLabel.setForeground(Color.RED);
 
-            // 자동 재연결 (사용자 개입 없이)
-            autoReconnect();
+            int choice = JOptionPane.showConfirmDialog(
+                    this,
+                    "Connection to opponent lost.\nAttempt to reconnect?",
+                    "Connection Lost",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.WARNING_MESSAGE);
+
+            if (choice == JOptionPane.YES_OPTION) {
+                autoReconnect();
+            } else {
+                returnToMainMenu();
+            }
         });
     }
 
