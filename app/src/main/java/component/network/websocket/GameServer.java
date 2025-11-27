@@ -10,7 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @ServerEndpoint("/game")
 public class GameServer {
 
-    private static Server server; // ← 이제 여기만 사용
+    private static Server server; // 서버를 하나만 사용
     private static final Set<Session> sessions = ConcurrentHashMap.newKeySet();
 
     @OnOpen
@@ -41,27 +41,30 @@ public class GameServer {
         System.err.println("[Server] Error on " + session.getId() + ": " + error.getMessage());
     }
 
-    /** ★ 서버 시작 (Daemon Thread + static server 사용) */
+    /** 서버 시작 */
     public static void startServer(int port) {
         Thread t = new Thread(() -> {
             try {
-                server = new Server("localhost", port, "/", null, GameServer.class);
+                // 모든 네트워크 인터페이스에서 수신
+                server = new Server("0.0.0.0", port, "", null, GameServer.class);
                 server.start();
-                System.out.println("[WebSocket] Server started on ws://localhost:" + port + "/game");
 
-                // ★ System.in.read() 제거 → 서버가 막히지 않음
-                // 서버는 stopServer()가 호출될 때까지 작동함
+                System.out.println("[WebSocket] Server started successfully!");
+                System.out.println("[WebSocket] Local:  ws://localhost:" + port + "/game");
+                System.out.println("[WebSocket] LAN:    ws://10.50.98.32:" + port + "/game");
+
+                Thread.currentThread().join();
 
             } catch (Exception e) {
                 e.printStackTrace();
             }
         });
 
-        t.setDaemon(true); // ★ JVM 종료를 막지 않음
+        t.setDaemon(false);
         t.start();
     }
 
-    /** ★ 서버 종료 */
+    /** 서버 종료 */
     public static void stopServer() {
         try {
             if (server != null) {

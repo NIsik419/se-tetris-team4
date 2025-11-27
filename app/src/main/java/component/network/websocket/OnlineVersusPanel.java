@@ -159,8 +159,8 @@ public class OnlineVersusPanel extends JPanel {
         oppLogic.setOnIncomingChanged(
                 count -> SwingUtilities.invokeLater(() -> oppIncoming.setText(String.valueOf(count))));
 
-        myView = new BoardView(myLogic);
-        oppView = new BoardView(oppLogic);
+        myView = new BoardView(myLogic,null);
+        oppView = new BoardView(oppLogic,null);
 
         /* 중앙 컨테이너 - 사이드바 + 보드들 */
         JPanel centerContainer = new JPanel(new BorderLayout(0, 0));
