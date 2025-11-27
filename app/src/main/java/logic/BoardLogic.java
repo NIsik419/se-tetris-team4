@@ -210,7 +210,7 @@ public class BoardLogic {
     // ============================================
     private void clearLinesAfterItem(Runnable afterClear) {
         var board = state.getBoard();
-        var pid = state.getPieceId();
+
 
         java.util.List<Integer> clearedRows = new java.util.ArrayList<>();
         for (int y = 0; y < HEIGHT; y++) {
@@ -378,6 +378,9 @@ public class BoardLogic {
         for (int row : clearedRows) {
             clear.getParticleSystem().createLineParticles(row, board, CELL_SIZE, WIDTH);
         }
+        
+        // 다음 턴을 위해 recentPlaced 초기화
+        for (int yy = 0; yy < HEIGHT; yy++) java.util.Arrays.fill(recentPlaced[yy], false);
 
         for (int row : clearedRows) {
             for (int x = 0; x < WIDTH; x++) {
@@ -835,6 +838,30 @@ public class BoardLogic {
 
         System.out.println("[DEBUG] Garbage applied: " + addedLines + " lines, total garbage: " + garbageCount);
     }
+        /**
+     * Simple garbage (no mask info) → convert to random-hole garbage masks
+     * and enqueue them so applyIncomingGarbage() can place them on the board.
+     */
+    private void addGarbageLines(int lines) {
+        if (lines <= 0) return;
+
+        java.util.Random rand = new java.util.Random();
+
+        for (int i = 0; i < lines; i++) {
+            // pick a random hole (empty cell) in this row
+            int holeX = rand.nextInt(WIDTH);
+
+            int mask = 0;
+            for (int x = 0; x < WIDTH; x++) {
+                if (x == holeX) continue;   // hole → 0
+                mask |= (1 << x);           // filled → 1
+            }
+
+            // enqueue this garbage row; it’ll be applied in applyIncomingGarbage()
+            incomingGarbageQueue.offer(mask);
+        }
+    }
+
 
     public void addGarbageMasks(int[] masks) {
         if (masks == null || masks.length == 0)
