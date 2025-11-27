@@ -110,21 +110,10 @@ public class ColorBombItem extends ItemBlock {
         if (clear != null) {
             clear.setSkipDuringItem(false);
 
-            // 1) 즉시 중력 (클러스터 중력 + 라인 압축)
-            clear.applyGravityInstantly();
-
-            // 화면 갱신
-            if (logic.getOnFrameUpdate() != null) {
-                javax.swing.SwingUtilities.invokeLater(logic.getOnFrameUpdate());
-            }
-
-            //  추가로 만들어진 줄이 있으면 지우기
-            clear.clearLines(
-                    logic.getOnFrameUpdate(),
-                    () -> {
-                        if (onComplete != null)
-                            onComplete.run();
-                    });
+            logic.applySimpleCellGravity();
+            //  만들어진 줄이 있는지 확인
+            logic.checkAndClearLinesAfterItem(onComplete);
+    
         } else {
             if (onComplete != null)
                 onComplete.run();

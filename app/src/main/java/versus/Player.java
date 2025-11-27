@@ -8,6 +8,7 @@ import component.BoardPanel;
 import component.GameConfig;
 
 import java.util.ArrayDeque;
+import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 
@@ -33,23 +34,27 @@ public class Player {
     // 대전용: 상대에게서 받은 garbage(마스크) 대기열 (맨 앞 = 가장 오래된 = 아래쪽부터 들어갈 줄)
     private final ArrayDeque<Integer> pendingMasks = new ArrayDeque<>();
 
-    public Player(Id id, GameConfig config, Events events, Runnable onExitToMenu) {
+    public Player(Id id, GameConfig config, Events events, Runnable onExitToMenu, boolean isAI) {
         this.id = id;
         this.config = config;
         this.events = (events != null) ? events : new Events();
 
         boolean useWASD = (id == Id.P1);
+        
 
         // BoardPanel 내부에서 BoardLogic/Loop/HUD/키바인딩까지 초기화됨
         this.panel = new BoardPanel(
             config,
             onExitToMenu,
-            useWASD,
-            /* onGameOver(대전용) = */ score -> {
+            useWASD,          // P1이면 WASD 
+            true,     // enableControls: 로컬 vs 모드이므로 키 입력 활성화
+            score -> {        // onGameOver 콜백
                 if (this.events.onGameOver != null) {
                     this.events.onGameOver.accept(score);
                 }
-            }
+            },
+            false,
+            false        
         );
         this.logic = panel.getLogic();
 
@@ -63,6 +68,13 @@ public class Player {
                 this.events.onLinesClearedWithMasks.accept(masks);
             }
         });
+
+        logic.setOnNextQueueUpdate(blocks -> {
+            if (this.events.onNext != null) {
+                this.events.onNext.accept(blocks);
+            } 
+        });
+
         // 다음 블럭 스폰 직전에 pending 가비지 실제 주입
         logic.setBeforeSpawnHook(this::flushGarbageIfAny);
     }
@@ -113,6 +125,10 @@ public class Player {
     /** 현재 대기 중인 줄 수 (HUD 표시에 사용) */
     public synchronized int getPendingGarbage() { return pendingMasks.size(); }
 
+    public List<blocks.Block> getNextBlocks() {
+        return logic.getNextBlocks();
+    }
+    
     /* ===== 편의 조회 ===== */
     public Id id() { return id; }
     public boolean isGameOver() { return logic.isGameOver(); }
@@ -120,5 +136,13 @@ public class Player {
 
     public void stop() { panel.stopLoop(); }
     public void start() {panel.startLoop(); }
+
+    public int getLevel() {
+        return logic.getLevel();
+    }
+
+    public int getLines() {
+        return logic.getLinesCleared();
+    }
 
 }

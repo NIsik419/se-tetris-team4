@@ -3,6 +3,10 @@ package component.network.websocket;
 import logic.BoardLogic;
 import logic.GameState;
 import java.awt.Color;
+import java.util.ArrayList;
+import java.util.List;
+
+import blocks.Block;
 
 /**
  * BoardSyncAdapter (델타 전송 방식)
@@ -24,10 +28,12 @@ public class BoardSyncAdapter {
     private final BoardDeltaTracker tracker;
 
     // 델타 전송 설정
-    private boolean enableDeltaSync = true; // 델타 전송 활성화
+    private boolean enableDeltaSync = true;
     private boolean enableCompression = true;
     private long lastFullSyncTime = 0;
-    private static final long FULL_SYNC_INTERVAL = 10000; // 10초마다 전체 동기화
+    private static final long FULL_SYNC_INTERVAL = 30000; // 10초 → 30초로 변경
+    private int deltasWithoutFullSync = 0;
+    private static final int MAX_DELTAS_BEFORE_FULL_SYNC = 100;
 
     // 통계
     private int deltasSent = 0;
@@ -37,6 +43,11 @@ public class BoardSyncAdapter {
     private long totalDeltaBytes = 0;
     private long totalFullBytes = 0;
 
+    private List<Block> lastSentNextBlocks = null;
+    private int lastSentScore = -1;
+    private int lastSentLevel = -1;
+    private int lastSentLines = -1;
+
     public BoardSyncAdapter(BoardLogic myLogic, BoardLogic oppLogic, GameClient client) {
         this.myLogic = myLogic;
         this.oppLogic = oppLogic;
@@ -45,10 +56,12 @@ public class BoardSyncAdapter {
         // 델타 추적기 초기화 (GameState의 고정 크기 사용)
         this.tracker = new BoardDeltaTracker(GameState.WIDTH, GameState.HEIGHT);
 
-        // 🔹 라인 클리어 시 공격 마스크 전송
+        // 라인 클리어 시 공격 마스크 전송 + 즉시 보드 동기화
         myLogic.setOnLinesClearedWithMasks(masks -> {
             client.send(new Message(MessageType.LINE_ATTACK, masks));
             System.out.println("[SEND] LINE_ATTACK → " + masks.length + " lines");
+            sendBoardStateImmediate();
+
         });
 
         // 🔹 게임오버 시 알림 전송
@@ -57,7 +70,7 @@ public class BoardSyncAdapter {
         System.out.println("[SYNC] BoardSyncAdapter initialized (Delta mode: " + enableDeltaSync + ")");
     }
 
-    /** 
+    /**
      * 🟦 주기적으로 내 보드 상태를 상대에게 전송
      * 델타 모드: 변경사항만 전송
      * 레거시 모드: 전체 보드 전송
@@ -65,6 +78,35 @@ public class BoardSyncAdapter {
     public void sendBoardState() {
         if (enableDeltaSync) {
             sendBoardStateDelta();
+        } else {
+            sendBoardStateLegacy();
+        }
+        // Next 블록 전송 (변경된 경우만)
+        sendNextBlocks();
+
+        // 플레이어 통계 전송 (변경된 경우만)
+        sendPlayerStats();
+    }
+
+    /**
+     * 즉시 보드 상태 전송 (라인 클리어 등 중요 이벤트용)
+     */
+    public void sendBoardStateImmediate() {
+        if (enableDeltaSync) {
+            GameState currentState = myLogic.getState();
+            sendFullSync(currentState);
+
+            // 1. 델타 추적기 강제 업데이트
+            tracker.forceUpdate(currentState);
+
+            // 2. 델타 전송
+            sendDelta(currentState);
+
+            // 3. Full Sync 타이머 리셋
+            lastFullSyncTime = System.currentTimeMillis();
+            deltasWithoutFullSync = 0; // 횟수도 리셋
+
+            System.out.println("[SYNC] Immediate sync completed");
         } else {
             sendBoardStateLegacy();
         }
@@ -77,16 +119,68 @@ public class BoardSyncAdapter {
         GameState myState = myLogic.getState();
         long now = System.currentTimeMillis();
 
-        // 주기적으로 전체 동기화 (패킷 손실 대비)
-        boolean shouldFullSync = (now - lastFullSyncTime) > FULL_SYNC_INTERVAL;
+        deltasWithoutFullSync++;
+
+        // 시간 OR 델타 횟수 기준으로 Full Sync
+        boolean shouldFullSync = (now - lastFullSyncTime) > FULL_SYNC_INTERVAL ||
+                deltasWithoutFullSync >= MAX_DELTAS_BEFORE_FULL_SYNC;
 
         if (shouldFullSync) {
             sendFullSync(myState);
             lastFullSyncTime = now;
+            deltasWithoutFullSync = 0;
             fullSyncsSent++;
         } else {
             sendDelta(myState);
         }
+    }
+
+    /**
+     * Next 블록 전송 (변경된 경우만)
+     */
+    private void sendNextBlocks() {
+        List<Block> nextBlocks = myLogic.getNextBlocks();
+
+        // 변경되지 않았으면 전송하지 않음
+        if (nextBlocks.equals(lastSentNextBlocks)) {
+            return;
+        }
+
+        lastSentNextBlocks = List.copyOf(nextBlocks);
+
+        try {
+            // Block을 직렬화 가능한 형태로 변환
+            List<BlockData> blockDataList = nextBlocks.stream()
+                    .map(this::blockToData)
+                    .toList();
+
+            client.send(new Message(MessageType.NEXT_BLOCKS,
+                    WebSocketUtil.toJson(blockDataList)));
+        } catch (Exception e) {
+            System.err.println("[ERROR] Failed to send NEXT_BLOCKS: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 플레이어 통계 전송 (점수, 레벨, 라인수)
+     */
+    private void sendPlayerStats() {
+        int score = myLogic.getScore();
+        int level = myLogic.getLevel();
+        int lines = myLogic.getLinesCleared();
+
+        // 변경되지 않았으면 전송하지 않음
+        if (score == lastSentScore && level == lastSentLevel && lines == lastSentLines) {
+            return;
+        }
+
+        lastSentScore = score;
+        lastSentLevel = level;
+        lastSentLines = lines;
+
+        PlayerStats stats = new PlayerStats(score, level, lines);
+        client.send(new Message(MessageType.PLAYER_STATS,
+                WebSocketUtil.toJson(stats)));
     }
 
     /**
@@ -148,42 +242,53 @@ public class BoardSyncAdapter {
         client.send(new Message(MessageType.GAME_OVER, "over"));
     }
 
+    /**
+     * Block을 직렬화 가능한 데이터로 변환
+     */
+    private BlockData blockToData(Block block) {
+        return new BlockData(
+                block.getColor().getRGB(),
+                block.getShapeArray());
+    }
+
     /** 🟨 수신 메시지 처리 */
     public void handleIncoming(Message msg) {
         switch (msg.type) {
             case BOARD_STATE -> {
-                // ✅ 레거시: 상대방 보드 데이터를 oppLogic에 반영
+                // 레거시: 상대방 보드 데이터를 oppLogic에 반영
                 Color[][] board = WebSocketUtil.fromJson(msg.data, Color[][].class);
                 oppLogic.setBoard(board);
             }
 
             case BOARD_DELTA -> {
-                // ✅ 델타: 변경사항만 적용
-                BoardDeltaTracker.BoardDelta delta = 
-                    WebSocketUtil.fromJson(msg.data, BoardDeltaTracker.BoardDelta.class);
+                // 델타: 변경사항만 적용
+                BoardDeltaTracker.BoardDelta delta = WebSocketUtil.fromJson(msg.data,
+                        BoardDeltaTracker.BoardDelta.class);
                 applyDeltaToOppLogic(delta);
             }
 
             case BOARD_DELTA_COMPRESSED -> {
-                // ✅ 압축된 델타 적용
-                BoardDeltaTracker.CompressedDelta compressed = 
-                    WebSocketUtil.fromJson(msg.data, BoardDeltaTracker.CompressedDelta.class);
+                // 압축된 델타 적용
+                BoardDeltaTracker.CompressedDelta compressed = WebSocketUtil.fromJson(msg.data,
+                        BoardDeltaTracker.CompressedDelta.class);
                 applyCompressedDeltaToOppLogic(compressed);
             }
 
             case BOARD_FULL_SYNC -> {
-                // ✅ 전체 동기화 적용
-                BoardDeltaTracker.BoardDelta fullDelta = 
-                    WebSocketUtil.fromJson(msg.data, BoardDeltaTracker.BoardDelta.class);
+                // 전체 동기화 적용
+                BoardDeltaTracker.BoardDelta fullDelta = WebSocketUtil.fromJson(msg.data,
+                        BoardDeltaTracker.BoardDelta.class);
                 applyDeltaToOppLogic(fullDelta);
                 System.out.println("[SYNC] Full sync received and applied");
             }
 
-            case LINE_ATTACK -> {
-                // ✅ 상대의 공격을 내 보드에 반영
-                int[] masks = WebSocketUtil.fromJson(msg.data, int[].class);
-                myLogic.addGarbageMasks(masks);
-            }
+            // case LINE_ATTACK -> {
+            //     // 상대의 공격을 내 보드에 반영
+            //     int[] masks = WebSocketUtil.fromJson(msg.data, int[].class);
+            //     myLogic.addGarbageMasks(masks);
+            // }
+
+            
 
             case GAME_OVER -> {
                 System.out.println("[RECV] GAME_OVER");
@@ -191,9 +296,15 @@ public class BoardSyncAdapter {
             }
 
             case SCORE_UPDATE -> {
-                // ✅ 점수 업데이트 수신
+                // 점수 업데이트 수신
                 int score = WebSocketUtil.fromJson(msg.data, Integer.class);
                 oppLogic.getState().setScore(score);
+            }
+
+            // 이 케이스들은 OnlineVersusPanel에서 처리해야 함
+            // 여기서는 무시
+            case NEXT_BLOCKS, PLAYER_STATS -> {
+                // OnlineVersusPanel에서 처리
             }
 
             default -> {
@@ -206,7 +317,8 @@ public class BoardSyncAdapter {
      * 델타를 oppLogic의 GameState에 적용
      */
     private void applyDeltaToOppLogic(BoardDeltaTracker.BoardDelta delta) {
-        if (delta == null) return;
+        if (delta == null)
+            return;
 
         GameState oppState = oppLogic.getState();
         Color[][] oppBoard = oppState.getBoard();
@@ -214,7 +326,7 @@ public class BoardSyncAdapter {
         // 셀 변경사항 적용
         for (BoardDeltaTracker.CellDelta change : delta.changes) {
             if (change.x >= 0 && change.x < GameState.WIDTH &&
-                change.y >= 0 && change.y < GameState.HEIGHT) {
+                    change.y >= 0 && change.y < GameState.HEIGHT) {
                 oppBoard[change.y][change.x] = rgbToColor(change.rgb);
             }
         }
@@ -231,6 +343,7 @@ public class BoardSyncAdapter {
         }
     }
 
+    
     /**
      * 압축된 델타를 oppLogic의 GameState에 적용
      */
@@ -245,7 +358,7 @@ public class BoardSyncAdapter {
                 int y = run.startY;
 
                 if (x >= 0 && x < GameState.WIDTH &&
-                    y >= 0 && y < GameState.HEIGHT) {
+                        y >= 0 && y < GameState.HEIGHT) {
                     oppBoard[y][x] = rgbToColor(run.rgb);
                 }
             }
@@ -303,7 +416,7 @@ public class BoardSyncAdapter {
         totalDeltaBytes = 0;
         totalFullBytes = 0;
         lastFullSyncTime = 0;
-
+        deltasWithoutFullSync = 0;
         System.out.println("[SYNC] Delta tracker reset");
     }
 
@@ -311,16 +424,18 @@ public class BoardSyncAdapter {
      * UI 표시용 간단한 통계 문자열
      */
     public String getStatsString() {
-        if (!enableDeltaSync) return "Sync: Legacy";
+        if (!enableDeltaSync)
+            return "Sync: Legacy";
 
         long totalSyncs = deltasSent + fullSyncsSent + skippedSyncs;
-        if (totalSyncs == 0) return "Sync: Waiting...";
+        if (totalSyncs == 0)
+            return "Sync: Waiting...";
 
         int skipPercentage = (int) ((skippedSyncs * 100.0) / totalSyncs);
         long avgDeltaSize = deltasSent > 0 ? totalDeltaBytes / deltasSent : 0;
 
-        return String.format("Δ:%d Full:%d Skip:%d%% (~%dB)", 
-            deltasSent, fullSyncsSent, skipPercentage, avgDeltaSize);
+        return String.format("Δ:%d Full:%d Skip:%d%% (~%dB)",
+                deltasSent, fullSyncsSent, skipPercentage, avgDeltaSize);
     }
 
     /**
@@ -387,4 +502,42 @@ public class BoardSyncAdapter {
             return String.format("%.2f MB", bytes / (1024.0 * 1024.0));
         }
     }
+
+    /**
+     * 직렬화 가능한 Block 데이터
+     */
+    public static class BlockData {
+        public int rgb;
+        public int[][] shape;
+
+        public BlockData() {
+        }
+
+        public BlockData(int rgb, int[][] shape) {
+            this.rgb = rgb;
+            this.shape = shape;
+        }
+    }
+
+    /**
+     * 플레이어 통계
+     */
+    public static class PlayerStats {
+        public int score;
+        public int level;
+        public int lines;
+
+        public PlayerStats() {
+        }
+
+        public PlayerStats(int score, int level, int lines) {
+            this.score = score;
+            this.level = level;
+            this.lines = lines;
+        }
+    }
+
 }
+
+
+

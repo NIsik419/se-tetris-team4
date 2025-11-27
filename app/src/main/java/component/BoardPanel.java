@@ -11,6 +11,7 @@ import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.awt.event.HierarchyEvent;
 import java.awt.event.HierarchyListener;
+import java.util.function.Consumer;
 
 import javax.swing.AbstractAction;
 import javax.swing.Box;
@@ -24,7 +25,8 @@ import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.border.EmptyBorder;
-
+import javax.swing.InputMap;
+import javax.swing.ActionMap;
 import component.board.KeyBindingInstaller;
 import component.config.Settings;
 import component.items.ColorBombItem;
@@ -37,6 +39,8 @@ import component.score.ScoreBoard;
 import component.score.ScoreboardOverlay;
 import component.sidebar.NextBlockPanel;
 import logic.BoardLogic;
+import logic.SoundManager;
+import logic.SoundManager.BGM;
 
 /**
  * BoardPanel
@@ -44,14 +48,18 @@ import logic.BoardLogic;
  * - GameFrame 또는 VersusFrame 등 어디에도 붙일 수 있도록 독립형 구성
  */
 public class BoardPanel extends JPanel {
-    private final BoardLogic logic;
-    private final BoardView boardView;
-    private final GameLoop loop;
+    private BoardLogic logic;
+    private BoardView boardView = null;
+    private GameLoop loop = null;
 
     private final JLabel scoreLabel = new JLabel("0");
     private final JLabel levelLabel = new JLabel("1");
     private final JLabel linesLabel = new JLabel("0");
     private final NextBlockPanel nextPanel = new NextBlockPanel(95);
+
+    private boolean showHUD;
+    private boolean enableControls = true;
+    private boolean wasMode;
 
     private final ScoreBoard scoreBoard = ScoreBoard.createDefault();
     private PausePanel pausePanel;
@@ -59,24 +67,42 @@ public class BoardPanel extends JPanel {
     private JPanel dialogPanel;
     private NameInputOverlay nameInputOverlay;
     private ScoreboardOverlay scoreboardOverlay;
+    public SoundManager soundManager;
 
     private final GameConfig config;
     private Settings settings;
-    private boolean isRestarting = false;
+    private boolean restarting = false;
     private final Runnable onExitToMenu;
     private java.util.function.Consumer<Integer> onGameOver;
 
     /** 기본 생성자: 키맵(화살표/Space/P) 사용 */
     public BoardPanel(GameConfig config, Runnable onExitToMenu) {
-        this(config, onExitToMenu, false, null);
+        this(config, onExitToMenu, false, true, null, true, true);
+    }
+
+    // WASD 모드 / P1용 생성자
+    public BoardPanel(GameConfig config,
+            Runnable onExitToMenu,
+            boolean wasMode,
+            java.util.function.Consumer<Integer> onGameOver) {
+        this(config, onExitToMenu, wasMode, true, onGameOver, (onGameOver == null), true);
     }
 
     /** 오버로드: wasMode=true면 키맵(WASD/F/R) 사용 */
-    public BoardPanel(GameConfig config, Runnable onExitToMenu, boolean wasMode,
-            java.util.function.Consumer<Integer> onGameOver) {
+    public BoardPanel(GameConfig config,
+            Runnable onExitToMenu,
+            boolean wasMode,
+            boolean enableControls,
+            java.util.function.Consumer<Integer> onGameOver,
+            boolean startBGM,
+            boolean showHUD) {
         this.config = config;
         this.onExitToMenu = onExitToMenu;
+        this.wasMode = wasMode;
+        this.enableControls = enableControls;
         this.onGameOver = onGameOver;
+        this.soundManager = SoundManager.getInstance();
+        this.showHUD = showHUD;
 
         // === 기본 패널 설정 ===
         setLayout(new BorderLayout(10, 0));
@@ -85,20 +111,46 @@ public class BoardPanel extends JPanel {
 
         // === 로직 초기화 ===
         this.logic = new BoardLogic(score -> {
+            soundManager.stopBGM();
             if (this.onGameOver != null) {
                 // 대전 모드: 외부 매니저로 승패 전달
                 this.onGameOver.accept(score);
             } else {
-                // 싱글 모드: 이름 입력/스코어보드
-                showNameInputOverlay(score);
+                loop.stopLoop();
+                SwingUtilities.invokeLater(() -> {
+                    boardView.triggerGameOverAnimation(() -> {
+                        // 애니메이션 끝 → 점수 표시
+                        boardView.showGameOverStats(
+                                logic.getScore(),
+                                logic.getLinesCleared(),
+                                logic.getLevel(),
+                                () -> {
+                                    // 점수 표시 끝 → 이름 입력창
+                                    showNameInputOverlay(score);
+                                });
+                    });
+                });
             }
         });
 
+        this.soundManager = SoundManager.getInstance();
+        if (config.mode() == GameConfig.Mode.ITEM) {
+            soundManager.playBGM(BGM.GAME_ITEM);
+        } else {
+            soundManager.playBGM(BGM.GAME_NORMAL);
+        }
         if (config.mode() == GameConfig.Mode.ITEM) {
             logic.setItemMode(true);
         }
 
-        this.boardView = new BoardView(logic);
+        Settings loadedSettings = Settings.load();
+        this.settings = loadedSettings;
+        loadedSettings.onChange(updatedSettings -> {
+            SwingUtilities.invokeLater(() -> {
+                applySettings(updatedSettings);
+            });
+        });
+        this.boardView = new BoardView(logic, settings);
         this.loop = new GameLoop(logic, boardView::repaint);
 
         // 루프 제어 콜백 연결
@@ -125,7 +177,10 @@ public class BoardPanel extends JPanel {
 
         // === 레이아웃 구성 ===
         add(centerBoard(boardView), BorderLayout.CENTER);
-        add(createHUDPanel(), BorderLayout.EAST);
+
+        if (showHUD) {
+            add(createHUDPanel(), BorderLayout.EAST);
+        }
 
         // === 보조 UI 초기화 ===
         initPausePanel();
@@ -144,15 +199,23 @@ public class BoardPanel extends JPanel {
         hudUpdateTimer.start();
 
         // === 초기 포커스 및 루프 시작 ===
-        boardView.setFocusable(true);
-        boardView.requestFocusInWindow();
-        SwingUtilities.invokeLater(() -> {
+        if (enableControls) {
             boardView.setFocusable(true);
             boardView.requestFocusInWindow();
-            boardView.requestFocus();
-            System.out.println("[DEBUG] Focus forced on boardView → " + boardView.isFocusOwner());
-        });
-        System.out.println("[DEBUG] Focus requested on boardView");
+            SwingUtilities.invokeLater(() -> {
+                boardView.setFocusable(true);
+                boardView.requestFocusInWindow();
+                boardView.requestFocus();
+            });
+            System.out.println("[DEBUG] Focus requested on boardView");
+        } else {
+            // AI는 절대 포커스 금지
+            boardView.setFocusable(false);
+            boardView.setRequestFocusEnabled(false);
+
+            boardView.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).clear();
+            boardView.getActionMap().clear();
+        }
         loop.startLoop();
 
         // === 키 바인딩 통합 ===
@@ -188,7 +251,7 @@ public class BoardPanel extends JPanel {
                 () -> settings != null ? settings.colorBlindMode : ColorBlindPalette.Mode.NORMAL, // 현재 색맹모드
                 mode -> {
                     boardView.setColorMode(mode);
-                    //nextPanel.setColorMode(mode);
+                    // nextPanel.setColorMode(mode);
                 },
 
                 // onColorModeChanged: Settings 에 저장
@@ -197,14 +260,22 @@ public class BoardPanel extends JPanel {
                         settings.colorBlindMode = mode;
                     }
                 });
-
-        if (wasMode) {
-            installer.install(boardView, deps, KeyBindingInstaller.KeySet.WASD, false, false); // P1 (WASD)
+        if (enableControls) {
+            if (wasMode) {
+                installer.install(boardView, deps, KeyBindingInstaller.KeySet.WASD, false, false);
+            } else {
+                installer.install(boardView, deps, KeyBindingInstaller.KeySet.ARROWS, true, false);
+            }
         } else {
-            installer.install(boardView, deps, KeyBindingInstaller.KeySet.ARROWS, true, false); // P2 (방향키)
+            boardView.setFocusable(false);
+        }
+
+        if (enableControls) {
+            bindPauseKey();
         }
     }
-     // 중앙에 BoardView를 넣고 비율 유지
+
+    // 중앙에 BoardView를 넣고 비율 유지
     private Component centerBoard(JComponent view) {
         JPanel wrapper = new JPanel(new GridBagLayout());
         wrapper.setBackground(new Color(20, 25, 35));
@@ -307,12 +378,15 @@ public class BoardPanel extends JPanel {
                                     pausePanel.hidePanel();
                                 },
                                 () -> {
-                                    isRestarting = true;
+                                    restarting = true;
                                     loop.stopLoop();
-                                    frame.dispose();
-                                    new GameFrame(config, false, false);
+                                    onExitToMenu.run();
                                 },
-                                onExitToMenu);
+                                () -> { // EXIT
+                                    restarting = false;
+                                    loop.stopLoop();
+                                    onExitToMenu.run();
+                                });
                         removeHierarchyListener(this);
                     }
                 }
@@ -359,12 +433,12 @@ public class BoardPanel extends JPanel {
                 scoreBoard,
                 () -> {
                     hideOverlay();
-                    isRestarting = true;
+                    restarting = true;
                     loop.stopLoop();
                     JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
                     if (frame != null)
                         frame.dispose();
-                    new GameFrame(config, false, false);
+                    new GameFrame(config, false, false, null); // 싱글 모드 새 게임 시작
                 },
                 onExitToMenu);
 
@@ -428,18 +502,38 @@ public class BoardPanel extends JPanel {
         });
     }
 
+    private void bindPauseKey() {
+        // boardView 기준으로 WHEN_IN_FOCUSED_WINDOW에 바인딩
+        InputMap im = boardView.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        ActionMap am = boardView.getActionMap();
+
+        im.put(KeyStroke.getKeyStroke("P"), "togglePause");
+        // 원하면 ESC도 같이 묶을 수 있음
+        // im.put(KeyStroke.getKeyStroke("ESCAPE"), "togglePause");
+
+        am.put("togglePause", new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                togglePause();
+            }
+        });
+    }
+
     // === Pause 토글 ===
     private void togglePause() {
         if (pausePanel == null) {
             loop.pauseLoop(); // 최소한 루프는 멈추게
             System.out.println("[WARN] togglePause() called before PausePanel init");
+            soundManager.pauseBGM();
             return;
         }
         if (pausePanel.isVisible()) {
             loop.resumeLoop();
+            soundManager.resumeBGM();
             pausePanel.hidePanel();
         } else {
             loop.pauseLoop();
+            soundManager.pauseBGM();
             pausePanel.showPanel();
         }
     }
@@ -450,15 +544,36 @@ public class BoardPanel extends JPanel {
     }
 
     public boolean isRestarting() {
-        return isRestarting;
+        return restarting;
+    }
+
+    public void markRestarting() {
+        restarting = true;
     }
 
     public void applySettings(Settings s) {
         this.settings = s;
         if (s == null)
             return;
-        boardView.setColorMode(s.colorBlindMode);
-        
+
+        // BoardView에 Settings 전달
+        if (boardView != null) {
+            boardView.updateSettings(s);
+            boardView.setColorMode(s.colorBlindMode);
+        }
+
+        // 부모 컨테이너 갱신
+        revalidate();
+        repaint();
+
+        // JFrame 리사이즈
+        SwingUtilities.invokeLater(() -> {
+            JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
+            if (frame != null) {
+                frame.pack();
+                frame.setLocationRelativeTo(null); // 화면 중앙 재배치
+            }
+        });
     }
 
     public void startLoop() {
@@ -474,5 +589,46 @@ public class BoardPanel extends JPanel {
         if (loop != null)
             loop.pauseLoop();
     }
+    // BoardPanel.java
 
+    public void pauseGame() {
+        // 1. 렌더링 타이머 정지
+        if (boardView != null) {
+            boardView.pauseRendering();
+        }
+
+        // 2. 게임 루프 정지
+        if (loop != null) {
+            loop.pauseLoop();
+        }
+
+        System.out.println("[PAUSE] Game paused");
+    }
+
+    public void resumeGame() {
+        // 1. 렌더링 타이머 재개
+        if (boardView != null) {
+            boardView.resumeRendering();
+        }
+
+        // 2. 게임 루프 재개
+        if (loop != null && !logic.isGameOver()) {
+            loop.resumeLoop();
+        }
+
+        System.out.println("[RESUME] Game resumed");
+    }
+
+    public void stopGame() {
+        if (boardView != null) {
+            boardView.stopRendering();
+            boardView.cleanup();
+        }
+        if (loop != null) {
+            loop.stopLoop();
+        }
+        soundManager.stopBGM();
+
+        System.out.println("[STOP] Game stopped");
+    }
 }

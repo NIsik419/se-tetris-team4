@@ -49,6 +49,7 @@ import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 
+import logic.SoundManager;
 import versus.VersusFrame;
 
 public class MenuPanel extends JPanel {
@@ -80,6 +81,8 @@ public class MenuPanel extends JPanel {
 
     private final Consumer<GameConfig> onStart;
     private final Consumer<MenuItem> onSelect;
+    private final SoundManager sound = SoundManager.getInstance();
+    private boolean bgmPlaying = false;
 
     // Starry background
     private static final int STARS = 80;
@@ -118,6 +121,8 @@ public class MenuPanel extends JPanel {
     private JPanel individualItemRow;
     private JPanel multiplayerSub;
     private JPanel multiplayerItemRow;
+    private JPanel individualAIRow;
+
     private JPanel onlineP2PSub;
     private JPanel onlineNormalRow;
     private JPanel onlineItemRow;
@@ -134,6 +139,8 @@ public class MenuPanel extends JPanel {
     public MenuPanel(Consumer<GameConfig> onStart, Consumer<MenuItem> onSelect) {
         this.onStart = onStart;
         this.onSelect = onSelect;
+
+        startMenuBGM();
 
         setOpaque(true);
         setBackground(new Color(0x0A0F18));
@@ -385,6 +392,14 @@ public class MenuPanel extends JPanel {
         local2PSub.add(makeSubButton("TIME", () -> togglePanel(localTimeRow)));
         local2PSub.add(Box.createVerticalStrut(7));
 
+        individualSub.add(makeSubButton("AI Battle", () -> togglePanel(individualAIRow)));
+        individualSub.add(Box.createVerticalStrut(9));
+
+        individualAIRow = makeAIDifficultyRow();
+        individualAIRow.setVisible(false);
+        individualSub.add(individualAIRow);
+        individualSub.add(Box.createVerticalStrut(9));
+
         localTimeRow = makeLocal2PTimeRow();
         localTimeRow.setVisible(false);
         local2PSub.add(localTimeRow);
@@ -434,11 +449,11 @@ public class MenuPanel extends JPanel {
     row.setOpaque(false);
     row.setAlignmentX(LEFT_ALIGNMENT);
     row.add(makeGlassSmallButton("EASY",
-        () -> onStart.accept(new GameConfig(mode, GameConfig.Difficulty.EASY, false))));
+        () -> { stopMenuBGM(); onStart.accept(new GameConfig(mode, GameConfig.Difficulty.EASY, false)); }));
     row.add(makeGlassSmallButton("MEDIUM",
-        () -> onStart.accept(new GameConfig(mode, GameConfig.Difficulty.NORMAL, false))));
+        () -> { stopMenuBGM(); onStart.accept(new GameConfig(mode, GameConfig.Difficulty.NORMAL, false)); }));
     row.add(makeGlassSmallButton("HARD",
-        () -> onStart.accept(new GameConfig(mode, GameConfig.Difficulty.HARD, false))));
+        () -> { stopMenuBGM(); onStart.accept(new GameConfig(mode, GameConfig.Difficulty.HARD, false)); }));
     return row;
     }
 
@@ -471,37 +486,98 @@ public class MenuPanel extends JPanel {
         row.add(makeGlassSmallButton("HARD",
                 () -> onStart.accept(new GameConfig(mode, GameConfig.Difficulty.HARD, false))));
         return row;
+    private JPanel makeAIDifficultyRow() {
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        row.setOpaque(false);
+        row.setAlignmentX(LEFT_ALIGNMENT);
+
+        row.add(makeGlassSmallButton("EASY", () -> {
+            GameConfig aiConfig = new GameConfig(
+                    GameConfig.Mode.AI,
+                    GameConfig.Difficulty.AI_EASY,
+                    false);
+            onStart.accept(aiConfig);
+        }));
+
+        row.add(makeGlassSmallButton("MEDIUM", () -> {
+            GameConfig aiConfig = new GameConfig(
+                    GameConfig.Mode.AI,
+                    GameConfig.Difficulty.AI_NORMAL,
+                    false);
+            onStart.accept(aiConfig);
+        }));
+
+        row.add(makeGlassSmallButton("HARD", () -> {
+            GameConfig aiConfig = new GameConfig(
+                    GameConfig.Mode.AI,
+                    GameConfig.Difficulty.AI_HARD,
+                    false);
+            onStart.accept(aiConfig);
+        }));
+
+        return row;
+    }
+
+    private VersusFrame openVersus() {
+        JFrame f = (JFrame) SwingUtilities.getWindowAncestor(MenuPanel.this);
+        if (f != null) f.dispose();
+
+        // NORMAL 난이도 고정 
+        GameConfig p1 = new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.NORMAL, false);
+        GameConfig p2 = new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.NORMAL, false);
+
+        String gameRule = "ITEM"; 
+
+        return new VersusFrame(p1, p2, gameRule);
     }
 
     // Local 2P (Same PC) – TIME row (simple version, adjust if you have a TIME mode)
     private JPanel makeLocal2PTimeRow() {
         JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         row.setOpaque(false);
-        row.setAlignmentX(LEFT_ALIGNMENT);
 
-        // change Mode/Difficulty here if you have a specific TIME mode in GameConfig
-        row.add(makeGlassSmallButton("START",
-                () -> onStart.accept(new GameConfig(GameConfig.Mode.CLASSIC,
-                                                    GameConfig.Difficulty.NORMAL,
-                                                    false))));
+        row.add(makeGlassSmallButton("START", () -> {
+            GameConfig.Mode mode = itemMode ? GameConfig.Mode.ITEM : GameConfig.Mode.CLASSIC;
+
+            GameConfig p1 = new GameConfig(mode, GameConfig.Difficulty.NORMAL, false);
+            GameConfig p2 = new GameConfig(mode, GameConfig.Difficulty.NORMAL, false);
+
+            String gameRule = "Normal"; 
+            
+            new VersusFrame(p1, p2, gameRule);  
+        }));
+
         return row;
     }
 
-    // E/M/H row for ITEM multiplayer (opens VersusFrame; wire difficulty later if needed)
-    private JPanel makeItemDifficultyRowForMulti() {
-        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+    // Local 2P TIME row - launches TIME_ATTACK mode
+    private JPanel makeLocal2PTimeRow() {
+        JPanel row = new JPanel();
         row.setOpaque(false);
-        row.setAlignmentX(LEFT_ALIGNMENT);
-        row.add(makeGlassSmallButton("EASY",   () -> openVersus()));
-        row.add(makeGlassSmallButton("MEDIUM", () -> openVersus()));
-        row.add(makeGlassSmallButton("HARD",   () -> openVersus()));
+
+        JButton startBtn = makeSubButton("Start", () -> {
+
+            GameConfig p1 = new GameConfig(
+                    GameConfig.Mode.TIME_ATTACK,
+                    GameConfig.Difficulty.NORMAL,
+                    false  
+            );
+
+            GameConfig p2 = new GameConfig(
+                    GameConfig.Mode.TIME_ATTACK,
+                    GameConfig.Difficulty.NORMAL,
+                    false
+            );
+
+             String gameRule = "TIME_ATTACK"; 
+
+            new versus.VersusFrame(p1, p2, gameRule);  // TIME 모드로 대전 시작
+        });
+
+        row.add(startBtn);
         return row;
     }
 
-    private void openVersus() {
-        JFrame f = (JFrame) SwingUtilities.getWindowAncestor(MenuPanel.this);
-        if (f != null) f.dispose();
-    }
 
     // NAV LIST management
     private void rebuildNavOrder() {
@@ -528,6 +604,7 @@ public class MenuPanel extends JPanel {
     private void moveSelection(int delta) {
         if (navOrder.isEmpty())
             return;
+        sound.play(SoundManager.Sound.MENU_MOVE, 0.3f);
         navIndex = (navIndex + delta + navOrder.size()) % navOrder.size();
         setSelection(navIndex);
     }
@@ -554,6 +631,7 @@ public class MenuPanel extends JPanel {
     private void activateSelection() {
         if (navOrder.isEmpty())
             return;
+        sound.play(SoundManager.Sound.MENU_SELECT, 0.5f);
         navOrder.get(navIndex).doClick();
     }
 
@@ -651,7 +729,22 @@ public class MenuPanel extends JPanel {
                         over = false;
                     }
                 });
-                addActionListener(e -> action.run());
+                addMouseListener(new MouseAdapter() {
+                    @Override
+                    public void mouseEntered(MouseEvent e) {
+                        over = true;
+                        sound.play(SoundManager.Sound.MENU_HOVER, 0.2f); // 조용하게
+                    }
+
+                    @Override
+                    public void mouseExited(MouseEvent e) {
+                        over = false;
+                    }
+                });
+                addActionListener(e -> {
+                    sound.play(SoundManager.Sound.MENU_SELECT, 0.5f);
+                    action.run();
+                });
             }
 
             @Override
@@ -731,7 +824,23 @@ public class MenuPanel extends JPanel {
                         over = false;
                     }
                 });
-                addActionListener(e -> action.run());
+                addMouseListener(new MouseAdapter() {
+                    @Override
+                    public void mouseEntered(MouseEvent e) {
+                        over = true;
+                        sound.play(SoundManager.Sound.MENU_HOVER, 0.15f); // 더 조용하게
+                    }
+
+                    @Override
+                    public void mouseExited(MouseEvent e) {
+                        over = false;
+                    }
+                });
+                
+                addActionListener(e -> {
+                    sound.play(SoundManager.Sound.MENU_CLICK, 0.4f);
+                    action.run();
+                });
             }
 
             @Override
@@ -811,7 +920,23 @@ public class MenuPanel extends JPanel {
                         over = false;
                     }
                 });
-                addActionListener(e -> action.run());
+                addMouseListener(new MouseAdapter() {
+                    @Override
+                    public void mouseEntered(MouseEvent e) {
+                        over = true;
+                        sound.play(SoundManager.Sound.MENU_HOVER, 0.15f);
+                    }
+
+                    @Override
+                    public void mouseExited(MouseEvent e) {
+                        over = false;
+                    }
+                });
+                
+                addActionListener(e -> {
+                    sound.play(SoundManager.Sound.MENU_CLICK, 0.4f);
+                    action.run();
+                });
             }
 
             @Override
@@ -880,6 +1005,22 @@ public class MenuPanel extends JPanel {
                 ss[i] = 0.6f + (float)Math.random() * 0.7f;
                 blockColorIndex[i] = (int)(Math.random() * BLOCK_COLORS.length);
             }
+        }
+    }
+
+    private void startMenuBGM() {
+    if (!bgmPlaying) {
+        sound.playBGM(SoundManager.BGM.MENU);
+        bgmPlaying = true;
+        System.out.println("[MenuPanel] BGM started");
+        }
+    }
+
+    public void stopMenuBGM() {
+        if (bgmPlaying) {
+            sound.stopBGM();
+            bgmPlaying = false;
+            System.out.println("[MenuPanel] BGM stopped");
         }
     }
 }
