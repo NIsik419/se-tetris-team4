@@ -8,14 +8,14 @@ import java.util.List;
 import java.util.Queue;
 import java.util.function.Consumer;
 
+import javax.swing.SwingUtilities;
+
 import blocks.Block;
 import component.BlockBag;
 import component.GameConfig;
 import component.GameConfig.Difficulty;
 import component.SpeedManager;
 import component.items.ItemBlock;
-
-import component.network.websocket.*;
 
 /**
  * BoardLogic (대전 모드 완성)
@@ -116,6 +116,26 @@ public class BoardLogic {
 
     public void queueGarbageMasks(int[] masks) {
         if (masks != null && masks.length > 0) incomingMasks.add(masks);
+    }
+
+    private void addGarbageLines(int lines) {
+        if (lines <= 0) return;
+
+        java.util.Random rand = new java.util.Random();
+
+        for (int i = 0; i < lines; i++) {
+            // pick a random hole (empty cell) in this row
+            int holeX = rand.nextInt(WIDTH);
+
+            int mask = 0;
+            for (int x = 0; x < WIDTH; x++) {
+                if (x == holeX) continue;   // hole → 0
+                mask |= (1 << x);           // filled → 1
+            }
+
+            // enqueue this garbage row; it’ll be applied in applyIncomingGarbage()
+            incomingGarbageQueue.offer(mask);
+        }
     }
 
     public int getPendingGarbageCount() {

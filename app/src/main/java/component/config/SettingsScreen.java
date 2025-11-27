@@ -65,11 +65,11 @@ public class SettingsScreen extends JPanel {
         if (size == null) return "";
         switch (size) {
             case SMALL:      // MenuPanel: 600 x 480
-                return "SMALL  (600 × 480)   – key 1";
+                return "SMALL  (600 × 480) ";
             case MEDIUM:     // MenuPanel: 900 x 720
-                return "MEDIUM (900 × 720)   – key 2";
+                return "MEDIUM (900 × 720) ";
             case LARGE:      // MenuPanel: 1200 x 840
-                return "LARGE  (1200 × 840) – key 3";
+                return "LARGE  (1200 × 840) ";
             default:
                 return size.name();
         }

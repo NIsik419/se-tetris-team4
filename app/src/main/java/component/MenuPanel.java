@@ -40,13 +40,11 @@ import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
 import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
-import javax.swing.Timer;
 import javax.swing.Timer;
 
 import versus.VersusFrame;
@@ -86,6 +84,17 @@ public class MenuPanel extends JPanel {
     private final float[] sx = new float[STARS], sy = new float[STARS], sv = new float[STARS], ss = new float[STARS];
     private final Timer anim;
 
+    // Colors for falling blocks (Tetris-like)
+    private static final Color[] BLOCK_COLORS = {        
+        new Color(0xFF4B4B), // red
+        new Color(0xFFD93B), // yellow
+        new Color(0x3BFF9C), // green
+        new Color(0x3BB9FF), // blue
+        new Color(0xC63BFF)  // purple
+    };
+    private final int[] blockColorIndex = new int[STARS];   
+
+
     // Title animation
     private JLabel title;
     private float titleGlowPhase = 0f;
@@ -106,6 +115,7 @@ public class MenuPanel extends JPanel {
     private JPanel individualNormalRow;
     private JPanel individualItemRow;
     private JPanel multiplayerSub;
+    private JPanel multiplayerItemRow;
     private JPanel onlineP2PSub;
     private JPanel onlineNormalRow;
     private JPanel onlineItemRow;
@@ -323,7 +333,7 @@ public class MenuPanel extends JPanel {
         multiplayerSub.add(makeSubButton("P2P Mode", () -> {
             // 현재 메뉴 창 닫고 대전 프레임 열기
             JFrame f = (JFrame) SwingUtilities.getWindowAncestor(MenuPanel.this);
-            new VersusFrame();
+            new VersusFrame(false);
             if (f != null) f.dispose();
         }));
         multiplayerSub.add(Box.createVerticalStrut(9));
@@ -433,6 +443,38 @@ public class MenuPanel extends JPanel {
             () -> onStart.accept(new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.HARD, false))));
         return row;
     }
+    // Local 2P – NORMAL / ITEM rows
+    private JPanel makeLocal2PRowFor(boolean itemMode) {
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        row.setOpaque(false);
+        row.setAlignmentX(LEFT_ALIGNMENT);
+
+        // Choose mode based on whether this is ITEM or NORMAL
+        GameConfig.Mode mode = itemMode ? GameConfig.Mode.ITEM : GameConfig.Mode.CLASSIC;
+
+        row.add(makeGlassSmallButton("EASY",
+                () -> onStart.accept(new GameConfig(mode, GameConfig.Difficulty.EASY, false))));
+        row.add(makeGlassSmallButton("MEDIUM",
+                () -> onStart.accept(new GameConfig(mode, GameConfig.Difficulty.NORMAL, false))));
+        row.add(makeGlassSmallButton("HARD",
+                () -> onStart.accept(new GameConfig(mode, GameConfig.Difficulty.HARD, false))));
+        return row;
+    }
+
+    // Local 2P (Same PC) – TIME row (simple version, adjust if you have a TIME mode)
+    private JPanel makeLocal2PTimeRow() {
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        row.setOpaque(false);
+        row.setAlignmentX(LEFT_ALIGNMENT);
+
+        // change Mode/Difficulty here if you have a specific TIME mode in GameConfig
+        row.add(makeGlassSmallButton("START",
+                () -> onStart.accept(new GameConfig(GameConfig.Mode.CLASSIC,
+                                                    GameConfig.Difficulty.NORMAL,
+                                                    false))));
+        return row;
+    }
+
     // E/M/H row for ITEM multiplayer (opens VersusFrame; wire difficulty later if needed)
     private JPanel makeItemDifficultyRowForMulti() {
         JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
@@ -446,7 +488,6 @@ public class MenuPanel extends JPanel {
 
     private void openVersus() {
         JFrame f = (JFrame) SwingUtilities.getWindowAncestor(MenuPanel.this);
-        new VersusFrame(); 
         if (f != null) f.dispose();
     }
 
@@ -532,9 +573,29 @@ public class MenuPanel extends JPanel {
 
         g2.setComposite(AlphaComposite.SrcOver);
         for (int i = 0; i < STARS; i++) {
-            int a = (int) (120 * ss[i]);
-            g2.setColor(new Color(255, 255, 255, a));
-            g2.fillRect(Math.round(sx[i]), Math.round(sy[i]), 2, 2);
+            int x = Math.round(sx[i]);                     // block position
+            int y = Math.round(sy[i]);                     // 
+            int size = 14 + (int)(ss[i] * 10);             // block size based on ss
+
+            Color base = BLOCK_COLORS[blockColorIndex[i]]; // choose base color
+            int alpha = (int)(180 * ss[i]);                // alpha from ss
+            Color fill = new Color(
+                    base.getRed(),
+                    base.getGreen(),
+                    base.getBlue(),
+                    Math.min(255, Math.max(40, alpha))
+            );
+            // outer block
+            g2.setColor(fill);
+            g2.fillRoundRect(x, y, size, size, 6, 6);
+
+            // inner highlight
+            g2.setColor(new Color(255, 255, 255, 70));
+            g2.fillRoundRect(x + 3, y + 3, size - 6, size - 6, 6, 6);
+
+            // outline
+            g2.setColor(new Color(0, 0, 0, 90));
+            g2.drawRoundRect(x, y, size, size, 6, 6);
         }
         g2.dispose();
     }
@@ -766,21 +827,19 @@ public class MenuPanel extends JPanel {
         b.setPreferredSize(d);
         b.setMaximumSize(d);
         b.setAlignmentX(LEFT_ALIGNMENT);
-        Dimension d = new Dimension(96, 30); // clearly smaller than 200x40
-        b.setPreferredSize(d);
-        b.setMaximumSize(d);
-        b.setAlignmentX(LEFT_ALIGNMENT);
         return b;
     }
 
     // star helpers
-    private void seedStars() {
+     private void seedStars() {
         Random r = new Random();
         for (int i = 0; i < STARS; i++) {
             sx[i] = r.nextInt(1400) - 100;
-            sy[i] = r.nextInt(900) - 100;
-            sv[i] = 0.2f + r.nextFloat() * 0.5f;
-            ss[i] = 0.4f + r.nextFloat() * 0.6f;
+            sy[i] = r.nextInt(900);                     
+            sv[i] = 3.0f + r.nextFloat() * 4.0f;        
+            ss[i] = 0.6f + r.nextFloat() * 0.7f;       
+
+            blockColorIndex[i] = r.nextInt(BLOCK_COLORS.length); //  give each block a color
         }
     }
 
@@ -788,17 +847,18 @@ public class MenuPanel extends JPanel {
         int w = getWidth(), h = getHeight();
         if (w == 0 || h == 0)
             return;
+
         for (int i = 0; i < STARS; i++) {
-            sy[i] += sv[i];
-            if (sy[i] > h + 20) {
-                sy[i] = -10;
-                sx[i] = (float) (Math.random() * w);
+            sy[i] += sv[i];                            
+
+            // when block goes below screen, respawn at top with new random params
+            if (sy[i] > h + 40) {                       // respawn logic
+                sx[i] = (float)(Math.random() * w);
+                sy[i] = -20;
+                sv[i] = 3.0f + (float)Math.random() * 4.0f;
+                ss[i] = 0.6f + (float)Math.random() * 0.7f;
+                blockColorIndex[i] = (int)(Math.random() * BLOCK_COLORS.length);
             }
-            ss[i] += (Math.random() * 0.08 - 0.04);
-            if (ss[i] < 0.35f)
-                ss[i] = 0.35f;
-            if (ss[i] > 1.0f)
-                ss[i] = 1.0f;
         }
     }
 }
