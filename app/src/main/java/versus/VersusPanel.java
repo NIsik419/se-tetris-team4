@@ -58,25 +58,6 @@ public class VersusPanel extends JPanel {
         topHud.setPreferredSize(new Dimension(0, 80));
 
         topHud.add(buildHud("P1 Incoming", p1Queue));
-
-        timerPanel = new JPanel();
-        timerPanel.setBackground(new Color(24, 28, 38));
-        timerPanel.setBorder(BorderFactory.createEmptyBorder(8, 12, 8, 12));
-        timerLabel.setForeground(Color.WHITE);
-        timerLabel.setFont(new Font("Arial", Font.BOLD, 28));
-        timerLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        timerPanel.add(timerLabel);
-        topHud.add(timerPanel);
-
-        JPanel syncPanel = new JPanel();
-        syncPanel.setBackground(new Color(24, 28, 38));
-        syncPanel.setBorder(BorderFactory.createEmptyBorder(8, 12, 8, 12));
-        syncStatsLabel.setForeground(new Color(150, 200, 255));
-        syncStatsLabel.setFont(new Font("Arial", Font.PLAIN, 11));
-        syncStatsLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        syncPanel.add(syncStatsLabel);
-        topHud.add(syncPanel);
-
         topHud.add(buildHud("P2 Incoming", p2Queue));
         add(topHud, BorderLayout.NORTH);
 
@@ -98,9 +79,8 @@ public class VersusPanel extends JPanel {
         p2Sidebar.setPreferredSize(new Dimension(160, 0));
         centerContainer.add(p2Sidebar, BorderLayout.EAST);
 
-        // === 사이드바 생성 후 Time UI 제거 ===
-        removeTimeFromSidebar(p1Sidebar);
-        removeTimeFromSidebar(p2Sidebar);
+        p1Sidebar.showTime(false);
+        p2Sidebar.showTime(false);
 
         // === 게임 매니저 초기화 (보드/플레이어 생성 포함) ===
         manager = new VersusGameManager(
@@ -134,10 +114,13 @@ public class VersusPanel extends JPanel {
         gbc.anchor = GridBagConstraints.CENTER;
         gbc.insets = new Insets(0, 10, 0, 10);
 
-        JPanel boardsPanel = new JPanel(new GridLayout(1, 2, 30, 0));
+        JPanel boardsPanel = new JPanel(new GridLayout(1, 2, 40, 0));
         boardsPanel.setBackground(new Color(18, 22, 30));
-        boardsPanel.add(manager.getP1Component());
-        boardsPanel.add(manager.getP2Component());
+        JComponent p1Board = manager.getP1Component();
+        JComponent p2Board = manager.getP2Component();
+
+        boardsPanel.add(createLabeledBoard("P1", p1Board));
+        boardsPanel.add(createLabeledBoard("P2", p2Board));
 
         boardsContainer.add(boardsPanel, gbc);
         centerContainer.add(boardsContainer, BorderLayout.CENTER);
@@ -320,26 +303,19 @@ public class VersusPanel extends JPanel {
         return new Dimension(totalWidth, totalHeight);
     }
 
-    private void removeTimeFromSidebar(HUDSidebar sidebar) {
-        // HUDSidebar는 BoxLayout(Y축)이므로 컴포넌트를 순서대로 찾으면 됨
-        Component[] comps = sidebar.getComponents();
+    private JPanel createLabeledBoard(String title, JComponent board) {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setOpaque(false);
 
-        for (Component c : comps) {
-            if (c instanceof JLabel label) {
-                String text = label.getText();
-                if ("Time".equalsIgnoreCase(text)) {
-                    sidebar.remove(label); // "Time" 제목 제거
-                }
-            }
+        JLabel label = new JLabel(title, SwingConstants.CENTER);
+        label.setForeground(new Color(210, 220, 240));
+        label.setFont(new Font("Arial", Font.BOLD, 20));
+        label.setBorder(BorderFactory.createEmptyBorder(0, 0, 6, 0)); // 보드와 살짝 간격
 
-            // 실제 timeLabel도 제거
-            if (c.getName() != null && c.getName().equals("timeLabel")) {
-                sidebar.remove(c);
-            }
-        }
+        panel.add(label, BorderLayout.NORTH);
+        panel.add(board, BorderLayout.CENTER);
 
-        sidebar.revalidate();
-        sidebar.repaint();
+        return panel;
     }
 
 }
