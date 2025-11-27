@@ -1,9 +1,12 @@
 package component.sidebar;
 
+import java.awt.BasicStroke;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GridLayout;
@@ -16,6 +19,12 @@ import javax.swing.JPanel;
 
 import blocks.Block;
 import component.ColorBlindPalette;
+import component.items.ColorBombItem;
+import component.items.ItemBlock;
+import component.items.LightningItem;
+import component.items.LineClearItem;
+import component.items.SpinLockItem;
+import component.items.WeightItem;
 
 public class NextPreviewPanel extends JPanel {
     private static final Color BG_PANEL = new Color(30, 35, 50);

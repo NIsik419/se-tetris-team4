@@ -18,6 +18,7 @@ import java.awt.GridLayout;
 import java.awt.Insets;
 import java.awt.Paint;
 import java.awt.RadialGradientPaint;
+import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.Shape;
 import java.awt.event.ActionEvent;
@@ -42,6 +43,7 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
+import javax.swing.JScrollPane;
 import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
@@ -235,7 +237,7 @@ public class MenuPanel extends JPanel {
         gb.gridx = 0;
         gb.gridy = 0;
         gb.insets = new Insets(0, 0, 8, 0);
-        gb.anchor = GridBagConstraints.CENTER;
+        gb.anchor = GridBagConstraints.PAGE_START;
         gb.fill = GridBagConstraints.NONE;
         gb.weightx = 1.0;
         gb.weighty = 0.0;
@@ -281,15 +283,25 @@ public class MenuPanel extends JPanel {
         title.setFont(title.getFont().deriveFont(Font.BOLD, 48f));
         add(title, gb);
 
-        // MAIN COLUMN
+        // MAIN COLUMN (scrollable)
         gb.gridy++;
-        gb.insets = new Insets(0, 0, 0, 0);
+        gb.insets = new Insets(40, 0, 0, 0);
         gb.weighty = 1.0;
+        gb.fill = GridBagConstraints.BOTH; // allow it to expand
 
         menuColumn = new JPanel();
         menuColumn.setOpaque(false);
         menuColumn.setLayout(new BoxLayout(menuColumn, BoxLayout.Y_AXIS));
-        add(menuColumn, gb);
+
+        // Wrap the column in a scroll pane so mouse wheel works
+        JScrollPane scroll = new JScrollPane(menuColumn);
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        scroll.setOpaque(false);
+        scroll.getViewport().setOpaque(false);
+        // smoother scrolling speed
+        scroll.getVerticalScrollBar().setUnitIncrement(16);
+
+        add(scroll, gb);
 
         // ===== INDIVIDUAL =====
         JButton btnIndividual = makeMainButton("INDIVIDUAL", () -> togglePanel(individualSub));
@@ -521,14 +533,23 @@ public class MenuPanel extends JPanel {
     }
 
     private void setSelection(int idx) {
-        if (navOrder.isEmpty())
-            return;
-        for (int i = 0; i < navOrder.size(); i++) {
-            JComponent c = navOrder.get(i);
-            c.putClientProperty("nav.selected", i == idx);
-            c.repaint();
-        }
+    if (navOrder.isEmpty())
+        return;
+
+    for (int i = 0; i < navOrder.size(); i++) {
+        JComponent c = navOrder.get(i);
+        c.putClientProperty("nav.selected", i == idx);
+        c.repaint();
     }
+
+    // ⬇  automatically scroll selected item into view
+    SwingUtilities.invokeLater(() -> {
+        JComponent selected = navOrder.get(idx);
+        Rectangle rect = selected.getBounds();
+        selected.scrollRectToVisible(rect);
+        });
+    }
+
 
     private void activateSelection() {
         if (navOrder.isEmpty())

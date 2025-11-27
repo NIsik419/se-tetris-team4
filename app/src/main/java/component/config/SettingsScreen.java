@@ -37,7 +37,6 @@ import javax.swing.JTextField;
 import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
-import javax.swing.UIManager;
 import javax.swing.border.Border;
 import javax.swing.text.JTextComponent;
 
@@ -74,6 +73,18 @@ public class SettingsScreen extends JPanel {
                 return size.name();
         }
     }
+    // unified display text for keys (arrows + rotate)
+    private static String keyToDisplay(int keyCode) {                     
+        return switch (keyCode) {                                         
+            case KeyEvent.VK_LEFT  -> "⬅";                             
+            case KeyEvent.VK_RIGHT ->"➡";    
+            case KeyEvent.VK_UP    -> "↻";  
+            case KeyEvent.VK_DOWN  -> "⬇";                           
+            default -> KeyEvent.getKeyText(keyCode);             
+        };                                                   
+    }     
+
+
     // apply screen size to current window
     private void applyScreenSize(Settings.ScreenSize size) {
         java.awt.Window w = SwingUtilities.getWindowAncestor(this);
@@ -92,6 +103,7 @@ public class SettingsScreen extends JPanel {
 
         f.setLocationRelativeTo(null);
     }
+    
 
     public SettingsScreen(Settings settings, ApplyListener applyListener, Runnable goBack) {
         this.settings       = settings;
@@ -354,8 +366,8 @@ public class SettingsScreen extends JPanel {
     private void showScoreResetDialog() {
         JPanel panel = new JPanel(new GridBagLayout());
         // EDIT: use light background + dark text for better contrast
-        panel.setOpaque(true);                            // EDIT
-        panel.setBackground(Color.WHITE);                 // NEW
+        panel.setOpaque(true);                   
+        panel.setBackground(Color.WHITE);   
 
         GridBagConstraints gc = new GridBagConstraints();
         gc.insets = new Insets(4, 8, 4, 8);
@@ -374,8 +386,8 @@ public class SettingsScreen extends JPanel {
         for (GameConfig.Mode mode : GameConfig.Mode.values()) {
             for (GameConfig.Difficulty diff : GameConfig.Difficulty.values()) {
                 JCheckBox cb = new JCheckBox(mode + " / " + diff);
-                cb.setOpaque(false);                      // keep transparent, background comes from panel
-                cb.setForeground(new Color(30, 30, 30)); // EDIT: dark text
+                cb.setOpaque(false);                     
+                cb.setForeground(new Color(30, 30, 30));  
                 boxes[mode.ordinal()][diff.ordinal()] = cb;
                 gc.gridy++;
                 panel.add(cb, gc);
@@ -520,7 +532,7 @@ public class SettingsScreen extends JPanel {
     private static class KeyField extends JTextField {
         private int keyCode = KeyEvent.VK_UNDEFINED;
         private final Runnable onChange;
-        private final Border normalBorder = UIManager.getBorder("TextField.border");
+        private final Border normalBorder;
 
         KeyField(Runnable onChange) {
             super(12);
@@ -534,12 +546,14 @@ public class SettingsScreen extends JPanel {
             setForeground(new Color(235, 245, 255)); // bright white text
             setCaretColor(new Color(235, 245, 255));
             setOpaque(true);
-            setBorder(BorderFactory.createLineBorder(new Color(70, 90, 140), 1));
-
+            normalBorder = BorderFactory.createMatteBorder(    
+                    0, 0, 1, 0, new Color(70, 90, 140));    
+            setBorder(normalBorder);                          
+            setFont(getFont().deriveFont(Font.BOLD, 18f));    
             addKeyListener(new KeyAdapter() {
                 @Override public void keyPressed(KeyEvent e) {
                     keyCode = e.getKeyCode();
-                    setText(KeyEvent.getKeyText(keyCode));
+                    setText(SettingsScreen.keyToDisplay(keyCode));  
                     if (onChange != null) onChange.run();
                     e.consume();
                 }
@@ -552,14 +566,14 @@ public class SettingsScreen extends JPanel {
 
         void setKeyCode(int code) {
             keyCode = code;
-            setText(KeyEvent.getKeyText(code));
+            setText(SettingsScreen.keyToDisplay(code));   
         }
 
         int getKeyCode() { return keyCode; }
 
         void setError(boolean error, String tooltip) {
             if (error) {
-                setBorder(BorderFactory.createLineBorder(new Color(200, 0, 0), 2));
+                setBorder(BorderFactory.createLineBorder(new Color(200, 60, 60), 2));
                 if (tooltip != null) setToolTipText(tooltip);
             } else {
                 setBorder(normalBorder);

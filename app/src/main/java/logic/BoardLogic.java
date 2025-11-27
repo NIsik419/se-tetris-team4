@@ -118,25 +118,7 @@ public class BoardLogic {
         if (masks != null && masks.length > 0) incomingMasks.add(masks);
     }
 
-    private void addGarbageLines(int lines) {
-        if (lines <= 0) return;
-
-        java.util.Random rand = new java.util.Random();
-
-        for (int i = 0; i < lines; i++) {
-            // pick a random hole (empty cell) in this row
-            int holeX = rand.nextInt(WIDTH);
-
-            int mask = 0;
-            for (int x = 0; x < WIDTH; x++) {
-                if (x == holeX) continue;   // hole → 0
-                mask |= (1 << x);           // filled → 1
-            }
-
-            // enqueue this garbage row; it’ll be applied in applyIncomingGarbage()
-            incomingGarbageQueue.offer(mask);
-        }
-    }
+    
 
     public int getPendingGarbageCount() {
         int c = incomingLines.stream().mapToInt(Integer::intValue).sum();
@@ -275,7 +257,7 @@ public class BoardLogic {
     /** 라인 클리어 처리 - 중력 즉시 적용 버전 */
     private void clearLinesAndThen(Runnable afterClear) {
         var board = state.getBoard();
-        var pid = state.getPieceId();
+
 
         java.util.List<Integer> clearedRows = new java.util.ArrayList<>();
         for (int y = 0; y < HEIGHT; y++) {
@@ -297,20 +279,7 @@ public class BoardLogic {
             return;
         }
 
-<<<<<<< HEAD
-        updateGarbageFlagsOnClear(clearedRows);
-
-        // 2줄 이상 클리어 시에만 공격
-        if (lines >= 2 && onLinesClearedWithMasks != null) {
-            int[] masks = new int[lines];
-            for (int i = 0; i < lines; i++) {
-                int y = clearedRows.get(i);
-                int mask = 0;
-                for (int x = 0; x < WIDTH; x++) {
-                    if (board[y][x] != null && !recentPlaced[y][x]) {
-                        mask |= (1 << x);
-                    }
-=======
+    
         // 2) 대전용: 최근 고정 블록(recentPlaced)을 제외한 마스크를 만들어 전송
        
         int[] masks = new int[lines];
@@ -320,19 +289,10 @@ public class BoardLogic {
             for (int x = 0; x < WIDTH; x++) {
                 if (board[y][x] != null && !recentPlaced[y][x]) {
                     mask |= (1 << x);
->>>>>>> 3732601 (Restore my today's work from commit 87c9521)
                 }
             }
             masks[i] = mask;
         }
-<<<<<<< HEAD
-
-        //  1. 파티클 생성 (삭제 전 색상 저장)
-        final int CELL_SIZE = 25;
-        for (int row : clearedRows) {
-            clear.getParticleSystem().createLineParticles(row, board, CELL_SIZE, WIDTH);
-        }
-=======
         if (onLinesClearedWithMasks != null)
         onLinesClearedWithMasks.accept(masks);
         if (context != Context.SINGLE && attackListener != null && lines >= 2) {
@@ -347,15 +307,21 @@ public class BoardLogic {
         
         // 다음 턴을 위해 recentPlaced 초기화
         for (int yy = 0; yy < HEIGHT; yy++) java.util.Arrays.fill(recentPlaced[yy], false);
->>>>>>> 3732601 (Restore my today's work from commit 87c9521)
 
-        //  2. 블록 즉시 삭제
-        for (int row : clearedRows) {
-            java.util.Arrays.fill(board[row], null);
-            java.util.Arrays.fill(pid[row], 0);
-        }
+        if (pauseCallback != null)
+            pauseCallback.run();
+        clear.clearLines(
+                () -> {
+                    if (onFrameUpdate != null)
+                        javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
+                },
+                () -> {
+                    if (resumeCallback != null)
+                        javax.swing.SwingUtilities.invokeLater(resumeCallback);
 
-        recentPlacedInitialize();
+                    if (afterClear != null)
+                        SwingUtilities.invokeLater(afterClear);
+                });
 
         // 3. 점수/콤보 처리 (즉시)
         clearedLines += lines;
@@ -509,6 +475,30 @@ public class BoardLogic {
             garbageCount++; // 필드에 깔린 회색줄 개수 증가
         }
     }
+        /**
+     * Simple garbage (no mask info) → convert to random-hole garbage masks
+     * and enqueue them so applyIncomingGarbage() can place them on the board.
+     */
+    private void addGarbageLines(int lines) {
+        if (lines <= 0) return;
+
+        java.util.Random rand = new java.util.Random();
+
+        for (int i = 0; i < lines; i++) {
+            // pick a random hole (empty cell) in this row
+            int holeX = rand.nextInt(WIDTH);
+
+            int mask = 0;
+            for (int x = 0; x < WIDTH; x++) {
+                if (x == holeX) continue;   // hole → 0
+                mask |= (1 << x);           // filled → 1
+            }
+
+            // enqueue this garbage row; it’ll be applied in applyIncomingGarbage()
+            incomingGarbageQueue.offer(mask);
+        }
+    }
+
 
     /** 상대에게서 가비지 라인 수신 (큐에 추가) */
     public void addGarbageMasks(int[] masks) {
