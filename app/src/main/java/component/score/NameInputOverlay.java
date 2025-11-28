@@ -31,43 +31,58 @@ public final class NameInputOverlay {
      */
     public void show(int score, GameConfig.Mode mode, GameConfig.Difficulty diff) {
         container.removeAll();
-        container.setLayout(new BorderLayout(8, 8));
 
+        // 🔹 게임 화면이 그대로 보이게, dialogPanel 자체는 투명 처리
+        container.setOpaque(false);
+        container.setBackground(new Color(0, 0, 0, 0));
+        container.setLayout(new GridBagLayout());
+
+        // === 네이비 박스 (실제 모달) ===
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(new Color(255, 255, 255, 230));
-        panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+        panel.setBackground(new Color(25, 30, 42) );           // 어두운 네이비
+        panel.setPreferredSize(new Dimension(320, 180));
+        panel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(180, 180, 180), 2), // 회색 테두리
+                BorderFactory.createEmptyBorder(20, 24, 20, 24)
+        ));
 
         JLabel subtitle = new JLabel("이름을 입력하세요:");
-        subtitle.setFont(new Font("Apple SD Gothic Neo, 맑은 고딕, Dialog", Font.PLAIN, 14)); 
+        subtitle.setFont(new Font("Apple SD Gothic Neo, 맑은 고딕, Dialog", Font.PLAIN, 14));
+        subtitle.setForeground(Color.WHITE);
         subtitle.setAlignmentX(Component.CENTER_ALIGNMENT);
 
         JTextField nameField = new JTextField("PLAYER", 12);
-        nameField.setMaximumSize(new Dimension(200, 30));
+        nameField.setMaximumSize(new Dimension(220, 32));
         nameField.setAlignmentX(Component.CENTER_ALIGNMENT);
+        nameField.setBackground(new Color(245, 245, 245));    // 연한 회색
+        nameField.setBorder(BorderFactory.createEmptyBorder(5, 8, 5, 8));
 
         JButton ok = new JButton("확인");
-        JButton cancel = new JButton("취소");
         ok.setAlignmentX(Component.CENTER_ALIGNMENT);
-        cancel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        panel.add(Box.createVerticalGlue());
 
         panel.add(subtitle);
-        panel.add(Box.createVerticalStrut(5));
-        panel.add(nameField);
         panel.add(Box.createVerticalStrut(10));
+        panel.add(nameField);
+        panel.add(Box.createVerticalStrut(15));
         panel.add(ok);
-        panel.add(Box.createVerticalStrut(5));
-        panel.add(cancel);
 
-        container.add(panel, BorderLayout.CENTER);
+        panel.add(Box.createVerticalGlue());
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        container.add(panel, gbc);
+
         container.revalidate();
         container.repaint();
 
         ok.addActionListener(e -> {
             String name = nameField.getText().isBlank() ? "PLAYER" : nameField.getText();
             int rankIndex = scoreBoard.addScore(name, score, mode, diff);
-            onDone.accept(rankIndex);
+            onDone.accept(rankIndex);   
         });
-        cancel.addActionListener(e -> onCancel.run());
     }
 }

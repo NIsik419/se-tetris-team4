@@ -9,6 +9,7 @@ import java.util.Set;
 public class GameFrame extends JFrame {
     private boolean returningToMenu = false;
     private final JPanel activePanel;
+    private boolean restartRequested = false; 
 
     /**
      * @param config   게임 설정
@@ -80,9 +81,16 @@ public class GameFrame extends JFrame {
                 dispose();
                 System.out.println("[WINDOW] Closed");
             }
+
              @Override
             public void windowClosed(WindowEvent e) {
                 System.out.println("[WINDOW] Closed");
+
+                // 재시작 중이면 전역 종료 스킵
+                if (restartRequested) {
+                    System.out.println("[INFO] Restart requested, skip global exit");
+                    return;
+                }
 
                 // 메뉴로 돌아가는 경우는 종료하지 않음
                 if (returningToMenu) {
@@ -235,5 +243,13 @@ public class GameFrame extends JFrame {
         } catch (Exception e) {
             System.err.println("[ERROR] Fullscreen toggle failed: " + e.getMessage());
         }
+    }
+
+    public void markRestartRequested() {      
+        this.restartRequested = true;
+    }
+
+    public boolean isRestartRequested() {      
+        return restartRequested;
     }
 }
