@@ -9,10 +9,15 @@ public class VersusFrame extends JFrame {
         super(makeTitle(p1Config)); 
 
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        setContentPane(new VersusPanel(p1Config, p2Config, gameRule));
+
+        VersusPanel panel = new VersusPanel(p1Config, p2Config, gameRule);
+        setContentPane(panel);
+
         pack();           
         setLocationRelativeTo(null);
         setVisible(true);
+
+        panel.attachOverlayToFrame(this);
     }
 
     public VersusFrame(GameConfig p1Config, GameConfig p2Config) {
