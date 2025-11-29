@@ -48,11 +48,14 @@ import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
+import launcher.GameLauncher;
 
 import logic.SoundManager;
 import versus.VersusFrame;
 
 public class MenuPanel extends JPanel {
+
+    public record VersusGameInfo(GameConfig p1Config, GameConfig p2Config, String gameRule) {}
 
     public enum MenuItem {
         SETTINGS, SCOREBOARD, EXIT
@@ -90,6 +93,7 @@ public class MenuPanel extends JPanel {
 
     private final Consumer<GameConfig> onStart;
     private final Consumer<MenuItem> onSelect;
+    private final Consumer<VersusGameInfo> onVersusStart;
     private final SoundManager sound = SoundManager.getInstance();
     private boolean bgmPlaying = false;
 
@@ -144,9 +148,11 @@ public class MenuPanel extends JPanel {
     private final List<JButton> navOrder = new ArrayList<>();
     private int navIndex = 0;
 
-    public MenuPanel(Consumer<GameConfig> onStart, Consumer<MenuItem> onSelect) {
+    public MenuPanel(Consumer<GameConfig> onStart, Consumer<MenuItem> onSelect,
+            Consumer<VersusGameInfo> onVersusStart) {
         this.onStart = onStart;
         this.onSelect = onSelect;
+        this.onVersusStart = onVersusStart;
 
         startMenuBGM();
 
@@ -604,7 +610,11 @@ public class MenuPanel extends JPanel {
             GameConfig p1 = new GameConfig(mode, GameConfig.Difficulty.EASY, false);
             GameConfig p2 = new GameConfig(mode, GameConfig.Difficulty.EASY, false);
             String gameRule = itemMode ? "ITEM" : "NORMAL";
-            new VersusFrame(p1, p2, gameRule);
+
+            // ⭐ VersusFrame 직접 생성 대신 콜백 호출
+            if (onVersusStart != null) {
+                onVersusStart.accept(new VersusGameInfo(p1, p2, gameRule));
+            }
         }));
 
         row.add(makeGlassSmallButton("MEDIUM", () -> {
@@ -612,7 +622,10 @@ public class MenuPanel extends JPanel {
             GameConfig p1 = new GameConfig(mode, GameConfig.Difficulty.NORMAL, false);
             GameConfig p2 = new GameConfig(mode, GameConfig.Difficulty.NORMAL, false);
             String gameRule = itemMode ? "ITEM" : "NORMAL";
-            new VersusFrame(p1, p2, gameRule);
+
+            if (onVersusStart != null) {
+                onVersusStart.accept(new VersusGameInfo(p1, p2, gameRule));
+            }
         }));
 
         row.add(makeGlassSmallButton("HARD", () -> {
@@ -620,7 +633,10 @@ public class MenuPanel extends JPanel {
             GameConfig p1 = new GameConfig(mode, GameConfig.Difficulty.HARD, false);
             GameConfig p2 = new GameConfig(mode, GameConfig.Difficulty.HARD, false);
             String gameRule = itemMode ? "ITEM" : "NORMAL";
-            new VersusFrame(p1, p2, gameRule);
+
+            if (onVersusStart != null) {
+                onVersusStart.accept(new VersusGameInfo(p1, p2, gameRule));
+            }
         }));
 
         return row;
@@ -685,14 +701,15 @@ public class MenuPanel extends JPanel {
                     GameConfig.Mode.TIME_ATTACK,
                     GameConfig.Difficulty.NORMAL,
                     false);
-
             GameConfig p2 = new GameConfig(
                     GameConfig.Mode.TIME_ATTACK,
                     GameConfig.Difficulty.NORMAL,
                     false);
-
             String gameRule = "TIME_ATTACK";
-            new VersusFrame(p1, p2, gameRule);
+
+            if (onVersusStart != null) {
+                onVersusStart.accept(new VersusGameInfo(p1, p2, gameRule));
+            }
         }));
 
         return row;

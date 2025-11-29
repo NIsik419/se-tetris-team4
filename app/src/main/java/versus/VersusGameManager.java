@@ -181,6 +181,11 @@ public class VersusGameManager {
         // 승자 메시지
         Component any = p1.getComponent();
         JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(any);
+
+        System.out.println("[DEBUG] onPlayerOver called");
+        System.out.println("[DEBUG] frame class: " + (frame != null ? frame.getClass().getName() : "null"));
+        System.out.println("[DEBUG] is VersusFrame: " + (frame instanceof VersusFrame));
+
         String msg = (winner == Player.Id.P1) ? "P1 WINS!" : "P2 WINS!";
 
         if (isAIMode) {
@@ -189,10 +194,16 @@ public class VersusGameManager {
 
         JOptionPane.showMessageDialog(frame, msg, "Game Over", JOptionPane.INFORMATION_MESSAGE);
 
-        // 창 닫고 메뉴 복귀
-        if (frame != null)
+        // ⭐ VersusFrame의 closeAfterGameOver() 호출
+        if (frame instanceof VersusFrame) {
+            System.out.println("[DEBUG] Calling VersusFrame.closeAfterGameOver()");
+            ((VersusFrame) frame).closeAfterGameOver();
+        } else if (frame != null) {
+            System.out.println("[DEBUG] Not VersusFrame, calling dispose()");
             frame.dispose();
-        // if (backToMenu != null) backToMenu.run();
+        } else {
+            System.out.println("[DEBUG] frame is null!");
+        }
     }
 
     /**

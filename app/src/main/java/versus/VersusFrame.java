@@ -6,19 +6,20 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import component.GameConfig;
 
+// VersusFrame.java 수정
 public class VersusFrame extends JFrame {
     private VersusPanel versusPanel;
     private boolean returningToMenu = false;
+    private boolean userRequestedClose = false; 
 
     public VersusFrame(GameConfig p1Config, GameConfig p2Config, String gameRule) {
         super(makeTitle(p1Config)); 
 
-        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE); 
 
         versusPanel = new VersusPanel(p1Config, p2Config, gameRule);
         setContentPane(versusPanel);
 
-        // ⭐ X 버튼 처리 추가
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
@@ -28,6 +29,13 @@ public class VersusFrame extends JFrame {
             @Override
             public void windowClosed(WindowEvent e) {
                 System.out.println("[VERSUS] Window closed");
+                System.out.println("[DEBUG] userRequestedClose: " + userRequestedClose);
+
+                //  사용자가 명시적으로 닫기를 요청하지 않았다면 무시
+                if (!userRequestedClose) {
+                    System.out.println("[WARNING] windowClosed called without user request - ignoring");
+                    return;
+                }
 
                 // 메뉴로 돌아가는 경우는 종료하지 않음
                 if (returningToMenu) {
@@ -58,11 +66,6 @@ public class VersusFrame extends JFrame {
         setVisible(true);
     }
 
-    public VersusFrame(GameConfig p1Config, GameConfig p2Config) {
-        this(p1Config, p2Config, "Normal");   
-    }
-
-    //  X 버튼 클릭 시 처리 (대전 모드는 즉시 나가기)
     private void handleWindowClose() {
         int choice = JOptionPane.showOptionDialog(
                 this,
@@ -84,15 +87,22 @@ public class VersusFrame extends JFrame {
             }
             
             returningToMenu = true;
+            userRequestedClose = true; //  추가
             dispose();
             
             // 메뉴로 복귀
             SwingUtilities.invokeLater(() -> {
                 // MainMenu 표시 로직
-                // 예: new MainMenu().setVisible(true);
             });
         }
         // choice == 1 또는 -1 (취소) → 아무것도 안 함 (대전 계속)
+    }
+
+    // 게임 오버 시 호출할 메서드 추가
+    public void closeAfterGameOver() {
+        returningToMenu = true;
+        userRequestedClose = true;
+        dispose();
     }
 
     private static String makeTitle(GameConfig config) {

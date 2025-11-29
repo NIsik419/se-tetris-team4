@@ -51,7 +51,8 @@ public class GameLauncher {
     private final JPanel root = new JPanel(cards);
 
     private final Settings settings = Settings.load();
-    private final MenuPanel menuPanel = new MenuPanel(this::onGameConfigSelect, this::onMenuSelect);
+    private final MenuPanel menuPanel = new MenuPanel(this::onGameConfigSelect, this::onMenuSelect,
+            this::onVersusStart);
 
     private final JPanel settingsPanel = createSettingsScreen();
     private final ScoreBoard scoreBoard = ScoreBoard.createDefault();
@@ -219,13 +220,22 @@ public class GameLauncher {
                 false);
 
         // VersusFrame으로 AI 대전 시작
-        VersusFrame aiGame = new VersusFrame(p1Config, p2Config);
+        VersusFrame aiGame = new VersusFrame(p1Config, p2Config, "AI Battle");
 
         // 창 닫힘 리스너
         aiGame.addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosed(WindowEvent e) {
-                // 🔚 그냥 종료 → 메뉴 복귀
+                System.out.println("[LAUNCHER] AI game windowClosed event");
+
+                // ⭐ VersusFrame이 여전히 표시 중이면 메뉴로 돌아가지 않음
+                if (aiGame.isVisible()) {
+                    System.out.println("[LAUNCHER] AI game still visible, not returning to menu");
+                    return;
+                }
+
+                // 창이 실제로 닫혔을 때만 메뉴 복귀
+                System.out.println("[LAUNCHER] Returning to menu from AI game");
                 frame.setVisible(true);
                 showScreen(Screen.MENU);
 
@@ -237,7 +247,42 @@ public class GameLauncher {
 
             @Override
             public void windowClosing(WindowEvent e) {
-                aiGame.dispose();
+                System.out.println("[LAUNCHER] AI game windowClosing event");
+                // ⭐ VersusFrame 내부에서 처리하도록 dispose() 제거
+                // aiGame.dispose();
+            }
+        });
+    }
+
+    private void onVersusStart(MenuPanel.VersusGameInfo info) {
+        // 메뉴 프레임 숨김
+        frame.setVisible(false);
+
+        VersusFrame versusGame = new VersusFrame(
+                info.p1Config(),
+                info.p2Config(),
+                info.gameRule());
+
+        versusGame.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosed(WindowEvent e) {
+                System.out.println("[LAUNCHER] VersusFrame windowClosed event");
+
+                // VersusFrame이 여전히 표시 중이면 메뉴로 돌아가지 않음
+                if (versusGame.isVisible()) {
+                    System.out.println("[LAUNCHER] VersusFrame still visible, not returning to menu");
+                    return;
+                }
+
+                // 창이 실제로 닫혔을 때만 메뉴 복귀
+                System.out.println("[LAUNCHER] Returning to menu from Versus");
+                frame.setVisible(true);
+                showScreen(Screen.MENU);
+
+                SwingUtilities.invokeLater(() -> {
+                    frame.toFront();
+                    frame.requestFocusInWindow();
+                });
             }
         });
     }
@@ -281,14 +326,14 @@ public class GameLauncher {
                 System.out.println("[LAUNCHER] GameFrame windowClosed event");
                 System.out.println("[LAUNCHER] isRestartRequested: " + game.isRestartRequested());
 
-                //  restartRequested 체크 추가
+                // restartRequested 체크 추가
                 if (game.isRestartRequested()) {
                     System.out.println("[LAUNCHER] Restart requested, restarting game...");
                     startGame(config, p2pMode, isServer, gameRule);
                     return;
                 }
 
-                //  단순히 windowClosed가 호출되었다고 해서 메뉴로 돌아가면 안 됨
+                // 단순히 windowClosed가 호출되었다고 해서 메뉴로 돌아가면 안 됨
                 // GameFrame 내부에서 명시적으로 dispose()를 호출했는지 확인 필요
 
                 if (mainBoardPanel != null && mainBoardPanel.isRestarting()) {
