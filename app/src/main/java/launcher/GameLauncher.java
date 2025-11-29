@@ -71,7 +71,7 @@ public class GameLauncher {
         frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         frame.setSize(720, 720);
         frame.setLocationRelativeTo(null);
-        // 메뉴 프레임 종료 리스너 추가 
+        // 메뉴 프레임 종료 리스너 추가
         frame.addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
@@ -81,12 +81,12 @@ public class GameLauncher {
             @Override
             public void windowClosed(WindowEvent e) {
                 System.out.println("[MENU] Main menu closed");
-                
+
                 // // MenuPanel 정리
                 // if (menuPanel != null) {
-                //     menuPanel.cleanup();
+                // menuPanel.cleanup();
                 // }
-                
+
                 // 잠시 대기 후 모든 창 확인
                 SwingUtilities.invokeLater(() -> {
                     try {
@@ -94,22 +94,22 @@ public class GameLauncher {
                     } catch (InterruptedException ex) {
                         ex.printStackTrace();
                     }
-                    
+
                     Window[] windows = Window.getWindows();
                     boolean allClosed = true;
-                    
+
                     for (Window w : windows) {
                         if (w.isVisible()) {
                             allClosed = false;
-                            System.out.println("[INFO] Window still visible: " + 
-                                            w.getClass().getSimpleName());
+                            System.out.println("[INFO] Window still visible: " +
+                                    w.getClass().getSimpleName());
                             break;
                         }
                     }
-                    
+
                     if (allClosed) {
                         System.out.println("[EXIT] All windows closed, exiting application...");
-                        //  모든 타이머 정리 후 종료
+                        // 모든 타이머 정리 후 종료
                         System.exit(0);
                     } else {
                         System.out.println("[INFO] Some windows still open, not exiting");
@@ -222,13 +222,13 @@ public class GameLauncher {
         VersusFrame aiGame = new VersusFrame(p1Config, p2Config);
 
         // 창 닫힘 리스너
-         aiGame.addWindowListener(new WindowAdapter() {
+        aiGame.addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosed(WindowEvent e) {
                 // 🔚 그냥 종료 → 메뉴 복귀
                 frame.setVisible(true);
                 showScreen(Screen.MENU);
-                
+
                 SwingUtilities.invokeLater(() -> {
                     frame.toFront();
                     frame.requestFocusInWindow();
@@ -278,15 +278,33 @@ public class GameLauncher {
         game.addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosed(WindowEvent e) {
+                System.out.println("[LAUNCHER] GameFrame windowClosed event");
+                System.out.println("[LAUNCHER] isRestartRequested: " + game.isRestartRequested());
 
-
-
-                if (mainBoardPanel != null && mainBoardPanel.isRestarting()) {
+                //  restartRequested 체크 추가
+                if (game.isRestartRequested()) {
+                    System.out.println("[LAUNCHER] Restart requested, restarting game...");
                     startGame(config, p2pMode, isServer, gameRule);
                     return;
                 }
 
+                //  단순히 windowClosed가 호출되었다고 해서 메뉴로 돌아가면 안 됨
+                // GameFrame 내부에서 명시적으로 dispose()를 호출했는지 확인 필요
+
+                if (mainBoardPanel != null && mainBoardPanel.isRestarting()) {
+                    System.out.println("[LAUNCHER] BoardPanel restarting...");
+                    startGame(config, p2pMode, isServer, gameRule);
+                    return;
+                }
+
+                // GameFrame이 여전히 표시 중이면 메뉴로 돌아가지 않음
+                if (game.isVisible()) {
+                    System.out.println("[LAUNCHER] GameFrame still visible, not returning to menu");
+                    return;
+                }
+
                 // 그냥 X를 눌렀거나 EXIT 로 닫힌 경우 → 메뉴 복귀
+                System.out.println("[LAUNCHER] Returning to menu");
                 frame.setVisible(true);
                 showScreen(Screen.MENU);
                 SwingUtilities.invokeLater(() -> {
@@ -297,7 +315,8 @@ public class GameLauncher {
 
             @Override
             public void windowClosing(WindowEvent e) {
-                game.dispose();
+                System.out.println("[LAUNCHER] GameFrame windowClosing event");
+                // game.dispose(); // GameFrame 내부에서 처리함
             }
         });
     }

@@ -3,18 +3,15 @@ package component;
 import javax.swing.*;
 import java.awt.*;
 
-/**
- * PausePanel
- * - 일시정지 상태에서 중앙에 컬러 버튼 3개 표시 (Continue / Restart / Exit)
- * - 프레임이 attach되기 전에 만들어져도 정상 표시됨
- */
 public class PausePanel extends JPanel {
 
     private final Runnable onResume;
     private final Runnable onRestart;
     private final Runnable onExit;
+    private final JFrame parentFrame;
 
     public PausePanel(JFrame parent, Runnable onResume, Runnable onRestart, Runnable onExit) {
+        this.parentFrame = parent;
         this.onResume = onResume;
         this.onRestart = onRestart;
         this.onExit = onExit;
@@ -29,12 +26,16 @@ public class PausePanel extends JPanel {
         setBounds(0, 0, width, height);
 
         System.out.println("[DEBUG] PausePanel 초기 설정 완료 (" + width + "x" + height + ")");
+
         // === 버튼 묶음 ===
         JPanel btnPanel = new JPanel();
         btnPanel.setLayout(new BoxLayout(btnPanel, BoxLayout.Y_AXIS));
         btnPanel.setOpaque(false);
 
-        JButton continueBtn = createStitchedButton("▶ CONTINUE", new Color(80, 200, 120), onResume);
+        JButton continueBtn = createStitchedButton("▶ CONTINUE", new Color(80, 200, 120), () -> {
+            hidePanel();
+            onResume.run();
+        });
         JButton restartBtn = createStitchedButton("🔄 RESTART", new Color(80, 160, 255), onRestart);
         JButton exitBtn = createStitchedButton("❌ EXIT", new Color(240, 100, 90), onExit);
 
@@ -118,18 +119,47 @@ public class PausePanel extends JPanel {
         btn.setOpaque(false);
         btn.setPreferredSize(new Dimension(220, 60));
         btn.setMaximumSize(new Dimension(220, 60));
-        
-        btn.addActionListener(e -> {
-            // 먼저 PausePanel 숨기기
-            PausePanel.this.hidePanel();
+        btn.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-            // 원래 콜백 실행
+        btn.addActionListener(e -> {
             if (onClick != null) {
                 onClick.run();
             }
         });
 
         return btn;
+    }
+
+    //  일시정지 중 X 버튼 처리
+    public void handleWindowClose() {
+        if (parentFrame == null)
+            return;
+
+        //  다이얼로그만 표시, 아직 아무것도 실행 안 함
+        int choice = JOptionPane.showOptionDialog(
+                parentFrame,
+                "게임을 종료하시겠습니까?",
+                "종료 확인",
+                JOptionPane.YES_NO_CANCEL_OPTION,
+                JOptionPane.QUESTION_MESSAGE,
+                null,
+                new Object[] { "메인으로", "게임 종료", "취소" },
+                "취소");
+
+        if (choice == 0) {
+            // 메인으로
+            hidePanel();
+            parentFrame.dispose(); // 프레임 먼저 닫기
+            SwingUtilities.invokeLater(() -> {
+                onExit.run(); // 그 다음 메인 메뉴
+            });
+        } else if (choice == 1) {
+            // 완전 종료
+            System.exit(0);
+        } else {
+            // 취소 (choice == 2 또는 -1) → 일시정지 상태 유지
+            // 아무것도 안 함 (pausePanel은 여전히 visible)
+        }
     }
 
     public void showPanel() {

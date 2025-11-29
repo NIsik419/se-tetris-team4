@@ -48,7 +48,8 @@ public class VersusPanel extends JPanel {
 
         setLayout(new BorderLayout(0, 0));
         setBackground(new Color(18, 22, 30));
-
+        
+        soundManager.stopBGM();
         soundManager.playBGM(SoundManager.BGM.VERSUS);
 
         // ───── 상단 HUD ─────
@@ -63,7 +64,8 @@ public class VersusPanel extends JPanel {
 
         this.backToMenu = () -> {
             JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
-            if (frame != null) frame.dispose();
+            if (frame != null)
+                frame.dispose();
         };
 
         // ───── 가운데 영역(좌 HUD + 보드 2개 + 우 HUD) ─────
@@ -98,8 +100,7 @@ public class VersusPanel extends JPanel {
                     if (p2Sidebar != null) {
                         p2Sidebar.setNextBlocks(blocks);
                     }
-                })
-        );
+                }));
 
         // 가운데 보드 2개
         JPanel boardsContainer = new JPanel(new GridBagLayout());
@@ -138,10 +139,9 @@ public class VersusPanel extends JPanel {
         p2Queue.setText(String.valueOf(manager.getP2Pending()));
 
         // 🔹 타임어택 여부 판정
-        boolean isTimeAttack =
-                p1Config.mode() == GameConfig.Mode.TIME_ATTACK
-             || p2Config.mode() == GameConfig.Mode.TIME_ATTACK
-             || (this.gameRule != null && this.gameRule.contains("Time"));
+        boolean isTimeAttack = p1Config.mode() == GameConfig.Mode.TIME_ATTACK
+                || p2Config.mode() == GameConfig.Mode.TIME_ATTACK
+                || (this.gameRule != null && this.gameRule.contains("Time"));
 
         if (timerPanel != null) {
             timerPanel.setVisible(isTimeAttack);
@@ -161,7 +161,8 @@ public class VersusPanel extends JPanel {
         // === PausePanel / P, R 키 바인딩 ===
         SwingUtilities.invokeLater(() -> {
             JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
-            if (frame == null) return;
+            if (frame == null)
+                return;
 
             pausePanel = new PausePanel(
                     frame,
@@ -181,8 +182,7 @@ public class VersusPanel extends JPanel {
                         manager.pauseBoth();
                         stopTimeAttackTimer();
                         backToMenu.run();
-                    }
-            );
+                    });
             setupPauseKeyBinding();
         });
     }
@@ -197,7 +197,8 @@ public class VersusPanel extends JPanel {
         am.put("togglePause", new AbstractAction() {
             @Override
             public void actionPerformed(java.awt.event.ActionEvent e) {
-                if (pausePanel == null) return;
+                if (pausePanel == null)
+                    return;
 
                 if (pausePanel.isVisible()) {
                     manager.resumeBoth();
@@ -297,7 +298,7 @@ public class VersusPanel extends JPanel {
             boardHeight = 720;
         }
 
-        int totalWidth  = (boardWidth * 2) + (160 * 2) + 100;
+        int totalWidth = (boardWidth * 2) + (160 * 2) + 100;
         int totalHeight = boardHeight + 180;
 
         return new Dimension(totalWidth, totalHeight);
@@ -316,6 +317,38 @@ public class VersusPanel extends JPanel {
         panel.add(board, BorderLayout.CENTER);
 
         return panel;
+    }
+
+    public void stopGame() {
+        System.out.println("[VersusPanel] Stopping game...");
+
+        if (manager != null) {
+            manager.pauseBoth();
+        }
+
+        stopTimeAttackTimer();
+        soundManager.stopBGM();
+
+        System.out.println("[VersusPanel] Game stopped");
+    }
+
+    public void cleanup() {
+        System.out.println("[VersusPanel] Starting cleanup...");
+
+        // 타이머 정리
+        stopTimeAttackTimer();
+
+        // 매니저 정리
+        if (manager != null) {
+            manager.cleanup();
+        }
+
+        // BGM 정지
+        if (soundManager != null) {
+            soundManager.stopBGM();
+        }
+
+        System.out.println("[VersusPanel] Cleanup completed");
     }
 
 }

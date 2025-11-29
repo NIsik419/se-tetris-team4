@@ -379,7 +379,7 @@ public class MenuPanel extends JPanel {
         individualSub.add(individualNormalRow);
 
         individualSub.add(individualNormalRow);
-        
+
         individualSub.add(makeSubButton("Item", () -> togglePanel(individualItemRow)));
 
         individualSub.add(Box.createVerticalStrut(9));
@@ -388,7 +388,6 @@ public class MenuPanel extends JPanel {
         individualSub.add(individualItemRow);
         individualSub.setVisible(false);
 
-        
         individualSub.add(makeSubButton("AI Battle", () -> togglePanel(individualAIRow)));
         individualSub.add(Box.createVerticalStrut(9));
 
@@ -516,21 +515,19 @@ public class MenuPanel extends JPanel {
         JPanel row = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
         row.setOpaque(false);
         row.setAlignmentX(CENTER_ALIGNMENT);
-        row.add(makeGlassSmallButton("EASY",
-                () -> {
-                    stopMenuBGM();
-                    onStart.accept(new GameConfig(mode, GameConfig.Difficulty.EASY, false));
-                }));
-        row.add(makeGlassSmallButton("MEDIUM",
-                () -> {
-                    stopMenuBGM();
-                    onStart.accept(new GameConfig(mode, GameConfig.Difficulty.NORMAL, false));
-                }));
-        row.add(makeGlassSmallButton("HARD",
-                () -> {
-                    stopMenuBGM();
-                    onStart.accept(new GameConfig(mode, GameConfig.Difficulty.HARD, false));
-                }));
+
+        row.add(makeGlassSmallButton("EASY", () -> {
+            launchGameAndStopBGM(new GameConfig(mode, GameConfig.Difficulty.EASY, false));
+        }));
+
+        row.add(makeGlassSmallButton("MEDIUM", () -> {
+            launchGameAndStopBGM(new GameConfig(mode, GameConfig.Difficulty.NORMAL, false));
+        }));
+
+        row.add(makeGlassSmallButton("HARD", () -> {
+            launchGameAndStopBGM(new GameConfig(mode, GameConfig.Difficulty.HARD, false));
+        }));
+
         return row;
     }
 
@@ -539,6 +536,7 @@ public class MenuPanel extends JPanel {
         row.setOpaque(false);
         row.setAlignmentX(LEFT_ALIGNMENT);
         row.add(makeGlassSmallButton("START", () -> {
+            stopMenuBGM();
             // GameConfig 생성 (VERSUS 모드)
             GameConfig config = new GameConfig(
                     GameConfig.Mode.VERSUS, // P2P 대전 모드
@@ -549,23 +547,6 @@ public class MenuPanel extends JPanel {
             // GameLauncher의 onGameConfigSelect 콜백 호출
             onStart.accept(config);
         }));
-        // // MEDIUM P2P
-        // row.add(makeGlassSmallButton("MEDIUM", () -> {
-        //     GameConfig config = new GameConfig(
-        //             GameConfig.Mode.VERSUS,
-        //             GameConfig.Difficulty.NORMAL,
-        //             false);
-        //     onStart.accept(config);
-        // }));
-
-        // // HARD P2P
-        // row.add(makeGlassSmallButton("HARD", () -> {
-        //     GameConfig config = new GameConfig(
-        //             GameConfig.Mode.VERSUS,
-        //             GameConfig.Difficulty.HARD,
-        //             false);
-        //     onStart.accept(config);
-        // }));
 
         return row;
     }
@@ -619,6 +600,7 @@ public class MenuPanel extends JPanel {
         GameConfig.Mode mode = itemMode ? GameConfig.Mode.ITEM : GameConfig.Mode.CLASSIC;
 
         row.add(makeGlassSmallButton("EASY", () -> {
+            stopMenuBGM();
             GameConfig p1 = new GameConfig(mode, GameConfig.Difficulty.EASY, false);
             GameConfig p2 = new GameConfig(mode, GameConfig.Difficulty.EASY, false);
             String gameRule = itemMode ? "ITEM" : "NORMAL";
@@ -626,6 +608,7 @@ public class MenuPanel extends JPanel {
         }));
 
         row.add(makeGlassSmallButton("MEDIUM", () -> {
+            stopMenuBGM();
             GameConfig p1 = new GameConfig(mode, GameConfig.Difficulty.NORMAL, false);
             GameConfig p2 = new GameConfig(mode, GameConfig.Difficulty.NORMAL, false);
             String gameRule = itemMode ? "ITEM" : "NORMAL";
@@ -633,6 +616,7 @@ public class MenuPanel extends JPanel {
         }));
 
         row.add(makeGlassSmallButton("HARD", () -> {
+            stopMenuBGM();
             GameConfig p1 = new GameConfig(mode, GameConfig.Difficulty.HARD, false);
             GameConfig p2 = new GameConfig(mode, GameConfig.Difficulty.HARD, false);
             String gameRule = itemMode ? "ITEM" : "NORMAL";
@@ -648,30 +632,27 @@ public class MenuPanel extends JPanel {
         row.setAlignmentX(CENTER_ALIGNMENT);
 
         row.add(makeGlassSmallButton("EASY", () -> {
-            stopMenuBGM();
             GameConfig aiConfig = new GameConfig(
                     GameConfig.Mode.AI,
                     GameConfig.Difficulty.AI_EASY,
                     false);
-            onStart.accept(aiConfig);
+            launchGameAndStopBGM(aiConfig);
         }));
 
         row.add(makeGlassSmallButton("MEDIUM", () -> {
-            stopMenuBGM();
             GameConfig aiConfig = new GameConfig(
                     GameConfig.Mode.AI,
                     GameConfig.Difficulty.AI_NORMAL,
                     false);
-            onStart.accept(aiConfig);
+            launchGameAndStopBGM(aiConfig);
         }));
 
         row.add(makeGlassSmallButton("HARD", () -> {
-            stopMenuBGM();
             GameConfig aiConfig = new GameConfig(
                     GameConfig.Mode.AI,
                     GameConfig.Difficulty.AI_HARD,
                     false);
-            onStart.accept(aiConfig);
+            launchGameAndStopBGM(aiConfig);
         }));
 
         return row;
@@ -699,6 +680,7 @@ public class MenuPanel extends JPanel {
         row.setAlignmentX(CENTER_ALIGNMENT);
 
         row.add(makeGlassSmallButton("START", () -> {
+            stopMenuBGM();
             GameConfig p1 = new GameConfig(
                     GameConfig.Mode.TIME_ATTACK,
                     GameConfig.Difficulty.NORMAL,
@@ -1145,17 +1127,43 @@ public class MenuPanel extends JPanel {
 
     private void startMenuBGM() {
         if (!bgmPlaying) {
-            sound.playBGM(SoundManager.BGM.MENU);
-            bgmPlaying = true;
-            System.out.println("[MenuPanel] BGM started");
+            try {
+                sound.playBGM(SoundManager.BGM.MENU);
+                bgmPlaying = true;
+                System.out.println("[MenuPanel] BGM started");
+            } catch (Exception e) {
+                System.err.println("[MenuPanel] BGM start failed: " + e.getMessage());
+            }
         }
     }
 
     public void stopMenuBGM() {
         if (bgmPlaying) {
-            sound.stopBGM();
-            bgmPlaying = false;
-            System.out.println("[MenuPanel] BGM stopped");
+            try {
+                sound.stopBGM();
+                bgmPlaying = false;
+                System.out.println("[MenuPanel] BGM stopped");
+            } catch (Exception e) {
+                System.err.println("[MenuPanel] BGM stop failed: " + e.getMessage());
+            }
         }
+    }
+
+    private void launchGameAndStopBGM(GameConfig config) {
+        stopMenuBGM(); // 먼저 BGM 정지
+        try {
+            Thread.sleep(50); // BGM 정지 대기
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        onStart.accept(config); // 그 다음 게임 시작
+    }
+
+    public void cleanup() {
+        stopMenuBGM();
+        if (anim != null) {
+            anim.stop();
+        }
+        System.out.println("[MenuPanel] Cleanup completed");
     }
 }

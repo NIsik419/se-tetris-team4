@@ -75,4 +75,8 @@ public class GameLoop {
     public void setInterval(int ms) { timer.setDelay(Math.max(1, ms)); }
     public boolean isRunning() { return running; }
     public boolean isPaused()  { return paused;  }
+    public synchronized void cleanup() {
+        stop();
+        System.out.println("[GameLoop] Cleanup completed");
+    } 
 }
