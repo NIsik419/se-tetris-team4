@@ -11,6 +11,8 @@ import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.awt.event.HierarchyEvent;
 import java.awt.event.HierarchyListener;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.util.function.Consumer;
 
 import javax.swing.AbstractAction;
@@ -396,15 +398,27 @@ public class BoardPanel extends JPanel {
 
     // === Overlay 초기화 ===
     private void initOverlay() {
-        overlay = new JPanel(null);
-        overlay.setBackground(new Color(0, 0, 0, 150));
+        // 전체 딤 처리용 오버레이 패널
+        overlay = new JPanel(null) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setColor(new Color(0, 0, 0, 150)); // 살짝 어두운 검정
+                g2.fillRect(0, 0, getWidth(), getHeight());
+                g2.dispose();
+            }
+        };
+        overlay.setOpaque(false);       // 직접 반투명 그릴 거라 false
         overlay.setVisible(false);
 
-        dialogPanel = new JPanel(new BorderLayout(8, 8));
-        dialogPanel.setBackground(new Color(245, 246, 250));
-        dialogPanel.setSize(400, 300);
+        // 실제 모달 컨텐츠를 담을 패널 (컨테이너)
+        dialogPanel = new JPanel(new BorderLayout());
+        dialogPanel.setOpaque(false);       // dialogPanel 자체 배경 없음
+        dialogPanel.setPreferredSize(null); // ❗ 사이즈 고정 제거
         overlay.add(dialogPanel);
 
+        // 프레임의 LayeredPane 위에 overlay를 올리기
         addHierarchyListener(new HierarchyListener() {
             @Override
             public void hierarchyChanged(HierarchyEvent e) {
@@ -412,62 +426,105 @@ public class BoardPanel extends JPanel {
                     JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(BoardPanel.this);
                     if (frame != null) {
                         frame.getLayeredPane().add(overlay, JLayeredPane.POPUP_LAYER);
-                        int w = frame.getWidth();
-                        int h = frame.getHeight();
-                        overlay.setBounds(0, 0, w, h);
-                        dialogPanel.setBounds(w / 2 - 200, h / 2 - 150, 400, 300);
+                        relayoutDialog();   // ← 여기에 이 한 줄만
                         removeHierarchyListener(this);
                     }
                 }
             }
         });
 
+        // 이름 입력 오버레이 (컨테이너: dialogPanel)
         nameInputOverlay = new NameInputOverlay(
                 dialogPanel,
                 scoreBoard,
-                this::showScoreboardOverlay,
-                this::hideOverlay);
+                this::showScoreboardOverlay,  // 이름 입력 완료 시 → 스코어보드 오버레이
+                this::hideOverlay             // 취소 시 → 그냥 오버레이 닫기
+        );
 
+        // 스코어보드 오버레이도 같은 dialogPanel 사용
         scoreboardOverlay = new ScoreboardOverlay(
-                dialogPanel,
-                scoreBoard,
-                () -> {
-                    hideOverlay();
-                    restarting = true;
-                    loop.stopLoop();
-                    JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
-                    if (frame != null)
-                        frame.dispose();
-                    new GameFrame(config, false, false, null); // 싱글 모드 새 게임 시작
-                },
-                onExitToMenu);
+            dialogPanel,
+            scoreBoard,
+            () -> {
+                // 이미 처리중이면 무시
+                if (restarting) return;
+                restarting = true;
 
+                hideOverlay();
+                loop.stopLoop();
+                soundManager.stopBGM();
+
+                // 여기서 GameFrame 에 "재시작 요청"만 표시하고 닫는다
+                java.awt.Window w = SwingUtilities.getWindowAncestor(BoardPanel.this);
+                if (w instanceof GameFrame gf) {
+                    gf.markRestartRequested();  
+                    gf.dispose();               
+                }
+            },
+            onExitToMenu);
+
+        // 프레임 리사이즈 시 overlay / dialogPanel 위치 재계산
         addComponentListener(new ComponentAdapter() {
             @Override
             public void componentResized(ComponentEvent e) {
-                JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(BoardPanel.this);
-                if (frame != null) {
-                    int w = frame.getWidth();
-                    int h = frame.getHeight();
-                    overlay.setBounds(0, 0, w, h);
-                    dialogPanel.setBounds(w / 2 - 200, h / 2 - 150, 400, 300);
-                }
+                relayoutDialog();   // ← 여기서도 고정값 대신 이 메서드 호출
             }
         });
     }
 
+    // dialogPanel을 현재 내용(preferredSize)에 맞춰 중앙에 배치
+    private void relayoutDialog() {
+        JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
+        if (frame == null) return;
+
+        int w = frame.getWidth();
+        int h = frame.getHeight();
+        overlay.setBounds(0, 0, w, h);
+
+        Dimension pref = dialogPanel.getPreferredSize();
+        if (pref == null || pref.width <= 0 || pref.height <= 0) {
+            // 안전빵 기본값 (이름 입력창 정도 크기)
+            pref = new Dimension(320, 180);
+        }
+
+        dialogPanel.setBounds(
+                (w - pref.width) / 2,
+                (h - pref.height) / 2,
+                pref.width,
+                pref.height
+        );
+    }
+
     // === Overlay 제어 ===
-    private void showNameInputOverlay(int score) {
-        loop.stopLoop();
+    private void showNameInputOverlay(int finalScore) {
+        // 이전 내용 지우고 (혹시 스코어보드 등이 들어있을 수 있으니)
+        dialogPanel.removeAll();
+        dialogPanel.revalidate();
+        dialogPanel.repaint();
+
+        // 오버레이 표시
         overlay.setVisible(true);
-        boardView.repaint();
-        nameInputOverlay.show(score, config.mode(), config.difficulty());
+
+        // 실제 이름 입력 모달 보여주기
+        nameInputOverlay.show(finalScore, config.mode(), config.difficulty());
+
+        // 내용이 채워진 뒤, 이제 크기가 생겼으니까 중앙 재배치
+        relayoutDialog();
     }
 
     private void showScoreboardOverlay(int highlightIndex) {
+        dialogPanel.removeAll();
+        dialogPanel.revalidate();
+        dialogPanel.repaint();
+
         overlay.setVisible(true);
+
         scoreboardOverlay.show(highlightIndex, config.mode(), config.difficulty());
+
+        // 테이블 크기 기준으로 다시 중앙 배치
+        relayoutDialog();
     }
+
 
     private void hideOverlay() {
         overlay.setVisible(false);

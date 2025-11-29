@@ -670,14 +670,19 @@ public class BoardView extends JPanel {
             public void mouseClicked(java.awt.event.MouseEvent e) {
                 if (showGameOverScreen && confirmButtonBounds != null &&
                         confirmButtonBounds.contains(e.getPoint())) {
-                    showGameOverScreen = false;
+
+                    // 더 이상 버튼은 못 누르게 리스너만 제거 
                     removeMouseListener(this);
                     removeMouseMotionListener(this);
-                    repaint();
+                    setCursor(Cursor.getDefaultCursor());
 
+                    // 이름 입력 오버레이 띄우기
                     if (gameOverConfirmAction != null) {
                         gameOverConfirmAction.run();
                     }
+
+                    // 보드 다시 그리기
+                    repaint();
                 }
             }
 

@@ -251,18 +251,19 @@ public class GameLauncher {
 
         GameFrame game = new GameFrame(config, p2pMode, isServer, gameRule);
 
-        // BoardPanel의 Settings 반영
-        try {
-            if (game.getActivePanel() instanceof BoardPanel panel) {
-                panel.applySettings(settings);
-            }
-        } catch (Exception ignore) {
-        }
+        // 여기서 미리 BoardPanel 레퍼런스를 잡아둔다
+        final BoardPanel mainBoardPanel;
+        if (game.getActivePanel() instanceof BoardPanel bp) {
+            mainBoardPanel = bp;
+            // Settings 적용
+            bp.applySettings(settings);
 
-        // 아이템 모드 활성화 (필요하다면)
-        if (config.mode() == GameConfig.Mode.ITEM &&
-                game.getActivePanel() instanceof BoardPanel panel) {
-            panel.getLogic().setItemMode(true);
+            // 아이템 모드 활성화
+            if (config.mode() == GameConfig.Mode.ITEM) {
+                bp.getLogic().setItemMode(true);
+            }
+        } else {
+            mainBoardPanel = null;
         }
 
         game.setTitle("TETRIS – " + config.mode() + " / " + config.difficulty());
@@ -274,32 +275,20 @@ public class GameLauncher {
             game.toFront();
         });
 
-        // // 기존 리스너 제거
-        // for (WindowListener wl : frame.getWindowListeners()) {
-        //     frame.removeWindowListener(wl);
-        // }
-
-        // 창이 닫힐 때: RESTART 인지, 그냥 종료인지 구분
         game.addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosed(WindowEvent e) {
 
-                JPanel p = game.getActivePanel();
 
-                // if (menuPanel != null) {
-                //     menuPanel.cleanup();
-                // }
 
-                if (p instanceof BoardPanel bp && bp.isRestarting()) {
-                    // 🔁 RESTART로 닫힌 경우 → 메뉴 안 띄우고 게임만 다시 시작
+                if (mainBoardPanel != null && mainBoardPanel.isRestarting()) {
                     startGame(config, p2pMode, isServer, gameRule);
                     return;
                 }
 
-                // 🔚 그냥 종료(EXIТ / X) → 메뉴 복귀
+                // 그냥 X를 눌렀거나 EXIT 로 닫힌 경우 → 메뉴 복귀
                 frame.setVisible(true);
                 showScreen(Screen.MENU);
-                // 메뉴로 돌아온 후 포커스 설정
                 SwingUtilities.invokeLater(() -> {
                     frame.toFront();
                     frame.requestFocusInWindow();
