@@ -54,13 +54,22 @@ import versus.VersusFrame;
 
 public class MenuPanel extends JPanel {
 
-    public enum MenuItem { SETTINGS, SCOREBOARD, EXIT }
-    public enum NavInput { LEFT, RIGHT, UP, DOWN, NEXT }
-    private enum ScreenSize { SMALL, MEDIUM, LARGE, FULLSCREEN }
+    public enum MenuItem {
+        SETTINGS, SCOREBOARD, EXIT
+    }
+
+    public enum NavInput {
+        LEFT, RIGHT, UP, DOWN, NEXT
+    }
+
+    private enum ScreenSize {
+        SMALL, MEDIUM, LARGE, FULLSCREEN
+    }
 
     private void applyScreenPreset(ScreenSize preset) {
         java.awt.Window w = SwingUtilities.getWindowAncestor(this);
-        if (!(w instanceof JFrame f)) return;
+        if (!(w instanceof JFrame f))
+            return;
 
         f.setExtendedState(JFrame.NORMAL);
         f.setResizable(true);
@@ -90,15 +99,14 @@ public class MenuPanel extends JPanel {
     private final Timer anim;
 
     // Colors for falling blocks (Tetris-like)
-    private static final Color[] BLOCK_COLORS = {        
-        new Color(0xFF4B4B), // red
-        new Color(0xFFD93B), // yellow
-        new Color(0x3BFF9C), // green
-        new Color(0x3BB9FF), // blue
-        new Color(0xC63BFF)  // purple
+    private static final Color[] BLOCK_COLORS = {
+            new Color(0xFF4B4B), // red
+            new Color(0xFFD93B), // yellow
+            new Color(0x3BFF9C), // green
+            new Color(0x3BB9FF), // blue
+            new Color(0xC63BFF) // purple
     };
-    private final int[] blockColorIndex = new int[STARS];   
-
+    private final int[] blockColorIndex = new int[STARS];
 
     // Title animation
     private JLabel title;
@@ -173,22 +181,56 @@ public class MenuPanel extends JPanel {
         im.put(KeyStroke.getKeyStroke("ENTER"), "enter");
         im.put(KeyStroke.getKeyStroke("SPACE"), "enter");
 
-        // SCREEN SIZE HOTKEYS 
+        // SCREEN SIZE HOTKEYS
         im.put(KeyStroke.getKeyStroke('1'), "sizeSmall");
         im.put(KeyStroke.getKeyStroke('2'), "sizeMedium");
         im.put(KeyStroke.getKeyStroke('3'), "sizeLarge");
         im.put(KeyStroke.getKeyStroke('4'), "sizeFull");
         im.put(KeyStroke.getKeyStroke("F11"), "sizeFull");
-        
-        am.put("sizeSmall",  new AbstractAction(){ @Override public void actionPerformed(ActionEvent e){ applyScreenPreset(ScreenSize.SMALL); }});
-        am.put("sizeMedium", new AbstractAction(){ @Override public void actionPerformed(ActionEvent e){ applyScreenPreset(ScreenSize.MEDIUM); }});
-        am.put("sizeLarge",  new AbstractAction(){ @Override public void actionPerformed(ActionEvent e){ applyScreenPreset(ScreenSize.LARGE); }});
-        am.put("sizeFull",   new AbstractAction(){ @Override public void actionPerformed(ActionEvent e){ applyScreenPreset(ScreenSize.FULLSCREEN); }});
 
+        am.put("sizeSmall", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                applyScreenPreset(ScreenSize.SMALL);
+            }
+        });
+        am.put("sizeMedium", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                applyScreenPreset(ScreenSize.MEDIUM);
+            }
+        });
+        am.put("sizeLarge", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                applyScreenPreset(ScreenSize.LARGE);
+            }
+        });
+        am.put("sizeFull", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                applyScreenPreset(ScreenSize.FULLSCREEN);
+            }
+        });
 
-        am.put("exit",     new AbstractAction(){ @Override public void actionPerformed(ActionEvent e){ onSelect.accept(MenuItem.EXIT); }});
-        am.put("score",    new AbstractAction(){ @Override public void actionPerformed(ActionEvent e){ onSelect.accept(MenuItem.SCOREBOARD); }});
-        am.put("settings", new AbstractAction(){ @Override public void actionPerformed(ActionEvent e){ onSelect.accept(MenuItem.SETTINGS); }});
+        am.put("exit", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                onSelect.accept(MenuItem.EXIT);
+            }
+        });
+        am.put("score", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                onSelect.accept(MenuItem.SCOREBOARD);
+            }
+        });
+        am.put("settings", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                onSelect.accept(MenuItem.SETTINGS);
+            }
+        });
 
         // Arrow behavior
         am.put("up", new AbstractAction() {
@@ -223,20 +265,30 @@ public class MenuPanel extends JPanel {
         });
 
         buildUI();
-        rebuildNavOrder(); 
-        setSelection(0); 
+        rebuildNavOrder();
+        setSelection(0);
     }
 
     public void handleMenuInput(NavInput input) {
     }
 
-    public void switchMenu(int delta) { }
-    public void setSelectedMode(GameConfig.Mode mode) {  }
-    public GameConfig.Mode getSelectedMode() { return GameConfig.Mode.CLASSIC; }
-    public GameConfig.Difficulty getSelectedDifficulty() { return GameConfig.Difficulty.NORMAL; }
-    public GameConfig getCurrentConfig() { return new GameConfig(GameConfig.Mode.CLASSIC, GameConfig.Difficulty.NORMAL, false); }
-    
+    public void switchMenu(int delta) {
+    }
 
+    public void setSelectedMode(GameConfig.Mode mode) {
+    }
+
+    public GameConfig.Mode getSelectedMode() {
+        return GameConfig.Mode.CLASSIC;
+    }
+
+    public GameConfig.Difficulty getSelectedDifficulty() {
+        return GameConfig.Difficulty.NORMAL;
+    }
+
+    public GameConfig getCurrentConfig() {
+        return new GameConfig(GameConfig.Mode.CLASSIC, GameConfig.Difficulty.NORMAL, false);
+    }
 
     // UI CONSTRUCTION
     private void buildUI() {
@@ -321,23 +373,30 @@ public class MenuPanel extends JPanel {
 
         individualSub.add(makeSubButton("Normal Game", () -> togglePanel(individualNormalRow)));
         individualSub.add(Box.createVerticalStrut(9));
-        individualSub.add(Box.createVerticalStrut(9));
 
         individualNormalRow = makeDifficultyRowFor(GameConfig.Mode.CLASSIC);
         individualNormalRow.setVisible(false);
         individualSub.add(individualNormalRow);
-        individualSub.add(Box.createVerticalStrut(9));
 
         individualSub.add(individualNormalRow);
-        individualSub.add(Box.createVerticalStrut(8));
+        
         individualSub.add(makeSubButton("Item", () -> togglePanel(individualItemRow)));
 
-
+        individualSub.add(Box.createVerticalStrut(9));
         individualItemRow = makeItemDifficultyRowForSingle(); // option buttons for ITEM
         individualItemRow.setVisible(false);
         individualSub.add(individualItemRow);
-
         individualSub.setVisible(false);
+
+        
+        individualSub.add(makeSubButton("AI Battle", () -> togglePanel(individualAIRow)));
+        individualSub.add(Box.createVerticalStrut(9));
+
+        individualAIRow = makeAIDifficultyRow();
+        individualAIRow.setVisible(false);
+        individualSub.add(individualAIRow);
+        individualSub.add(Box.createVerticalStrut(9));
+
         menuColumn.add(individualSub);
         menuColumn.add(Box.createVerticalStrut(18));
 
@@ -349,23 +408,40 @@ public class MenuPanel extends JPanel {
 
         multiplayerSub = makeSubPanel();
         multiplayerSub.setAlignmentX(CENTER_ALIGNMENT);
-        multiplayerSub.add(makeSubButton("P2P Mode", () -> {
-            // 현재 메뉴 창 닫고 대전 프레임 열기
-            JFrame f = (JFrame) SwingUtilities.getWindowAncestor(MenuPanel.this);
-            new VersusFrame(false);
-            if (f != null) f.dispose();
-        }));
+
+        // Online P2P Battle
+        multiplayerSub.add(makeSubButton("Online P2P Battle", () -> togglePanel(onlineP2PSub)));
         multiplayerSub.add(Box.createVerticalStrut(9));
 
-        multiplayerSub.add(makeSubButton("Battle Mode", () -> togglePanel(multiplayerItemRow)));
-        multiplayerSub.add(Box.createVerticalStrut(9));
+        onlineP2PSub = makeSubPanel();
+        onlineP2PSub.setAlignmentX(CENTER_ALIGNMENT);
 
-        multiplayerItemRow = makeItemDifficultyRowForMulti(); // small buttons under Item
-        multiplayerItemRow.setVisible(false);
-        multiplayerSub.add(multiplayerItemRow);
-        multiplayerSub.add(Box.createVerticalStrut(9));
-        
+        onlineP2PSub.add(makeSubButton("NORMAL", () -> togglePanel(onlineNormalRow)));
+        onlineP2PSub.add(Box.createVerticalStrut(7));
 
+        onlineNormalRow = makeOnlineP2PRowFor(GameConfig.Mode.CLASSIC);
+        onlineNormalRow.setVisible(false);
+        onlineP2PSub.add(onlineNormalRow);
+        onlineP2PSub.add(Box.createVerticalStrut(7));
+
+        onlineP2PSub.add(makeSubButton("ITEM", () -> togglePanel(onlineItemRow)));
+        onlineP2PSub.add(Box.createVerticalStrut(7));
+
+        onlineItemRow = makeOnlineP2PRowFor(GameConfig.Mode.ITEM);
+        onlineItemRow.setVisible(false);
+        onlineP2PSub.add(onlineItemRow);
+        onlineP2PSub.add(Box.createVerticalStrut(7));
+
+        onlineP2PSub.add(makeSubButton("TIME", () -> togglePanel(onlineTimeRow)));
+        onlineP2PSub.add(Box.createVerticalStrut(7));
+
+        onlineTimeRow = makeOnlineP2PRowFor(GameConfig.Mode.TIME_ATTACK);
+        onlineTimeRow.setVisible(false);
+        onlineP2PSub.add(onlineTimeRow);
+
+        onlineP2PSub.setVisible(false);
+        multiplayerSub.add(onlineP2PSub);
+        multiplayerSub.add(Box.createVerticalStrut(12));
         // Local 2P (Same PC)
         multiplayerSub.add(makeSubButton("Local 2P (Same PC)", () -> togglePanel(local2PSub)));
         multiplayerSub.add(Box.createVerticalStrut(9));
@@ -391,14 +467,6 @@ public class MenuPanel extends JPanel {
 
         local2PSub.add(makeSubButton("TIME", () -> togglePanel(localTimeRow)));
         local2PSub.add(Box.createVerticalStrut(7));
-
-        individualSub.add(makeSubButton("AI Battle", () -> togglePanel(individualAIRow)));
-        individualSub.add(Box.createVerticalStrut(9));
-
-        individualAIRow = makeAIDifficultyRow();
-        individualAIRow.setVisible(false);
-        individualSub.add(individualAIRow);
-        individualSub.add(Box.createVerticalStrut(9));
 
         localTimeRow = makeLocal2PTimeRow();
         localTimeRow.setVisible(false);
@@ -445,53 +513,142 @@ public class MenuPanel extends JPanel {
 
     // Difficulty row for single player NORMAL mode
     private JPanel makeDifficultyRowFor(GameConfig.Mode mode) {
-    JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-    row.setOpaque(false);
-    row.setAlignmentX(LEFT_ALIGNMENT);
-    row.add(makeGlassSmallButton("EASY",
-        () -> { stopMenuBGM(); onStart.accept(new GameConfig(mode, GameConfig.Difficulty.EASY, false)); }));
-    row.add(makeGlassSmallButton("MEDIUM",
-        () -> { stopMenuBGM(); onStart.accept(new GameConfig(mode, GameConfig.Difficulty.NORMAL, false)); }));
-    row.add(makeGlassSmallButton("HARD",
-        () -> { stopMenuBGM(); onStart.accept(new GameConfig(mode, GameConfig.Difficulty.HARD, false)); }));
-    return row;
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
+        row.setOpaque(false);
+        row.setAlignmentX(CENTER_ALIGNMENT);
+        row.add(makeGlassSmallButton("EASY",
+                () -> {
+                    stopMenuBGM();
+                    onStart.accept(new GameConfig(mode, GameConfig.Difficulty.EASY, false));
+                }));
+        row.add(makeGlassSmallButton("MEDIUM",
+                () -> {
+                    stopMenuBGM();
+                    onStart.accept(new GameConfig(mode, GameConfig.Difficulty.NORMAL, false));
+                }));
+        row.add(makeGlassSmallButton("HARD",
+                () -> {
+                    stopMenuBGM();
+                    onStart.accept(new GameConfig(mode, GameConfig.Difficulty.HARD, false));
+                }));
+        return row;
+    }
+
+    private JPanel makeOnlineP2PRowFor(GameConfig.Mode modeIgnored) {
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        row.setOpaque(false);
+        row.setAlignmentX(LEFT_ALIGNMENT);
+        row.add(makeGlassSmallButton("START", () -> {
+            // GameConfig 생성 (VERSUS 모드)
+            GameConfig config = new GameConfig(
+                    GameConfig.Mode.VERSUS, // P2P 대전 모드
+                    GameConfig.Difficulty.EASY, // 기본 난이도
+                    false // colorBlindMode
+            );
+
+            // GameLauncher의 onGameConfigSelect 콜백 호출
+            onStart.accept(config);
+        }));
+        // // MEDIUM P2P
+        // row.add(makeGlassSmallButton("MEDIUM", () -> {
+        //     GameConfig config = new GameConfig(
+        //             GameConfig.Mode.VERSUS,
+        //             GameConfig.Difficulty.NORMAL,
+        //             false);
+        //     onStart.accept(config);
+        // }));
+
+        // // HARD P2P
+        // row.add(makeGlassSmallButton("HARD", () -> {
+        //     GameConfig config = new GameConfig(
+        //             GameConfig.Mode.VERSUS,
+        //             GameConfig.Difficulty.HARD,
+        //             false);
+        //     onStart.accept(config);
+        // }));
+
+        return row;
     }
 
     // E/M/H row for ITEM single-player (explicit per request)
     private JPanel makeItemDifficultyRowForSingle() {
-        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
         row.setOpaque(false);
-        row.setAlignmentX(LEFT_ALIGNMENT);
+        row.setAlignmentX(CENTER_ALIGNMENT);
         row.add(makeGlassSmallButton("EASY",
-            () -> onStart.accept(new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.EASY, false))));
+                () -> onStart.accept(new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.EASY, false))));
         row.add(makeGlassSmallButton("MEDIUM",
-            () -> onStart.accept(new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.NORMAL, false))));
+                () -> onStart.accept(new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.NORMAL, false))));
         row.add(makeGlassSmallButton("HARD",
-            () -> onStart.accept(new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.HARD, false))));
+                () -> onStart.accept(new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.HARD, false))));
         return row;
     }
-    // Local 2P – NORMAL / ITEM rows
-    private JPanel makeLocal2PRowFor(boolean itemMode) {
-        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        row.setOpaque(false);
-        row.setAlignmentX(LEFT_ALIGNMENT);
 
-        // Choose mode based on whether this is ITEM or NORMAL
-        GameConfig.Mode mode = itemMode ? GameConfig.Mode.ITEM : GameConfig.Mode.CLASSIC;
-
-        row.add(makeGlassSmallButton("EASY",
-                () -> onStart.accept(new GameConfig(mode, GameConfig.Difficulty.EASY, false))));
-        row.add(makeGlassSmallButton("MEDIUM",
-                () -> onStart.accept(new GameConfig(mode, GameConfig.Difficulty.NORMAL, false))));
-        row.add(makeGlassSmallButton("HARD",
-                () -> onStart.accept(new GameConfig(mode, GameConfig.Difficulty.HARD, false))));
-        return row;
-    private JPanel makeAIDifficultyRow() {
-        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+    private JPanel makeItemDifficultyRowForMulti() {
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
         row.setOpaque(false);
-        row.setAlignmentX(LEFT_ALIGNMENT);
+        row.setAlignmentX(CENTER_ALIGNMENT);
 
         row.add(makeGlassSmallButton("EASY", () -> {
+            GameConfig p1 = new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.EASY, false);
+            GameConfig p2 = new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.EASY, false);
+            new VersusFrame(p1, p2, "ITEM");
+        }));
+
+        row.add(makeGlassSmallButton("MEDIUM", () -> {
+            GameConfig p1 = new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.NORMAL, false);
+            GameConfig p2 = new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.NORMAL, false);
+            new VersusFrame(p1, p2, "ITEM");
+        }));
+
+        row.add(makeGlassSmallButton("HARD", () -> {
+            GameConfig p1 = new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.HARD, false);
+            GameConfig p2 = new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.HARD, false);
+            new VersusFrame(p1, p2, "ITEM");
+        }));
+
+        return row;
+    }
+
+    // Local 2P – NORMAL / ITEM rows
+    private JPanel makeLocal2PRowFor(boolean itemMode) {
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
+        row.setOpaque(false);
+        row.setAlignmentX(CENTER_ALIGNMENT);
+
+        GameConfig.Mode mode = itemMode ? GameConfig.Mode.ITEM : GameConfig.Mode.CLASSIC;
+
+        row.add(makeGlassSmallButton("EASY", () -> {
+            GameConfig p1 = new GameConfig(mode, GameConfig.Difficulty.EASY, false);
+            GameConfig p2 = new GameConfig(mode, GameConfig.Difficulty.EASY, false);
+            String gameRule = itemMode ? "ITEM" : "NORMAL";
+            new VersusFrame(p1, p2, gameRule);
+        }));
+
+        row.add(makeGlassSmallButton("MEDIUM", () -> {
+            GameConfig p1 = new GameConfig(mode, GameConfig.Difficulty.NORMAL, false);
+            GameConfig p2 = new GameConfig(mode, GameConfig.Difficulty.NORMAL, false);
+            String gameRule = itemMode ? "ITEM" : "NORMAL";
+            new VersusFrame(p1, p2, gameRule);
+        }));
+
+        row.add(makeGlassSmallButton("HARD", () -> {
+            GameConfig p1 = new GameConfig(mode, GameConfig.Difficulty.HARD, false);
+            GameConfig p2 = new GameConfig(mode, GameConfig.Difficulty.HARD, false);
+            String gameRule = itemMode ? "ITEM" : "NORMAL";
+            new VersusFrame(p1, p2, gameRule);
+        }));
+
+        return row;
+    }
+
+    private JPanel makeAIDifficultyRow() {
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
+        row.setOpaque(false);
+        row.setAlignmentX(CENTER_ALIGNMENT);
+
+        row.add(makeGlassSmallButton("EASY", () -> {
+            stopMenuBGM();
             GameConfig aiConfig = new GameConfig(
                     GameConfig.Mode.AI,
                     GameConfig.Difficulty.AI_EASY,
@@ -500,6 +657,7 @@ public class MenuPanel extends JPanel {
         }));
 
         row.add(makeGlassSmallButton("MEDIUM", () -> {
+            stopMenuBGM();
             GameConfig aiConfig = new GameConfig(
                     GameConfig.Mode.AI,
                     GameConfig.Difficulty.AI_NORMAL,
@@ -508,6 +666,7 @@ public class MenuPanel extends JPanel {
         }));
 
         row.add(makeGlassSmallButton("HARD", () -> {
+            stopMenuBGM();
             GameConfig aiConfig = new GameConfig(
                     GameConfig.Mode.AI,
                     GameConfig.Difficulty.AI_HARD,
@@ -520,64 +679,42 @@ public class MenuPanel extends JPanel {
 
     private VersusFrame openVersus() {
         JFrame f = (JFrame) SwingUtilities.getWindowAncestor(MenuPanel.this);
-        if (f != null) f.dispose();
+        if (f != null)
+            f.dispose();
 
-        // NORMAL 난이도 고정 
+        // NORMAL 난이도 고정
         GameConfig p1 = new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.NORMAL, false);
         GameConfig p2 = new GameConfig(GameConfig.Mode.ITEM, GameConfig.Difficulty.NORMAL, false);
 
-        String gameRule = "ITEM"; 
+        String gameRule = "ITEM";
 
         return new VersusFrame(p1, p2, gameRule);
     }
 
-    // Local 2P (Same PC) – TIME row (simple version, adjust if you have a TIME mode)
+    // Local 2P (Same PC) – TIME row (simple version, adjust if you have a TIME
+    // mode)
     private JPanel makeLocal2PTimeRow() {
-        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
         row.setOpaque(false);
+        row.setAlignmentX(CENTER_ALIGNMENT);
 
         row.add(makeGlassSmallButton("START", () -> {
-            GameConfig.Mode mode = itemMode ? GameConfig.Mode.ITEM : GameConfig.Mode.CLASSIC;
-
-            GameConfig p1 = new GameConfig(mode, GameConfig.Difficulty.NORMAL, false);
-            GameConfig p2 = new GameConfig(mode, GameConfig.Difficulty.NORMAL, false);
-
-            String gameRule = "Normal"; 
-            
-            new VersusFrame(p1, p2, gameRule);  
-        }));
-
-        return row;
-    }
-
-    // Local 2P TIME row - launches TIME_ATTACK mode
-    private JPanel makeLocal2PTimeRow() {
-        JPanel row = new JPanel();
-        row.setOpaque(false);
-
-        JButton startBtn = makeSubButton("Start", () -> {
-
             GameConfig p1 = new GameConfig(
                     GameConfig.Mode.TIME_ATTACK,
                     GameConfig.Difficulty.NORMAL,
-                    false  
-            );
+                    false);
 
             GameConfig p2 = new GameConfig(
                     GameConfig.Mode.TIME_ATTACK,
                     GameConfig.Difficulty.NORMAL,
-                    false
-            );
+                    false);
 
-             String gameRule = "TIME_ATTACK"; 
+            String gameRule = "TIME_ATTACK";
+            new VersusFrame(p1, p2, gameRule);
+        }));
 
-            new versus.VersusFrame(p1, p2, gameRule);  // TIME 모드로 대전 시작
-        });
-
-        row.add(startBtn);
         return row;
     }
-
 
     // NAV LIST management
     private void rebuildNavOrder() {
@@ -610,23 +747,22 @@ public class MenuPanel extends JPanel {
     }
 
     private void setSelection(int idx) {
-    if (navOrder.isEmpty())
-        return;
+        if (navOrder.isEmpty())
+            return;
 
-    for (int i = 0; i < navOrder.size(); i++) {
-        JComponent c = navOrder.get(i);
-        c.putClientProperty("nav.selected", i == idx);
-        c.repaint();
-    }
+        for (int i = 0; i < navOrder.size(); i++) {
+            JComponent c = navOrder.get(i);
+            c.putClientProperty("nav.selected", i == idx);
+            c.repaint();
+        }
 
-    // ⬇  automatically scroll selected item into view
-    SwingUtilities.invokeLater(() -> {
-        JComponent selected = navOrder.get(idx);
-        Rectangle rect = selected.getBounds();
-        selected.scrollRectToVisible(rect);
+        // ⬇ automatically scroll selected item into view
+        SwingUtilities.invokeLater(() -> {
+            JComponent selected = navOrder.get(idx);
+            Rectangle rect = selected.getBounds();
+            selected.scrollRectToVisible(rect);
         });
     }
-
 
     private void activateSelection() {
         if (navOrder.isEmpty())
@@ -672,18 +808,17 @@ public class MenuPanel extends JPanel {
 
         g2.setComposite(AlphaComposite.SrcOver);
         for (int i = 0; i < STARS; i++) {
-            int x = Math.round(sx[i]);                     // block position
-            int y = Math.round(sy[i]);                     // 
-            int size = 14 + (int)(ss[i] * 10);             // block size based on ss
+            int x = Math.round(sx[i]); // block position
+            int y = Math.round(sy[i]); //
+            int size = 14 + (int) (ss[i] * 10); // block size based on ss
 
             Color base = BLOCK_COLORS[blockColorIndex[i]]; // choose base color
-            int alpha = (int)(180 * ss[i]);                // alpha from ss
+            int alpha = (int) (180 * ss[i]); // alpha from ss
             Color fill = new Color(
                     base.getRed(),
                     base.getGreen(),
                     base.getBlue(),
-                    Math.min(255, Math.max(40, alpha))
-            );
+                    Math.min(255, Math.max(40, alpha)));
             // outer block
             g2.setColor(fill);
             g2.fillRoundRect(x, y, size, size, 6, 6);
@@ -789,8 +924,8 @@ public class MenuPanel extends JPanel {
         };
         Dimension d = new Dimension(240, 52);
         b.setPreferredSize(d);
-        b.setMaximumSize(d);         // prevent BoxLayout from expanding it
-        b.setAlignmentX(LEFT_ALIGNMENT);
+        b.setMaximumSize(d); // prevent BoxLayout from expanding it
+        b.setAlignmentX(CENTER_ALIGNMENT);
         // keep the rest (listeners, painting) as you had
         return b;
     }
@@ -836,7 +971,7 @@ public class MenuPanel extends JPanel {
                         over = false;
                     }
                 });
-                
+
                 addActionListener(e -> {
                     sound.play(SoundManager.Sound.MENU_CLICK, 0.4f);
                     action.run();
@@ -879,8 +1014,8 @@ public class MenuPanel extends JPanel {
         };
         Dimension d = new Dimension(200, 40);
         b.setPreferredSize(d);
-        b.setMaximumSize(d);         // stop width growth
-        b.setAlignmentX(LEFT_ALIGNMENT);
+        b.setMaximumSize(d); // stop width growth
+        b.setAlignmentX(CENTER_ALIGNMENT);
         return b;
     }
 
@@ -905,7 +1040,7 @@ public class MenuPanel extends JPanel {
             {
                 setOpaque(false);
                 setContentAreaFilled(false);
-                setBorder(BorderFactory.createEmptyBorder(5, 14, 5,14));
+                setBorder(BorderFactory.createEmptyBorder(5, 14, 5, 14));
                 setFocusPainted(false);
                 setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
                 t.start();
@@ -932,7 +1067,7 @@ public class MenuPanel extends JPanel {
                         over = false;
                     }
                 });
-                
+
                 addActionListener(e -> {
                     sound.play(SoundManager.Sound.MENU_CLICK, 0.4f);
                     action.run();
@@ -944,7 +1079,7 @@ public class MenuPanel extends JPanel {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 int w = getWidth(), h = getHeight();
-                boolean sel = Boolean.TRUE.equals(getClientProperty("nav.selected")); 
+                boolean sel = Boolean.TRUE.equals(getClientProperty("nav.selected"));
 
                 Shape rr = new RoundRectangle2D.Float(0, 0, w - 1, h - 1, 10, 10);
                 GradientPaint bg = new GradientPaint(0, 0, new Color(60, 110, 140, (int) (140 + 60 * hover)),
@@ -972,20 +1107,20 @@ public class MenuPanel extends JPanel {
         Dimension d = new Dimension(96, 30); // clearly smaller than 200x40
         b.setPreferredSize(d);
         b.setMaximumSize(d);
-        b.setAlignmentX(LEFT_ALIGNMENT);
+        b.setAlignmentX(CENTER_ALIGNMENT);
         return b;
     }
 
     // star helpers
-     private void seedStars() {
+    private void seedStars() {
         Random r = new Random();
         for (int i = 0; i < STARS; i++) {
             sx[i] = r.nextInt(1400) - 100;
-            sy[i] = r.nextInt(900);                     
-            sv[i] = 3.0f + r.nextFloat() * 4.0f;        
-            ss[i] = 0.6f + r.nextFloat() * 0.7f;       
+            sy[i] = r.nextInt(900);
+            sv[i] = 3.0f + r.nextFloat() * 4.0f;
+            ss[i] = 0.6f + r.nextFloat() * 0.7f;
 
-            blockColorIndex[i] = r.nextInt(BLOCK_COLORS.length); //  give each block a color
+            blockColorIndex[i] = r.nextInt(BLOCK_COLORS.length); // give each block a color
         }
     }
 
@@ -995,24 +1130,24 @@ public class MenuPanel extends JPanel {
             return;
 
         for (int i = 0; i < STARS; i++) {
-            sy[i] += sv[i];                            
+            sy[i] += sv[i];
 
             // when block goes below screen, respawn at top with new random params
-            if (sy[i] > h + 40) {                       // respawn logic
-                sx[i] = (float)(Math.random() * w);
+            if (sy[i] > h + 40) { // respawn logic
+                sx[i] = (float) (Math.random() * w);
                 sy[i] = -20;
-                sv[i] = 3.0f + (float)Math.random() * 4.0f;
-                ss[i] = 0.6f + (float)Math.random() * 0.7f;
-                blockColorIndex[i] = (int)(Math.random() * BLOCK_COLORS.length);
+                sv[i] = 3.0f + (float) Math.random() * 4.0f;
+                ss[i] = 0.6f + (float) Math.random() * 0.7f;
+                blockColorIndex[i] = (int) (Math.random() * BLOCK_COLORS.length);
             }
         }
     }
 
     private void startMenuBGM() {
-    if (!bgmPlaying) {
-        sound.playBGM(SoundManager.BGM.MENU);
-        bgmPlaying = true;
-        System.out.println("[MenuPanel] BGM started");
+        if (!bgmPlaying) {
+            sound.playBGM(SoundManager.BGM.MENU);
+            bgmPlaying = true;
+            System.out.println("[MenuPanel] BGM started");
         }
     }
 

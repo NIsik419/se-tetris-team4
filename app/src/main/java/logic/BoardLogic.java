@@ -210,7 +210,7 @@ public class BoardLogic {
     // ============================================
     private void clearLinesAfterItem(Runnable afterClear) {
         var board = state.getBoard();
-
+        var pid = state.getPieceId();
 
         java.util.List<Integer> clearedRows = new java.util.ArrayList<>();
         for (int y = 0; y < HEIGHT; y++) {
