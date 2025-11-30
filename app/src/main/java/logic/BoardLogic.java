@@ -1003,38 +1003,34 @@ public class BoardLogic {
 
         int endY = state.getY();
 
-        // 블록의 각 열에 대해 빔 효과 생성
+        // 동적 셀 크기 사용
         int cellSize = currentCellSize;
-        boolean[][] shape = new boolean[curr.height()][curr.width()];
 
-        // 블록의 각 열이 실제로 블록을 포함하는지 확인
+        // 블록의 최소/최대 X 좌표 찾기 (전체 너비 계산)
+        int minX = curr.width();
+        int maxX = -1;
+
         for (int j = 0; j < curr.height(); j++) {
             for (int i = 0; i < curr.width(); i++) {
                 if (curr.getShape(i, j) == 1) {
-                    shape[j][i] = true;
+                    minX = Math.min(minX, i);
+                    maxX = Math.max(maxX, i);
                 }
             }
         }
 
-        // 각 열마다 빔 생성 (블록이 있는 열만)
-        for (int i = 0; i < curr.width(); i++) {
-            boolean hasBlock = false;
-            for (int j = 0; j < curr.height(); j++) {
-                if (shape[j][i]) {
-                    hasBlock = true;
-                    break;
-                }
-            }
+        // 블록 전체를 하나의 광선으로 생성
+        if (minX <= maxX) {
+            int beamStartX = state.getX() + minX;
+            int beamWidth = (maxX - minX + 1);
 
-            if (hasBlock) {
-                int columnX = state.getX() + i;
-                clear.getParticleSystem().createHardDropBeam(
-                        columnX,
-                        startY,
-                        endY,
-                        curr.getColor(),
-                        cellSize);
-            }
+            clear.getParticleSystem().createHardDropBeamWide(
+                    beamStartX,
+                    beamWidth,
+                    startY,
+                    endY,
+                    curr.getColor(),
+                    cellSize);
         }
 
         sound.play(SoundManager.Sound.HARD_DROP, 0.2f);

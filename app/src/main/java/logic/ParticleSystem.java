@@ -324,86 +324,65 @@ public class ParticleSystem {
      * @param blockColor 블록 색상
      * @param cellSize   셀 크기
      */
-    public void createHardDropBeam(int columnX, int startY, int endY, Color blockColor, int cellSize) {
-        //  보드 높이 (바닥까지)
-        int boardHeight = 20; // BoardLogic.HEIGHT 값 사용
+    /**
+     *  하드 드롭 넓은 광선 효과 (블록 전체를 하나의 광선으로)
+     */
+    public void createHardDropBeamWide(int startX, int widthCells, int startY, int endY,
+            Color blockColor, int cellSize) {
+        int boardHeight = 20;
 
-        // 메인 빔 (중앙, 밝고 넓음) - 맨 위에서 바닥까지
+        // 블록 전체 너비를 커버하는 하나의 광선
+        int beamCenterX = startX * cellSize + (widthCells * cellSize) / 2;
+        int beamWidth = widthCells * cellSize;
+
         Color brightColor = new Color(
-                Math.min(255, blockColor.getRed() + 150),
-                Math.min(255, blockColor.getGreen() + 150),
-                Math.min(255, blockColor.getBlue() + 150));
+                Math.min(255, blockColor.getRed() + 180),
+                Math.min(255, blockColor.getGreen() + 180),
+                Math.min(255, blockColor.getBlue() + 180));
 
         beamParticles.add(new BeamParticle(
-                columnX * cellSize + cellSize / 2,
-                0, 
-                boardHeight * cellSize, 
+                startX * cellSize + (widthCells * cellSize) / 2,
+                0,
+                boardHeight * cellSize,
                 brightColor,
-                6, // 6프레임 유지
-                cellSize));
-
-        // 보조 빔 (양쪽, 약간 어둡고 좁음) - 맨 위에서 바닥까지
-        Color dimColor = new Color(
-                Math.min(255, blockColor.getRed() + 80),
-                Math.min(255, blockColor.getGreen() + 80),
-                Math.min(255, blockColor.getBlue() + 80));
-
-        beamParticles.add(new BeamParticle(
-                columnX * cellSize + cellSize / 4,
-                0, 
-                boardHeight * cellSize, 
-                dimColor,
-                5,
-                cellSize / 2));
-
-        beamParticles.add(new BeamParticle(
-                columnX * cellSize + cellSize * 3 / 4,
-                0, 
-                boardHeight * cellSize, 
-                dimColor,
-                5,
-                cellSize / 2));
+                6,
+                beamWidth));
 
         // 착지 지점에 폭발 효과
-        double centerX = columnX * cellSize + cellSize / 2.0;
+        double centerX = beamCenterX;
         double centerY = endY * cellSize + cellSize;
 
-        // 불꽃 파티클 (위로 튀어오름)
-        int sparkCount = 5 + random.nextInt(3);
+        // 불꽃 파티클
+        int sparkCount = 8 + random.nextInt(5);
         for (int i = 0; i < sparkCount; i++) {
             double angle = -Math.PI / 2 + (random.nextDouble() - 0.5) * Math.PI;
-            double speed = 2.0 + random.nextDouble() * 3.0;
+            double speed = 3.0 + random.nextDouble() * 4.0;
 
             double vx = Math.cos(angle) * speed;
             double vy = Math.sin(angle) * speed;
 
             Color sparkColor = new Color(
-                    Math.min(255, 200 + random.nextInt(56)),
-                    Math.min(255, 200 + random.nextInt(56)),
+                    Math.min(255, 220 + random.nextInt(36)),
+                    Math.min(255, 220 + random.nextInt(36)),
                     255);
 
-            int size = 2;
-            int life = 8 + random.nextInt(5);
-
-            particles.add(new Particle(centerX, centerY, vx, vy, sparkColor, life, size));
+            particles.add(new Particle(centerX, centerY, vx, vy, sparkColor, 10 + random.nextInt(8), 3));
         }
 
-        // 먼지 파티클 (옆으로 퍼짐)
-        int dustCount = 4 + random.nextInt(3);
+        // 먼지 파티클
+        int dustCount = 6 + random.nextInt(4);
         for (int i = 0; i < dustCount; i++) {
             double angle = random.nextDouble() * Math.PI - Math.PI / 2;
-            double speed = 1.5 + random.nextDouble() * 2.0;
+            double speed = 2.0 + random.nextDouble() * 2.5;
 
             double vx = Math.cos(angle) * speed;
             double vy = Math.sin(angle) * speed * 0.5;
 
-            int gray = 150 + random.nextInt(50);
+            int gray = 180 + random.nextInt(50);
             Color dustColor = new Color(gray, gray, gray);
 
-            int size = 2 + random.nextInt(2);
-            int life = 10 + random.nextInt(6);
-
-            particles.add(new Particle(centerX, centerY, vx, vy, dustColor, life, size));
+            particles.add(
+                    new Particle(centerX, centerY, vx, vy, dustColor, 12 + random.nextInt(8), 3 + random.nextInt(2)));
         }
     }
 

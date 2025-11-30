@@ -147,17 +147,17 @@ public class BoardView extends JPanel {
             long elapsed = System.currentTimeMillis() - createTime;
 
             if (elapsed < 200) {
-                // 
+                //
                 float t = elapsed / 200f;
                 scale = 0.5f + (0.5f * t);
                 alpha = t;
             } else if (elapsed < 1800) {
-                // 
+                //
                 scale = 1.0f;
                 alpha = 1.0f;
                 offsetY = (int) ((elapsed - 200) / 6); // 천천히 위로 (5 → 6)
             } else if (elapsed < 2200) {
-                // 
+                //
                 float t = (elapsed - 1800) / 400f;
                 alpha = 1.0f - t;
                 offsetY = (int) ((elapsed - 200) / 6);
@@ -244,7 +244,7 @@ public class BoardView extends JPanel {
     }
 
     /**
-     * 빔 파티클 렌더링 (일반 파티클보다 먼저 그려야 배경처럼 보임)
+     * 빔 파티클 렌더링 (테이퍼 광선 - 아래는 굵고 위는 얇음)
      */
     private void renderBeamParticles(Graphics2D g2, int cellSize) {
         ParticleSystem particleSystem = logic.getClearService().getParticleSystem();
@@ -255,47 +255,101 @@ public class BoardView extends JPanel {
         }
 
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
 
         for (ParticleSystem.BeamParticle beam : beams) {
             float alpha = beam.getAlpha();
             if (alpha <= 0)
                 continue;
 
-            // 투명도 강화: 더 빠르게 사라지도록 알파값 제곱 적용
-            float fadeAlpha = alpha * alpha; // 선형 → 제곱 페이드 (더 빠름)
+            //  제곱 페이드 효과 (더 빠르게 사라짐)
+            float fadeAlpha = alpha * alpha;
 
-            // 투명도 적용
-            Color beamColor = new Color(
-                    beam.color.getRed(),
-                    beam.color.getGreen(),
-                    beam.color.getBlue(),
-                    (int) (fadeAlpha * 180));
-
-            // 그라데이션 효과 (중앙이 밝고 양쪽이 어두움)
-            int x = beam.x - beam.width / 2;
-            int width = beam.width;
             int height = beam.endY - beam.startY;
 
-            // 중앙 밝은 부분
-            g2.setColor(beamColor);
-            g2.fillRect(x + width / 4, beam.startY, width / 2, height);
-
-            // 양쪽 어두운 부분
-            Color dimColor = new Color(
-                    beam.color.getRed(),
-                    beam.color.getGreen(),
-                    beam.color.getBlue(),
-                    (int) (fadeAlpha * 80));
-            g2.setColor(dimColor);
-            g2.fillRect(x, beam.startY, width / 4, height);
-            g2.fillRect(x + width * 3 / 4, beam.startY, width / 4, height);
-
-            // 테두리 빛남 효과
-            g2.setStroke(new BasicStroke(2f));
-            Color glowColor = new Color(255, 255, 255, (int) (fadeAlpha * 120)); // 🔥 150 → 120
-            g2.setColor(glowColor);
-            g2.drawLine(x + width / 2, beam.startY, x + width / 2, beam.endY);
+            //  테이퍼 광선 그리기 (아래 → 위로 점점 가늘어짐)
+            drawTaperedBeam(g2, beam, fadeAlpha, height, cellSize);
         }
+    }
+
+    /**
+     * 테이퍼 광선 그리기 (메인 광선 한 줄기만)
+     */
+    private void drawTaperedBeam(Graphics2D g2, ParticleSystem.BeamParticle beam,
+            float alpha, int height, int cellSize) {
+        int centerX = beam.x;
+
+        //  블록보다 살짝만 넓게 (1.1배)
+        int bottomWidth = (int) (beam.width * 0.7f);
+        int topWidth = (int) (beam.width * 0.7f);
+
+        //  메인 광선 한 줄기만
+        drawBeamLayer(g2, centerX, beam.startY, beam.endY,
+                topWidth, bottomWidth,
+                beam.color, alpha * 1.0f); // 더 진하게
+    }
+
+    private void drawBeamLayer(Graphics2D g2, int centerX, int startY, int endY,
+            int topWidth, int bottomWidth, Color baseColor, float alpha) {
+        if (alpha <= 0)
+            return;
+
+        Color solidColor = new Color(
+                baseColor.getRed() ,
+                baseColor.getGreen() ,
+                baseColor.getBlue() ,
+                (int)(alpha * 255)); // 약간 투명하게
+
+        // 사다리꼴 모양
+        int[] xPoints = {
+                centerX - topWidth / 2,
+                centerX + topWidth / 2,
+                centerX + bottomWidth / 2,
+                centerX - bottomWidth / 2
+        };
+        int[] yPoints = {
+                startY,
+                startY,
+                endY,
+                endY
+        };
+
+        
+        g2.setPaint(solidColor);
+        g2.fillPolygon(xPoints, yPoints, 4);
+    }
+
+    /**
+     * 중심 밝은 라인 (레이저 코어) - 심플하게
+     */
+    private void drawCoreBeam(Graphics2D g2, int centerX, int startY, int endY,
+            int topWidth, int bottomWidth, float alpha) {
+        if (alpha <= 0)
+            return;
+
+        //  순백색 코어 (적당하게)
+        Color coreColor = new Color(255, 255, 255, (int) (alpha * 180));
+
+        int[] xPoints = {
+                centerX - topWidth / 2,
+                centerX + topWidth / 2,
+                centerX + bottomWidth / 2,
+                centerX - bottomWidth / 2
+        };
+        int[] yPoints = {
+                startY,
+                startY,
+                endY,
+                endY
+        };
+
+        g2.setColor(coreColor);
+        g2.fillPolygon(xPoints, yPoints, 4);
+
+        //  중앙 라인 (심플하게)
+        g2.setStroke(new BasicStroke(2f));
+        g2.setColor(new Color(255, 255, 255, (int) (alpha * 220)));
+        g2.drawLine(centerX, startY, centerX, endY);
     }
 
     /** 파티클 렌더링 */
