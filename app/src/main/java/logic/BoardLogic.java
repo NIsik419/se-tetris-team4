@@ -368,19 +368,29 @@ public class BoardLogic {
 
         updateGarbageFlagsOnClear(clearedRows);
 
-        if (lines >= 2 && onLinesClearedWithMasks != null) {
+        // 가비지가 아닌 라인만 카운트
+        int nonGarbageLines = 0;
+        for (int y : clearedRows) {
+            if (!isGarbageRow[y]) {
+                nonGarbageLines++;
+            }
+        }
+
+        // 가비지가 아닌 라인이 2줄 이상일 때만 공격 전송
+        if (nonGarbageLines >= 2 && onLinesClearedWithMasks != null) {
             int[] masks = buildAttackMasks(clearedRows);
             onLinesClearedWithMasks.accept(masks);
-            System.out.println("[ATTACK] " + lines + "줄 클리어 → " + lines + "줄 공격 전송");
+            System.out.println("[ATTACK] " + nonGarbageLines + "줄 클리어 (가비지 제외) → 공격 전송");
         }
 
         final int CELL_SIZE = 25;
         for (int row : clearedRows) {
             clear.getParticleSystem().createLineParticles(row, board, CELL_SIZE, WIDTH);
         }
-        
+
         // 다음 턴을 위해 recentPlaced 초기화
-        for (int yy = 0; yy < HEIGHT; yy++) java.util.Arrays.fill(recentPlaced[yy], false);
+        for (int yy = 0; yy < HEIGHT; yy++)
+            java.util.Arrays.fill(recentPlaced[yy], false);
 
         for (int row : clearedRows) {
             for (int x = 0; x < WIDTH; x++) {
@@ -436,7 +446,7 @@ public class BoardLogic {
     }
 
     // ============================================
-    // 공격 마스크 생성 (recentPlaced 제외)
+    // 공격 마스크 생성 (recentPlaced와 가비지 제외)
     // ============================================
     private int[] buildAttackMasks(List<Integer> clearedRows) {
         var board = state.getBoard();
@@ -445,6 +455,13 @@ public class BoardLogic {
         for (int i = 0; i < clearedRows.size(); i++) {
             int y = clearedRows.get(i);
             int mask = 0;
+
+            // 가비지 라인은 공격으로 변환하지 않음
+            if (isGarbageRow[y]) {
+                masks[i] = 0; // 빈 마스크 (공격 없음)
+                continue;
+            }
+
             for (int x = 0; x < WIDTH; x++) {
                 // 방금 고정된 블록은 제외
                 if (board[y][x] != null && !recentPlaced[y][x]) {
@@ -463,7 +480,7 @@ public class BoardLogic {
         clearedLines += lines;
         // 이전 누적 줄 수 기억
         int prevDeleted = deletedLinesTotal;
-        deletedLinesTotal += lines;  // 이번에 지운 줄 수 더함
+        deletedLinesTotal += lines; // 이번에 지운 줄 수 더함
 
         if (onLineCleared != null)
             onLineCleared.accept(lines);
@@ -838,12 +855,14 @@ public class BoardLogic {
 
         System.out.println("[DEBUG] Garbage applied: " + addedLines + " lines, total garbage: " + garbageCount);
     }
-        /**
+
+    /**
      * Simple garbage (no mask info) → convert to random-hole garbage masks
      * and enqueue them so applyIncomingGarbage() can place them on the board.
      */
     private void addGarbageLines(int lines) {
-        if (lines <= 0) return;
+        if (lines <= 0)
+            return;
 
         java.util.Random rand = new java.util.Random();
 
@@ -853,15 +872,15 @@ public class BoardLogic {
 
             int mask = 0;
             for (int x = 0; x < WIDTH; x++) {
-                if (x == holeX) continue;   // hole → 0
-                mask |= (1 << x);           // filled → 1
+                if (x == holeX)
+                    continue; // hole → 0
+                mask |= (1 << x); // filled → 1
             }
 
             // enqueue this garbage row; it’ll be applied in applyIncomingGarbage()
             incomingGarbageQueue.offer(mask);
         }
     }
-
 
     public void addGarbageMasks(int[] masks) {
         if (masks == null || masks.length == 0)
@@ -1063,7 +1082,7 @@ public class BoardLogic {
         this.gameOver = true;
         sound.play(SoundManager.Sound.GAME_OVER, 0.4f); // 추가
         System.out.println("[GAME OVER] Your Score: " + score);
-        
+
         state.setCurr(null);
         if (onGameOverCallback != null)
             onGameOverCallback.run();
