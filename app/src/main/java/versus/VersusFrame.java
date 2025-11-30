@@ -65,7 +65,7 @@ public class VersusFrame extends JFrame {
         setLocationRelativeTo(null);
         setVisible(true);
 
-        panel.attachOverlayToFrame(this);
+        versusPanel.attachOverlayToFrame(this);
     }
 
     private void handleWindowClose() {
@@ -97,7 +97,10 @@ public class VersusFrame extends JFrame {
                 // MainMenu 표시 로직
             });
         }
-        // choice == 1 또는 -1 (취소) → 아무것도 안 함 (대전 계속)
+       else {
+            // 취소 - 게임 재개
+            System.out.println("[VERSUS] Resume game");
+        }
     }
 
     // 게임 오버 시 호출할 메서드 추가
