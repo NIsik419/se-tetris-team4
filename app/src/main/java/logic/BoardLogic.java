@@ -17,6 +17,7 @@ import javax.swing.SwingUtilities;
 
 import blocks.Block;
 import component.BlockBag;
+import component.BoardView;
 import component.GameConfig;
 import component.GameConfig.Difficulty;
 import component.SpeedManager;
@@ -24,6 +25,7 @@ import component.items.ItemBlock;
 
 public class BoardLogic {
     private final SoundManager sound = SoundManager.getInstance();
+    private BoardView boardView;
     public static final int WIDTH = GameState.WIDTH;
     public static final int HEIGHT = GameState.HEIGHT;
     private static final int MAX_GARBAGE = 10;
@@ -36,6 +38,10 @@ public class BoardLogic {
     private Runnable resumeCallback;
     private Runnable onGameOverCallback;
     private Runnable onGarbageApplied;
+
+    public void setBoardView(BoardView view) {
+        this.boardView = view;
+    }
 
     public void setOnGarbageApplied(Runnable callback) {
         this.onGarbageApplied = callback;
@@ -495,6 +501,10 @@ public class BoardLogic {
             onLineCleared.accept(lines);
         addScore(lines * 100);
 
+        if (boardView != null && lines >= 2) {
+            boardView.showLineClear(lines);
+        }
+
         playLineClearSound(lines);
 
         long now = System.currentTimeMillis();
@@ -506,11 +516,22 @@ public class BoardLogic {
             addScore(comboBonus);
             System.out.println("Combo! x" + comboCount + " (+" + comboBonus + ")");
 
+            if (boardView != null) {
+                boardView.showCombo(comboBonus);
+            }
             playComboSound(comboBonus);
         }
 
         if (clearedLines % 10 == 0) {
             speedManager.increaseLevel();
+
+            // SpeedUp 어워드 표시
+            if (boardView != null) {
+                int currentLevel = speedManager.getLevel();
+                SwingUtilities.invokeLater(() -> {
+                    boardView.showSpeedUp(currentLevel);
+                });
+            }
         }
         if (itemMode) {
             int prevStep = prevDeleted / ITEM_LINES_INTERVAL;

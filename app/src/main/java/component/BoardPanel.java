@@ -157,6 +157,7 @@ public class BoardPanel extends JPanel {
             });
         });
         this.boardView = new BoardView(logic, settings);
+        logic.setBoardView(boardView);
         this.loop = new GameLoop(logic, boardView::repaint);
 
         // 루프 제어 콜백 연결

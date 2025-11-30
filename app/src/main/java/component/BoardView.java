@@ -30,6 +30,7 @@ public class BoardView extends JPanel {
     private Rectangle confirmButtonBounds = null;
     private boolean confirmButtonHovered = false;
     private Runnable gameOverConfirmAction = null;
+    private List<AwardNotification> awards = new ArrayList<>();
 
     // === 상수 통일 (Board 기준) ===
     private static final int CELL_SIZE = 25;
@@ -124,6 +125,50 @@ public class BoardView extends JPanel {
         g2.dispose();
     }
 
+    private static class AwardNotification {
+        String text;
+        Color color;
+        long createTime;
+        int fontSize;
+
+        // 애니메이션 상태
+        float alpha = 0f;
+        float scale = 0.4f;
+        int offsetY = 0;
+
+        AwardNotification(String text, Color color, int fontSize) {
+            this.text = text;
+            this.color = color;
+            this.fontSize = fontSize;
+            this.createTime = System.currentTimeMillis();
+        }
+
+        void update() {
+            long elapsed = System.currentTimeMillis() - createTime;
+
+            if (elapsed < 200) {
+                // 
+                float t = elapsed / 200f;
+                scale = 0.5f + (0.5f * t);
+                alpha = t;
+            } else if (elapsed < 1800) {
+                // 
+                scale = 1.0f;
+                alpha = 1.0f;
+                offsetY = (int) ((elapsed - 200) / 6); // 천천히 위로 (5 → 6)
+            } else if (elapsed < 2200) {
+                // 
+                float t = (elapsed - 1800) / 400f;
+                alpha = 1.0f - t;
+                offsetY = (int) ((elapsed - 200) / 6);
+            }
+        }
+
+        boolean isExpired() {
+            return System.currentTimeMillis() - createTime > 1500;
+        }
+    }
+
     @Override
     protected void paintComponent(Graphics g) {
         boolean clearing = logic.isLineClearing();
@@ -141,7 +186,7 @@ public class BoardView extends JPanel {
         if (shakeOffset != 0) {
             g2.translate(shakeOffset, 0); // 좌우로 흔들기
         }
-        
+
         // 1) 현재 셀 크기 계산 (Settings 기반)
         int currentCellSize = CELL_SIZE; // 기본값
         if (settings != null) {
@@ -189,7 +234,12 @@ public class BoardView extends JPanel {
         if (showGameOverScreen) {
             drawGameOverScreen(g2);
         }
+        awards.removeIf(award -> {
+            award.update();
+            return award.isExpired();
+        });
 
+        drawAwards(g2, currentCellSize);
         g2.dispose();
     }
 
@@ -849,5 +899,118 @@ public class BoardView extends JPanel {
         int textX = buttonX + (buttonWidth - fmBtn.stringWidth(buttonText)) / 2;
         int textY = buttonY + (buttonHeight + fmBtn.getAscent() - fmBtn.getDescent()) / 2;
         g2.drawString(buttonText, textX, textY);
+    }
+
+    private void drawAwards(Graphics2D g2, int cellSize) {
+        if (awards.isEmpty())
+            return;
+
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+        int boardWidth = getWidth();
+        int baseY = 100; // 보드 상단에서 100픽셀 아래
+
+        for (AwardNotification award : awards) {
+            if (award.alpha <= 0)
+                continue;
+
+            // 폰트 설정 (스케일 적용)
+            int scaledSize = (int) (award.fontSize * award.scale);
+            Font font = new Font("Arial Black", Font.BOLD, scaledSize);
+            g2.setFont(font);
+
+            FontMetrics fm = g2.getFontMetrics();
+            int textWidth = fm.stringWidth(award.text);
+            int x = (boardWidth - textWidth) / 2;
+            int y = baseY - award.offsetY;
+
+            // 그림자 효과 (더 진하게)
+            g2.setColor(new Color(0, 0, 0, (int) (180 * award.alpha)));
+            g2.drawString(award.text, x + 3, y + 3);
+
+            // 외곽선 효과 (더 두껍게)
+            g2.setColor(new Color(0, 0, 0, (int) (200 * award.alpha)));
+            g2.setStroke(new BasicStroke(4f));
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dy = -1; dy <= 1; dy++) {
+                    if (dx != 0 || dy != 0) {
+                        g2.drawString(award.text, x + dx * 2, y + dy * 2);
+                    }
+                }
+            }
+
+            // 메인 텍스트
+            g2.setColor(new Color(
+                    award.color.getRed(),
+                    award.color.getGreen(),
+                    award.color.getBlue(),
+                    (int) (255 * award.alpha)));
+            g2.drawString(award.text, x, y);
+
+            // 빛나는 효과 (선택적)
+            if (award.alpha > 0.7f) {
+                g2.setColor(new Color(255, 255, 255, (int) (100 * award.alpha)));
+                Font glowFont = new Font("Arial Black", Font.BOLD, scaledSize + 2);
+                g2.setFont(glowFont);
+                g2.drawString(award.text, x, y);
+            }
+        }
+    }
+
+    /**
+     * 어워드 표시 (공개 메서드)
+     */
+    public void showAward(String text, Color color, int fontSize) {
+        awards.add(new AwardNotification(text, color, fontSize));
+        repaint();
+    }
+
+    /**
+     * 콤보 표시
+     */
+    public void showCombo(int combo) {
+        if (combo < 2)
+            return;
+
+        Color color;
+        if (combo >= 5) {
+            color = new Color(255, 100, 255); // 보라색
+        } else if (combo >= 3) {
+            color = new Color(255, 150, 50); // 주황색
+        } else {
+            color = new Color(100, 200, 255); // 파란색
+        }
+
+        showAward("COMBO x" + combo + "!", color, 32);
+    }
+
+    /**
+     * Double/Triple/Tetris 표시
+     */
+    public void showLineClear(int lines) {
+        switch (lines) {
+            case 2 -> showAward("DOUBLE!", new Color(100, 200, 255), 28);
+            case 3 -> showAward("TRIPLE!", new Color(150, 100, 255), 30);
+            case 4 -> showAward("TETRIS!!", new Color(255, 100, 100), 36);
+        }
+    }
+
+    /**
+     * Perfect Clear 표시
+     */
+    public void showPerfectClear() {
+        showAward("PERFECT CLEAR!!", new Color(255, 215, 0), 40);
+    }
+
+    /**
+     * Back-to-Back 표시
+     */
+    public void showBackToBack() {
+        showAward("BACK-TO-BACK!", new Color(255, 50, 150), 34);
+    }
+
+    public void showSpeedUp(int level) {
+        showAward("SPEED UP! Lv." + level, new Color(255, 165, 0), 30);
     }
 }
