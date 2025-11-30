@@ -88,6 +88,7 @@ public class BoardLogic {
     private int clearedLines = 0;
     private boolean nextIsItem = false;
     private boolean itemMode = false;
+    private int currentCellSize = 25; // 기본값
 
     private static final Color GARBAGE_COLOR = new Color(80, 80, 80);
 
@@ -129,6 +130,14 @@ public class BoardLogic {
 
     public void setItemMode(boolean enabled) {
         this.itemMode = enabled;
+    }
+
+    public void setCellSize(int cellSize) {
+        this.currentCellSize = cellSize;
+    }
+
+    public int getCellSize() {
+        return currentCellSize;
     }
 
     public void addScore(int delta) {
@@ -882,6 +891,9 @@ public class BoardLogic {
         }
     }
 
+    // ============================================
+    // addGarbageMasks 수정 (진동 효과 추가)
+    // ============================================
     public void addGarbageMasks(int[] masks) {
         if (masks == null || masks.length == 0)
             return;
@@ -892,6 +904,16 @@ public class BoardLogic {
 
         if (onIncomingChanged != null) {
             onIncomingChanged.accept(incomingGarbageQueue.size());
+        }
+
+        // 진동 효과 트리거 (라인 수에 비례)
+        triggerShakeEffect(masks.length);
+
+        // 사운드 추가
+        if (masks.length >= 3) {
+            sound.play(SoundManager.Sound.GAME_OVER, 0.2f); // 큰 공격용 임시 사운드
+        } else {
+            sound.play(SoundManager.Sound.ROTATE, 0.3f); // 작은 공격용 임시 사운드
         }
 
         System.out.println(
@@ -948,10 +970,52 @@ public class BoardLogic {
     public void hardDrop() {
         if (state.getCurr() == null)
             return;
-        while (move.canMove(state.getCurr(), state.getX(), state.getY() + 1)) {
+
+        Block curr = state.getCurr();
+        int startY = state.getY();
+
+        // 하드드롭으로 이동
+        while (move.canMove(curr, state.getX(), state.getY() + 1)) {
             move.moveDown();
             score += 2;
         }
+
+        int endY = state.getY();
+
+        // 블록의 각 열에 대해 빔 효과 생성
+        int cellSize = currentCellSize;
+        boolean[][] shape = new boolean[curr.height()][curr.width()];
+
+        // 블록의 각 열이 실제로 블록을 포함하는지 확인
+        for (int j = 0; j < curr.height(); j++) {
+            for (int i = 0; i < curr.width(); i++) {
+                if (curr.getShape(i, j) == 1) {
+                    shape[j][i] = true;
+                }
+            }
+        }
+
+        // 각 열마다 빔 생성 (블록이 있는 열만)
+        for (int i = 0; i < curr.width(); i++) {
+            boolean hasBlock = false;
+            for (int j = 0; j < curr.height(); j++) {
+                if (shape[j][i]) {
+                    hasBlock = true;
+                    break;
+                }
+            }
+
+            if (hasBlock) {
+                int columnX = state.getX() + i;
+                clear.getParticleSystem().createHardDropBeam(
+                        columnX,
+                        startY,
+                        endY,
+                        curr.getColor(),
+                        cellSize);
+            }
+        }
+
         sound.play(SoundManager.Sound.HARD_DROP, 0.2f);
         moveDown();
     }
@@ -1194,4 +1258,33 @@ public class BoardLogic {
             sound.play(SoundManager.Sound.COMBO_2, 0.4f);
         }
     }
+
+    // BoardLogic.java에 추가할 메서드들
+
+    // ============================================
+    // 가비지 수신 시 화면 진동 트리거
+    // ============================================
+    private void triggerShakeEffect(int intensity) {
+        if (onFrameUpdate != null) {
+            // 진동 강도에 따라 흔들림 설정
+            int shakeIntensity = Math.min(intensity * 2, 10); // 최대 10픽셀
+
+            new Thread(() -> {
+                try {
+                    for (int i = 0; i < 8; i++) { // 8프레임 동안 진동
+                        int offset = (i % 2 == 0) ? shakeIntensity : -shakeIntensity;
+                        shakeOffset = offset * (8 - i) / 8; // 점점 약해짐
+
+                        SwingUtilities.invokeLater(onFrameUpdate);
+                        Thread.sleep(30);
+                    }
+                    shakeOffset = 0;
+                    SwingUtilities.invokeLater(onFrameUpdate);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }).start();
+        }
+    }
+
 }

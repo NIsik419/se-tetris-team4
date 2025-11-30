@@ -38,7 +38,7 @@ public class BoardView extends JPanel {
     public static final int WIDTH = BoardLogic.WIDTH;
     public static final int HEIGHT = BoardLogic.HEIGHT;
     private static final Color BG_GAME = new Color(25, 30, 42);
-    
+
     // 배경 타일 기본색 (블록보다 더 어두운 회색 느낌)
     private static final Color BG_TILE_COLOR = new Color(24, 26, 32);
 
@@ -48,7 +48,7 @@ public class BoardView extends JPanel {
     private BufferedImage backgroundImage;
     private int backgroundCellSize = -1;
 
-    //  생성자에 Settings 추가
+    // 생성자에 Settings 추가
     public BoardView(BoardLogic logic, Settings settings) {
         this.logic = logic;
         this.move = new MovementService(logic.getState());
@@ -63,7 +63,7 @@ public class BoardView extends JPanel {
                 case LARGE -> 30;
             };
         }
-
+        logic.setCellSize(cellSize);
         // 배경 이미지 생성 (셀 크기에 맞춰)
         initBackgroundImage(cellSize);
 
@@ -78,7 +78,7 @@ public class BoardView extends JPanel {
         setBorder(BorderFactory.createLineBorder(new Color(50, 55, 70), 3));
     }
 
-    //  getPreferredSize를 Settings 기반으로 수정 (null 안전)
+    // getPreferredSize를 Settings 기반으로 수정 (null 안전)
     @Override
     public Dimension getPreferredSize() {
         int cellSize;
@@ -107,7 +107,6 @@ public class BoardView extends JPanel {
         Graphics2D g2 = backgroundImage.createGraphics();
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-
         // 보드 배경 기본 색
         g2.setColor(BG_GAME);
         g2.fillRect(0, 0, w, h);
@@ -118,7 +117,7 @@ public class BoardView extends JPanel {
         // 배경 빈칸 타일 그리기
         for (int y = 0; y < BoardLogic.HEIGHT; y++) {
             for (int x = 0; x < BoardLogic.WIDTH; x++) {
-                drawBackgroundCell(g2, x, y, cellSize);  // ← 반드시 cellSize 넘겨서 그리기
+                drawBackgroundCell(g2, x, y, cellSize); // ← 반드시 cellSize 넘겨서 그리기
             }
         }
 
@@ -131,20 +130,25 @@ public class BoardView extends JPanel {
         super.paintComponent(g);
         Graphics2D g2 = (Graphics2D) g.create();
 
-       if (!visibleDuringStandby) {
-            g2.dispose();      // ← 리턴 전에 정리
+        if (!visibleDuringStandby) {
+            g2.dispose(); // ← 리턴 전에 정리
             return;
         }
 
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
+        int shakeOffset = logic.getShakeOffset();
+        if (shakeOffset != 0) {
+            g2.translate(shakeOffset, 0); // 좌우로 흔들기
+        }
+        
         // 1) 현재 셀 크기 계산 (Settings 기반)
         int currentCellSize = CELL_SIZE; // 기본값
         if (settings != null) {
             currentCellSize = switch (settings.screenSize) {
-                case SMALL  -> 20;
+                case SMALL -> 20;
                 case MEDIUM -> 25;
-                case LARGE  -> 30;
+                case LARGE -> 30;
             };
         }
 
@@ -156,6 +160,8 @@ public class BoardView extends JPanel {
         // 3) 배경 먼저 그리기
         g2.drawImage(backgroundImage, 0, 0, null);
 
+        renderBeamParticles(g2, currentCellSize);
+
         // 5) 고정 블록 그리기
         Color[][] grid = logic.getBoard();
         for (int y = 0; y < BoardLogic.HEIGHT; y++) {
@@ -163,7 +169,7 @@ public class BoardView extends JPanel {
                 if (grid[y][x] != null) {
                     drawCell(g2, x, y,
                             ColorBlindPalette.convert(grid[y][x], colorMode),
-                            currentCellSize);   // ← 셀 크기 전달
+                            currentCellSize); // ← 셀 크기 전달
                 }
             }
         }
@@ -185,6 +191,61 @@ public class BoardView extends JPanel {
         }
 
         g2.dispose();
+    }
+
+    /**
+     * 빔 파티클 렌더링 (일반 파티클보다 먼저 그려야 배경처럼 보임)
+     */
+    private void renderBeamParticles(Graphics2D g2, int cellSize) {
+        ParticleSystem particleSystem = logic.getClearService().getParticleSystem();
+        List<ParticleSystem.BeamParticle> beams = particleSystem.getBeamParticles();
+
+        if (beams == null || beams.isEmpty()) {
+            return;
+        }
+
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+        for (ParticleSystem.BeamParticle beam : beams) {
+            float alpha = beam.getAlpha();
+            if (alpha <= 0)
+                continue;
+
+            // 투명도 강화: 더 빠르게 사라지도록 알파값 제곱 적용
+            float fadeAlpha = alpha * alpha; // 선형 → 제곱 페이드 (더 빠름)
+
+            // 투명도 적용
+            Color beamColor = new Color(
+                    beam.color.getRed(),
+                    beam.color.getGreen(),
+                    beam.color.getBlue(),
+                    (int) (fadeAlpha * 180));
+
+            // 그라데이션 효과 (중앙이 밝고 양쪽이 어두움)
+            int x = beam.x - beam.width / 2;
+            int width = beam.width;
+            int height = beam.endY - beam.startY;
+
+            // 중앙 밝은 부분
+            g2.setColor(beamColor);
+            g2.fillRect(x + width / 4, beam.startY, width / 2, height);
+
+            // 양쪽 어두운 부분
+            Color dimColor = new Color(
+                    beam.color.getRed(),
+                    beam.color.getGreen(),
+                    beam.color.getBlue(),
+                    (int) (fadeAlpha * 80));
+            g2.setColor(dimColor);
+            g2.fillRect(x, beam.startY, width / 4, height);
+            g2.fillRect(x + width * 3 / 4, beam.startY, width / 4, height);
+
+            // 테두리 빛남 효과
+            g2.setStroke(new BasicStroke(2f));
+            Color glowColor = new Color(255, 255, 255, (int) (fadeAlpha * 120)); // 🔥 150 → 120
+            g2.setColor(glowColor);
+            g2.drawLine(x + width / 2, beam.startY, x + width / 2, beam.endY);
+        }
     }
 
     /** 파티클 렌더링 */
@@ -255,11 +316,11 @@ public class BoardView extends JPanel {
         int innerSize = size - inset * 2;
 
         // 🔹 색 계열: 대비를 확 줄여서 은은하게
-        Color topColor    = lighten(baseColor, 0.15f); // 0.35f → 0.15f
-        Color leftColor   = lighten(baseColor, 0.07f); // 0.15f → 0.07f
-        Color rightColor  = darken(baseColor, 0.12f);  // 0.25f → 0.12f
-        Color bottomColor = darken(baseColor, 0.20f);  // 0.45f → 0.20f
-        Color centerColor = darken(baseColor, 0.03f);  // 중앙은 아주 조금만 어둡게
+        Color topColor = lighten(baseColor, 0.15f); // 0.35f → 0.15f
+        Color leftColor = lighten(baseColor, 0.07f); // 0.15f → 0.07f
+        Color rightColor = darken(baseColor, 0.12f); // 0.25f → 0.12f
+        Color bottomColor = darken(baseColor, 0.20f); // 0.45f → 0.20f
+        Color centerColor = darken(baseColor, 0.03f); // 중앙은 아주 조금만 어둡게
 
         // ===== top facet (위 사다리꼴) =====
         Polygon top = new Polygon();
@@ -352,23 +413,23 @@ public class BoardView extends JPanel {
         // facet 들은 “아주 약한” 하이라이트/그림자만
         // top
         g2.setColor(new Color(230, 230, 240, 10)); // 살짝만 밝게
-        g2.fillPolygon(new int[]{px, px + size, innerX + innerSize, innerX},
-                    new int[]{py, py, innerY, innerY}, 4);
+        g2.fillPolygon(new int[] { px, px + size, innerX + innerSize, innerX },
+                new int[] { py, py, innerY, innerY }, 4);
 
         // bottom
         g2.setColor(new Color(0, 0, 0, 40)); // 살짝만 어둡게
-        g2.fillPolygon(new int[]{px, px + size, innerX + innerSize, innerX},
-                    new int[]{py + size, py + size, innerY + innerSize, innerY + innerSize}, 4);
+        g2.fillPolygon(new int[] { px, px + size, innerX + innerSize, innerX },
+                new int[] { py + size, py + size, innerY + innerSize, innerY + innerSize }, 4);
 
         // left
         g2.setColor(new Color(220, 220, 230, 5));
-        g2.fillPolygon(new int[]{px, px, innerX, innerX},
-                    new int[]{py, py + size, innerY + innerSize, innerY}, 4);
+        g2.fillPolygon(new int[] { px, px, innerX, innerX },
+                new int[] { py, py + size, innerY + innerSize, innerY }, 4);
 
         // right
         g2.setColor(new Color(0, 0, 0, 35));
-        g2.fillPolygon(new int[]{px + size, px + size, innerX + innerSize, innerX + innerSize},
-                    new int[]{py, py + size, innerY + innerSize, innerY}, 4);
+        g2.fillPolygon(new int[] { px + size, px + size, innerX + innerSize, innerX + innerSize },
+                new int[] { py, py + size, innerY + innerSize, innerY }, 4);
     }
 
     /** 유령 블록 (Ghost) - cellSize 파라미터 추가 */
@@ -469,10 +530,22 @@ public class BoardView extends JPanel {
     public ColorBlindPalette.Mode getColorMode() {
         return colorMode;
     }
-    
-    //  Settings 업데이트 메서드 추가
+
+    // Settings 업데이트 메서드 추가
     public void updateSettings(Settings settings) {
         this.settings = settings;
+
+        // 셀 크기 변경 시 BoardLogic에도 알려주기
+        int cellSize = CELL_SIZE;
+        if (settings != null) {
+            cellSize = switch (settings.screenSize) {
+                case SMALL -> 20;
+                case MEDIUM -> 25;
+                case LARGE -> 30;
+            };
+        }
+        logic.setCellSize(cellSize);
+
         revalidate();
         repaint();
     }
@@ -554,7 +627,7 @@ public class BoardView extends JPanel {
 
         List<JPanel> blocks = new ArrayList<>();
 
-        //  현재 셀 크기 사용
+        // 현재 셀 크기 사용
         int currentCellSize = Math.min(getWidth() / WIDTH, getHeight() / HEIGHT);
 
         for (int y = 0; y < BoardLogic.HEIGHT; y++) {
@@ -671,7 +744,7 @@ public class BoardView extends JPanel {
                 if (showGameOverScreen && confirmButtonBounds != null &&
                         confirmButtonBounds.contains(e.getPoint())) {
 
-                    // 더 이상 버튼은 못 누르게 리스너만 제거 
+                    // 더 이상 버튼은 못 누르게 리스너만 제거
                     removeMouseListener(this);
                     removeMouseMotionListener(this);
                     setCursor(Cursor.getDefaultCursor());
