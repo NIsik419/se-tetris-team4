@@ -91,14 +91,16 @@ public class VersusGameManager {
 
         // ─── 이벤트 배선 (마스크 기반 공격만 사용) ───
         p1.events.onLinesClearedWithMasks = masks -> {
-            if (masks == null || masks.length < 2) return; // 규칙: 2줄 이상만
+            if (masks == null || masks.length < 2)
+                return; // 규칙: 2줄 이상만
             p2.enqueueGarbageMasks(masks);
             safeHudUpdateP2();
             System.out.printf("[P1->P2] send masks %d%n", masks.length);
         };
 
         p2.events.onLinesClearedWithMasks = masks -> {
-            if (masks == null || masks.length < 2) return;
+            if (masks == null || masks.length < 2)
+                return;
             p1.enqueueGarbageMasks(masks);
             safeHudUpdateP1();
             System.out.printf("[P2->P1] send masks %d%n", masks.length);
@@ -135,7 +137,7 @@ public class VersusGameManager {
     private void initializeAI(GameConfig p2Config) {
         BoardPanel p2Panel = (BoardPanel) p2.getComponent();
         BoardLogic p2Logic = p2Panel.getLogic();
-        
+
         aiPlayer = new AIPlayer(p2Logic);
 
         // 난이도 설정
@@ -185,7 +187,8 @@ public class VersusGameManager {
      * 승패 처리
      */
     private void onPlayerOver(Player.Id loser) {
-        if (finished) return;
+        if (finished)
+            return;
         finished = true;
 
         Player.Id winner = (loser == Player.Id.P1) ? Player.Id.P2 : Player.Id.P1;
@@ -193,7 +196,7 @@ public class VersusGameManager {
         // 양쪽 루프 정지
         p1.stop();
         p2.stop();
-        
+
         // AI 타이머 정지
         if (aiTimer != null && aiTimer.isRunning()) {
             aiTimer.stop();
@@ -214,7 +217,8 @@ public class VersusGameManager {
      * TIME ATTACK 모드 종료 (점수 비교)
      */
     public void finishByTimeAttack() {
-        if (finished) return;
+        if (finished)
+            return;
 
         int p1Score = p1.getScore();
         int p2Score = p2.getScore();
@@ -232,7 +236,7 @@ public class VersusGameManager {
         finished = true;
         p1.stop();
         p2.stop();
-        
+
         if (aiTimer != null && aiTimer.isRunning()) {
             aiTimer.stop();
         }
@@ -259,8 +263,34 @@ public class VersusGameManager {
         }
     }
 
+    public void cleanup() {
+        System.out.println("[VersusGameManager] Cleaning up...");
+
+        // AI 타이머 정리
+        if (aiTimer != null) {
+            aiTimer.stop();
+            aiTimer = null;
+        }
+
+        // AI 플레이어 정리
+        if (aiPlayer != null) {
+            aiPlayer = null;
+        }
+
+        // P1, P2 정리
+        if (p1 != null) {
+            p1.cleanup();
+        }
+
+        if (p2 != null) {
+            p2.cleanup();
+        }
+
+        System.out.println("[VersusGameManager] Cleanup completed");
+    }
+
     // ─── 외부 제공 API ───
-    
+
     public JComponent getP1Component() {
         return p1.getComponent();
     }
@@ -324,7 +354,7 @@ public class VersusGameManager {
     public List<Block> getP2NextBlocks() {
         return p2.getNextBlocks();
     }
-    
+
     public boolean isAIMode() {
         return isAIMode;
     }

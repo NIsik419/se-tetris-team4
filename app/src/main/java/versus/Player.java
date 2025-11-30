@@ -145,4 +145,31 @@ public class Player {
         return logic.getLinesCleared();
     }
 
+     //  게임 정지 (리소스 정리)
+    public void stopGame() {
+        System.out.println("[Player " + id + "] Stopping game...");
+        stop(); // 루프 정지
+        
+        if (panel != null) {
+            panel.stopGame();
+        }
+    }
+
+    //  리소스 정리
+    public void cleanup() {
+        System.out.println("[Player " + id + "] Cleaning up...");
+        stop(); // 루프 정지
+        
+        if (panel != null) {
+            panel.cleanup();
+        }
+        
+        // 가비지 큐 정리
+        synchronized (this) {
+            pendingMasks.clear();
+        }
+        
+        System.out.println("[Player " + id + "] Cleanup completed");
+    }
+
 }

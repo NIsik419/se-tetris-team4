@@ -22,6 +22,7 @@ import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JLayeredPane;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
@@ -136,11 +137,14 @@ public class BoardPanel extends JPanel {
         });
 
         this.soundManager = SoundManager.getInstance();
-        if (config.mode() == GameConfig.Mode.ITEM) {
-            soundManager.playBGM(BGM.GAME_ITEM);
-        } else {
-            soundManager.playBGM(BGM.GAME_NORMAL);
+        if (startBGM) {
+            if (config.mode() == GameConfig.Mode.ITEM) {
+                soundManager.playBGM(BGM.GAME_ITEM);
+            } else {
+                soundManager.playBGM(BGM.GAME_NORMAL);
+            }
         }
+
         if (config.mode() == GameConfig.Mode.ITEM) {
             logic.setItemMode(true);
         }
@@ -377,18 +381,21 @@ public class BoardPanel extends JPanel {
                                 frame,
                                 () -> {
                                     loop.resumeLoop();
-                                    pausePanel.hidePanel();
+                                    soundManager.resumeBGM();
                                 },
                                 () -> {
                                     restarting = true;
                                     loop.stopLoop();
+                                    soundManager.stopBGM();
                                     onExitToMenu.run();
                                 },
                                 () -> { // EXIT
                                     restarting = false;
                                     loop.stopLoop();
+                                    soundManager.stopBGM();
                                     onExitToMenu.run();
                                 });
+
                         removeHierarchyListener(this);
                     }
                 }
@@ -404,21 +411,20 @@ public class BoardPanel extends JPanel {
             protected void paintComponent(Graphics g) {
                 super.paintComponent(g);
                 Graphics2D g2 = (Graphics2D) g.create();
-                g2.setColor(new Color(0, 0, 0, 150)); // 살짝 어두운 검정
+                g2.setColor(new Color(0, 0, 0, 150));
                 g2.fillRect(0, 0, getWidth(), getHeight());
                 g2.dispose();
             }
         };
-        overlay.setOpaque(false);       // 직접 반투명 그릴 거라 false
+        overlay.setOpaque(false);
         overlay.setVisible(false);
 
-        // 실제 모달 컨텐츠를 담을 패널 (컨테이너)
         dialogPanel = new JPanel(new BorderLayout());
-        dialogPanel.setOpaque(false);       // dialogPanel 자체 배경 없음
-        dialogPanel.setPreferredSize(null); // ❗ 사이즈 고정 제거
+        dialogPanel.setOpaque(false);
+        dialogPanel.setPreferredSize(null);
         overlay.add(dialogPanel);
 
-        // 프레임의 LayeredPane 위에 overlay를 올리기
+        // LayeredPane 추가는 프레임 attach 시
         addHierarchyListener(new HierarchyListener() {
             @Override
             public void hierarchyChanged(HierarchyEvent e) {
@@ -426,48 +432,53 @@ public class BoardPanel extends JPanel {
                     JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(BoardPanel.this);
                     if (frame != null) {
                         frame.getLayeredPane().add(overlay, JLayeredPane.POPUP_LAYER);
-                        relayoutDialog();   // ← 여기에 이 한 줄만
+                        relayoutDialog();
                         removeHierarchyListener(this);
                     }
                 }
             }
         });
 
-        // 이름 입력 오버레이 (컨테이너: dialogPanel)
+        // 이름 입력 오버레이
         nameInputOverlay = new NameInputOverlay(
                 dialogPanel,
                 scoreBoard,
-                this::showScoreboardOverlay,  // 이름 입력 완료 시 → 스코어보드 오버레이
-                this::hideOverlay             // 취소 시 → 그냥 오버레이 닫기
-        );
+                this::showScoreboardOverlay,
+                () -> {
+                    hideOverlay();
+                    // 취소 시 메인으로
+                    onExitToMenu.run();
+                });
 
-        // 스코어보드 오버레이도 같은 dialogPanel 사용
+        // 스코어보드 오버레이
         scoreboardOverlay = new ScoreboardOverlay(
-            dialogPanel,
-            scoreBoard,
-            () -> {
-                // 이미 처리중이면 무시
-                if (restarting) return;
-                restarting = true;
+                dialogPanel,
+                scoreBoard,
+                () -> {
+                    if (restarting)
+                        return;
+                    restarting = true;
 
-                hideOverlay();
-                loop.stopLoop();
-                soundManager.stopBGM();
+                    hideOverlay();
+                    loop.stopLoop();
+                    soundManager.stopBGM();
 
-                // 여기서 GameFrame 에 "재시작 요청"만 표시하고 닫는다
-                java.awt.Window w = SwingUtilities.getWindowAncestor(BoardPanel.this);
-                if (w instanceof GameFrame gf) {
-                    gf.markRestartRequested();  
-                    gf.dispose();               
-                }
-            },
-            onExitToMenu);
+                    java.awt.Window w = SwingUtilities.getWindowAncestor(BoardPanel.this);
+                    if (w instanceof GameFrame gf) {
+                        gf.markRestartRequested();
+                        gf.dispose();
+                    }
+                },
+                () -> {
+                    hideOverlay();
+                    // 메인으로
+                    onExitToMenu.run();
+                });
 
-        // 프레임 리사이즈 시 overlay / dialogPanel 위치 재계산
         addComponentListener(new ComponentAdapter() {
             @Override
             public void componentResized(ComponentEvent e) {
-                relayoutDialog();   // ← 여기서도 고정값 대신 이 메서드 호출
+                relayoutDialog();
             }
         });
     }
@@ -475,7 +486,8 @@ public class BoardPanel extends JPanel {
     // dialogPanel을 현재 내용(preferredSize)에 맞춰 중앙에 배치
     private void relayoutDialog() {
         JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
-        if (frame == null) return;
+        if (frame == null)
+            return;
 
         int w = frame.getWidth();
         int h = frame.getHeight();
@@ -491,8 +503,7 @@ public class BoardPanel extends JPanel {
                 (w - pref.width) / 2,
                 (h - pref.height) / 2,
                 pref.width,
-                pref.height
-        );
+                pref.height);
     }
 
     // === Overlay 제어 ===
@@ -524,7 +535,6 @@ public class BoardPanel extends JPanel {
         // 테이블 크기 기준으로 다시 중앙 배치
         relayoutDialog();
     }
-
 
     private void hideOverlay() {
         overlay.setVisible(false);
@@ -688,4 +698,38 @@ public class BoardPanel extends JPanel {
 
         System.out.println("[STOP] Game stopped");
     }
+
+    public void cleanup() {
+        System.out.println("[BoardPanel] Starting cleanup...");
+
+        // 1. 게임 루프 정지
+        if (loop != null) {
+            loop.cleanup();
+        }
+
+        // 2. BGM/효과음 정지
+        if (soundManager != null) {
+            soundManager.stopBGM();
+        }
+
+        // 3. 타이머들 정지
+        if (boardView != null) {
+            boardView.stopRendering();
+        }
+
+        // 4. 키보드 리스너 제거
+        for (var listener : getKeyListeners()) {
+            removeKeyListener(listener);
+        }
+
+        System.out.println("[BoardPanel] Cleanup completed");
+    }
+
+    // BoardPanel.java에 추가
+    public void hidePausePanel() {
+        if (pausePanel != null && pausePanel.isVisible()) {
+            pausePanel.hidePanel();
+        }
+    }
+
 }

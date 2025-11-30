@@ -9,26 +9,29 @@ import java.util.Set;
 public class GameFrame extends JFrame {
     private boolean returningToMenu = false;
     private final JPanel activePanel;
-    private boolean restartRequested = false; 
+    private boolean restartRequested = false;
+    private boolean showingDialog = false;
+    private boolean userRequestedClose = false; // ⭐ 사용자가 명시적으로 닫기를 요청했는지 추적
 
-    /**
-     * @param config   게임 설정
-     * @param p2pMode  true면 온라인 대전 모드
-     * @param isServer true면 서버
-     * @param gameRule P2P 게임 룰 ("Normal", "Item", "Time Limit (3min)")
-     */
     public GameFrame(GameConfig config, boolean p2pMode, boolean isServer, String gameRule) {
         super("SeoulTech SE Tetris");
-        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+
+        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         setLayout(new BorderLayout());
 
+        // GameFrame.java 생성자 부분
         if (p2pMode) {
-            // 게임 룰 전달
             this.activePanel = new component.network.websocket.OnlineVersusPanel(isServer, gameRule);
             setTitle("Tetris Online Battle - " + gameRule);
             setSize(950, 750);
         } else {
-            this.activePanel = new BoardPanel(config, this::returnToMenu);
+            //  onExitToMenu 호출 추적
+            this.activePanel = new BoardPanel(config, () -> {
+                System.out.println("\n========== onExitToMenu CALLED ==========");
+                Thread.dumpStack(); // 스택 트레이스 출력
+                System.out.println("==========================================\n");
+                returnToMenu();
+            });
             setSize(720, 800);
         }
 
@@ -38,14 +41,13 @@ public class GameFrame extends JFrame {
             System.out.println("\n========== SHUTDOWN HOOK ==========");
             System.out.println("Active threads:");
 
-            Thread.getAllStackTraces().forEach((thread, stackTrace) -> {  // ⭐ stack → stackTrace
+            Thread.getAllStackTraces().forEach((thread, stackTrace) -> {
                 if (thread.isAlive() && !thread.isDaemon()) {
-                    System.out.println("\n⚠️  " + thread.getName() + 
-                                    " (state: " + thread.getState() + ")");
-                    
-                    // 스택 트레이스 출력 (어디서 실행 중인지 확인)
+                    System.out.println("\n⚠️  " + thread.getName() +
+                            " (state: " + thread.getState() + ")");
+
                     System.out.println("    Stack trace:");
-                    for (int i = 0; i < Math.min(stackTrace.length, 10); i++) {  // ⭐ 수정
+                    for (int i = 0; i < Math.min(stackTrace.length, 10); i++) {
                         System.out.println("      " + stackTrace[i]);
                     }
                 }
@@ -54,115 +56,171 @@ public class GameFrame extends JFrame {
             System.out.println("===================================\n");
         }));
 
-        // 윈도우 이벤트 리스너 추가
         addWindowListener(new WindowAdapter() {
+            // GameFrame.java의 windowClosing 수정
             @Override
             public void windowClosing(WindowEvent e) {
-                // 창 닫힐 때 리소스 정리
                 System.out.println("\n========== WINDOW CLOSING ==========");
+                System.out.println("[DEBUG] isVisible: " + isVisible());
+                System.out.println("[DEBUG] isDisplayable: " + isDisplayable());
 
-                logActiveThreads();
-    
-                pauseGame();
+                showingDialog = true;
+
+                // ⭐ PausePanel이 열려있으면 닫기
                 if (activePanel instanceof BoardPanel) {
-                    ((BoardPanel) activePanel).stopGame();
+                    BoardPanel bp = (BoardPanel) activePanel;
+                    bp.hidePausePanel(); // 이 메서드를 BoardPanel에 추가해야 함
                 }
-                // else if (activePanel instanceof
-                // component.network.websocket.OnlineVersusPanel) {
-                // // OnlineVersusPanel도 stopGame() 구현 필요
-                // component.network.websocket.OnlineVersusPanel onlinePanel =
-                // (component.network.websocket.OnlineVersusPanel) activePanel;
-                // onlinePanel.stopGame();
 
-                // 프레임 완전히 제거
-                System.out.println("\n[After cleanup]");
-                logActiveThreads();
-    
-                dispose();
-                System.out.println("[WINDOW] Closed");
+                pauseGame();
+
+                // 키 입력 비활성화
+                activePanel.setEnabled(false);
+
+                int choice = JOptionPane.showOptionDialog(
+                        GameFrame.this,
+                        "게임을 종료하시겠습니까?",
+                        "종료 확인",
+                        JOptionPane.YES_NO_CANCEL_OPTION,
+                        JOptionPane.QUESTION_MESSAGE,
+                        null,
+                        new Object[] { "메인으로", "게임 종료", "취소" },
+                        "취소");
+
+                showingDialog = false;
+
+                // 키 입력 재활성화
+                activePanel.setEnabled(true);
+
+                if (choice == 0) {
+                    // 메인으로
+                    System.out.println("[USER] Selected: Return to menu");
+                    if (activePanel instanceof BoardPanel) {
+                        ((BoardPanel) activePanel).stopGame();
+                        ((BoardPanel) activePanel).cleanup();
+                    }
+
+                    logActiveThreads();
+                    returningToMenu = true;
+                    userRequestedClose = true;
+                    dispose();
+
+                } else if (choice == 1) {
+                    // 게임 종료
+                    System.out.println("[USER] Selected: Exit game");
+                    if (activePanel instanceof BoardPanel) {
+                        ((BoardPanel) activePanel).stopGame();
+                        ((BoardPanel) activePanel).cleanup();
+                    }
+
+                    logActiveThreads();
+                    userRequestedClose = true;
+                    dispose();
+                    System.exit(0);
+
+                } else {
+                    // 취소 → 게임 재개
+                    System.out.println("[USER] Selected: Cancel (resume game)");
+                    System.out.println("[DEBUG] Before resume - isVisible: " + isVisible());
+
+                    if (activePanel instanceof BoardPanel) {
+                        ((BoardPanel) activePanel).resumeGame();
+                    }
+
+                    // 포커스 복원
+                    SwingUtilities.invokeLater(() -> {
+                        activePanel.requestFocusInWindow();
+                        if (activePanel instanceof BoardPanel) {
+                            BoardPanel bp = (BoardPanel) activePanel;
+                            // boardView에 포커스 주기
+                            Component boardView = bp.getComponent(0); // centerBoard
+                            if (boardView instanceof JPanel) {
+                                JPanel wrapper = (JPanel) boardView;
+                                if (wrapper.getComponentCount() > 0) {
+                                    wrapper.getComponent(0).requestFocusInWindow();
+                                }
+                            }
+                        }
+                    });
+
+                    System.out.println("[DEBUG] After resume - isVisible: " + isVisible());
+                    if (!isVisible()) {
+                        System.err.println("[ERROR] Window became invisible!");
+                        setVisible(true);
+                    }
+                }
             }
 
-             @Override
+            @Override
             public void windowClosed(WindowEvent e) {
                 System.out.println("[WINDOW] Closed");
+                System.out.println("[DEBUG] userRequestedClose: " + userRequestedClose);
+                System.out.println("[DEBUG] returningToMenu: " + returningToMenu);
+                System.out.println("[DEBUG] restartRequested: " + restartRequested);
 
-                // 재시작 중이면 전역 종료 스킵
+                // ⭐ 사용자가 명시적으로 닫기를 요청하지 않았다면 무시
+                if (!userRequestedClose) {
+                    System.out.println("[WARNING] windowClosed called without user request - ignoring");
+                    return;
+                }
+
                 if (restartRequested) {
                     System.out.println("[INFO] Restart requested, skip global exit");
                     return;
                 }
 
-                // 메뉴로 돌아가는 경우는 종료하지 않음
                 if (returningToMenu) {
                     System.out.println("[INFO] Returning to menu, not exiting...");
                     return;
                 }
-                
-                //  모든 윈도우가 닫혔는지 확인
+
                 Window[] windows = Window.getWindows();
                 boolean allClosed = true;
-                
+
                 for (Window w : windows) {
                     if (w.isVisible()) {
                         allClosed = false;
                         break;
                     }
                 }
-                
+
                 if (allClosed) {
                     System.out.println("[EXIT] All windows closed, terminating AWT...");
-                    
-                    //  AWT 이벤트 디스패치 스레드 종료 대기
                     SwingUtilities.invokeLater(() -> {
                         try {
-                            Thread.sleep(200); // 정리 대기
+                            Thread.sleep(200);
                         } catch (InterruptedException ex) {
                             ex.printStackTrace();
                         }
-                        System.exit(0); // 강제 종료
+                        System.exit(0);
                     });
-                }
-            }
-            
-
-            // 헬퍼 메서드
-            private void logActiveTimers() {
-                System.out.println("Active threads:");
-                Set<Thread> threadSet = Thread.getAllStackTraces().keySet();
-                
-                for (Thread t : threadSet) {
-                    // Swing Timer 관련 스레드 찾기
-                    if (t.getName().contains("AWT") || 
-                        t.getName().contains("Timer") || 
-                        t.getName().contains("Swing")) {
-                        System.out.println("  ⚠️  " + t.getName() + 
-                                        " [" + t.getState() + "]");
-                    }
                 }
             }
 
             @Override
             public void windowIconified(WindowEvent e) {
-                // 창 최소화 시 일시정지
-                pauseGame();
+                if (!showingDialog) {
+                    pauseGame();
+                }
             }
 
             @Override
             public void windowDeiconified(WindowEvent e) {
-                // 창 복원 시 재개 (선택사항)
-                // resumeGame(); // 자동 재개를 원하지 않으면 주석 처리
+                // resumeGame();
             }
 
             @Override
             public void windowLostFocus(WindowEvent e) {
-                // 포커스 잃을 때 일시정지 (선택사항)
-                pauseGame();
+                if (!showingDialog) {
+                    System.out.println("[DEBUG] Window lost focus (not dialog)");
+                    // pauseGame();
+                }
             }
 
             @Override
             public void windowGainedFocus(WindowEvent e) {
-                // 포커스 얻을 때 재개 (선택사항)
-                // resumeGame(); // 자동 재개를 원하지 않으면 주석 처리
+                System.out.println("[DEBUG] Window gained focus");
+                // resumeGame();
             }
         });
 
@@ -177,38 +235,39 @@ public class GameFrame extends JFrame {
         });
     }
 
-    //  활성 스레드 로깅
     private void logActiveThreads() {
         System.out.println("Active threads:");
         Set<Thread> threadSet = Thread.getAllStackTraces().keySet();
-        
+
         for (Thread t : threadSet) {
-            if (t.getName().contains("AWT") || 
-                t.getName().contains("Timer") || 
-                t.getName().contains("Swing")) {
-                System.out.println("  ??  " + t.getName() + 
-                                 " [" + t.getState() + "]");
+            if (t.getName().contains("AWT") ||
+                    t.getName().contains("Timer") ||
+                    t.getName().contains("Swing")) {
+                System.out.println("  ⚠️  " + t.getName() +
+                        " [" + t.getState() + "]");
             }
         }
     }
 
-    // 게임 일시정지 메서드
     private void pauseGame() {
+        System.out.println("[DEBUG] pauseGame() called");
         if (activePanel instanceof BoardPanel) {
             BoardPanel boardPanel = (BoardPanel) activePanel;
             boardPanel.pauseGame();
         }
-        // } else if (activePanel instanceof
-        // component.network.websocket.OnlineVersusPanel) {
-        // component.network.websocket.OnlineVersusPanel onlinePanel =
-        // (component.network.websocket.OnlineVersusPanel) activePanel;
-        // onlinePanel.pauseGame();
-        // }
     }
 
-    // 메뉴로 돌아가기 콜백
+    // GameFrame.java의 returnToMenu() 메서드 수정
     private void returnToMenu() {
+        System.out.println("\n========== RETURN TO MENU CALLED ==========");
+        System.out.println("Stack trace:");
+        for (StackTraceElement element : Thread.currentThread().getStackTrace()) {
+            System.out.println("  " + element);
+        }
+        System.out.println("==========================================\n");
+
         returningToMenu = true;
+        userRequestedClose = true;
         pauseGame();
         dispose();
     }
@@ -245,11 +304,11 @@ public class GameFrame extends JFrame {
         }
     }
 
-    public void markRestartRequested() {      
+    public void markRestartRequested() {
         this.restartRequested = true;
     }
 
-    public boolean isRestartRequested() {      
+    public boolean isRestartRequested() {
         return restartRequested;
     }
 }
