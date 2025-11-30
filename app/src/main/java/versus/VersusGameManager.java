@@ -7,8 +7,12 @@ import logic.BoardLogic;
 
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
+
+import javax.swing.JComponent;
+import javax.swing.SwingUtilities;
+import javax.swing.Timer;
+
 import java.awt.*;
-import javax.swing.*;
 import java.util.List;
 
 import blocks.Block;
@@ -23,13 +27,28 @@ import blocks.Block;
  */
 public class VersusGameManager {
 
+    /** 게임 종료 결과를 VersusPanel 에 알려주기 위한 DTO */
+    public static class GameResult {
+        public final Player.Id winner;   // 무승부면 null
+        public final Player.Id loser;    // 무승부면 null
+        public final int p1Score;
+        public final int p2Score;
+
+        public GameResult(Player.Id winner, Player.Id loser, int p1Score, int p2Score) {
+            this.winner = winner;
+            this.loser = loser;
+            this.p1Score = p1Score;
+            this.p2Score = p2Score;
+        }
+    }
+
     private final Player p1;
     private final Player p2;
 
     // AI 관련
     private AIPlayer aiPlayer;
     private Timer aiTimer;
-    private boolean isAIMode;
+    private final boolean isAIMode;
 
     // HUD 업데이트 콜백 (각각 "상대에게서 들어올 예정" 줄 수 표시)
     private final IntConsumer onP1PendingChanged; // P1 라벨 값 갱신
@@ -39,6 +58,8 @@ public class VersusGameManager {
     private final Consumer<List<Block>> onP2Next;
 
     private final Runnable backToMenu;
+    private final Consumer<GameResult> onGameFinished;
+
     private boolean finished = false;
 
     public VersusGameManager(
@@ -51,13 +72,15 @@ public class VersusGameManager {
             IntConsumer onP1PendingChanged,
             IntConsumer onP2PendingChanged,
             Consumer<List<Block>> onP1Next,
-            Consumer<List<Block>> onP2Next) {
+            Consumer<List<Block>> onP2Next,
+            Consumer<GameResult> onGameFinished) {
 
         this.onP1PendingChanged = onP1PendingChanged;
         this.onP2PendingChanged = onP2PendingChanged;
         this.onP1Next = onP1Next;
         this.onP2Next = onP2Next;
         this.backToMenu = backToMenu;
+        this.onGameFinished = onGameFinished;
 
         // P2가 AI인지 체크
         this.isAIMode = p2Config.mode() == GameConfig.Mode.AI;
@@ -87,6 +110,7 @@ public class VersusGameManager {
         p1.events.onLineCleared = null;
         p2.events.onLineCleared = null;
 
+        // 게임 오버 콜백
         p1.events.onGameOver = score -> onPlayerOver(Player.Id.P1);
         p2.events.onGameOver = score -> onPlayerOver(Player.Id.P2);
 
@@ -178,31 +202,14 @@ public class VersusGameManager {
             aiTimer.stop();
         }
 
-        // 승자 메시지
-        Component any = p1.getComponent();
-        JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(any);
-
-        System.out.println("[DEBUG] onPlayerOver called");
-        System.out.println("[DEBUG] frame class: " + (frame != null ? frame.getClass().getName() : "null"));
-        System.out.println("[DEBUG] is VersusFrame: " + (frame instanceof VersusFrame));
-
-        String msg = (winner == Player.Id.P1) ? "P1 WINS!" : "P2 WINS!";
-
-        if (isAIMode) {
-            msg = (winner == Player.Id.P1) ? "YOU WIN!" : "AI WINS!";
-        }
-
-        JOptionPane.showMessageDialog(frame, msg, "Game Over", JOptionPane.INFORMATION_MESSAGE);
-
-        // ⭐ VersusFrame의 closeAfterGameOver() 호출
-        if (frame instanceof VersusFrame) {
-            System.out.println("[DEBUG] Calling VersusFrame.closeAfterGameOver()");
-            ((VersusFrame) frame).closeAfterGameOver();
-        } else if (frame != null) {
-            System.out.println("[DEBUG] Not VersusFrame, calling dispose()");
-            frame.dispose();
-        } else {
-            System.out.println("[DEBUG] frame is null!");
+        // VersusPanel 에 결과 전달
+        if (onGameFinished != null) {
+            GameResult result = new GameResult(
+                    winner,
+                    loser,
+                    p1.getScore(),
+                    p2.getScore());
+            SwingUtilities.invokeLater(() -> onGameFinished.accept(result));
         }
     }
 
@@ -226,6 +233,7 @@ public class VersusGameManager {
         }
 
         // === 무승부 (DRAW) ===
+        finished = true;
         p1.stop();
         p2.stop();
 
@@ -233,20 +241,14 @@ public class VersusGameManager {
             aiTimer.stop();
         }
 
-        Component any = p1.getComponent();
-        JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(any);
-
-        JOptionPane.showMessageDialog(
-                frame,
-                "Time's up!\nDRAW",
-                "무승부입니다",
-                JOptionPane.INFORMATION_MESSAGE);
-
-        if (frame != null)
-            frame.dispose();
-        // if (backToMenu != null) backToMenu.run();
-
-        finished = true;
+        if (onGameFinished != null) {
+            GameResult result = new GameResult(
+                    null,   // winner
+                    null,   // loser
+                    p1.getScore(),
+                    p2.getScore());
+            SwingUtilities.invokeLater(() -> onGameFinished.accept(result));
+        }
     }
 
     private void safeHudUpdateP1() {

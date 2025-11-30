@@ -64,6 +64,8 @@ public class VersusFrame extends JFrame {
         pack();           
         setLocationRelativeTo(null);
         setVisible(true);
+
+        panel.attachOverlayToFrame(this);
     }
 
     private void handleWindowClose() {

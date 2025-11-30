@@ -607,35 +607,152 @@ public class MenuPanel extends JPanel {
 
         row.add(makeGlassSmallButton("EASY", () -> {
             stopMenuBGM();
+
             GameConfig p1 = new GameConfig(mode, GameConfig.Difficulty.EASY, false);
             GameConfig p2 = new GameConfig(mode, GameConfig.Difficulty.EASY, false);
             String gameRule = itemMode ? "ITEM" : "NORMAL";
 
-            // ⭐ VersusFrame 직접 생성 대신 콜백 호출
-            if (onVersusStart != null) {
-                onVersusStart.accept(new VersusGameInfo(p1, p2, gameRule));
+            // ← 메뉴 프레임 숨기기
+            JFrame menuFrame = (JFrame) SwingUtilities.getWindowAncestor(MenuPanel.this);
+            if (menuFrame != null) {
+                menuFrame.setVisible(false);
+            }
+
+            VersusFrame versus = new VersusFrame(p1, p2, gameRule);
+
+            // ← 대전창이 닫힐 때 메뉴 복귀
+            if (menuFrame != null) {
+                versus.addWindowListener(new java.awt.event.WindowAdapter() {
+                    @Override
+                    public void windowClosed(java.awt.event.WindowEvent e) {
+                        menuFrame.setVisible(true);
+                        SwingUtilities.invokeLater(() -> {
+                            menuFrame.toFront();
+                            menuFrame.requestFocusInWindow();
+                        });
+                    }
+
+                    @Override
+                    public void windowClosing(java.awt.event.WindowEvent e) {
+                        versus.dispose();
+                    }
+                });
             }
         }));
 
         row.add(makeGlassSmallButton("MEDIUM", () -> {
             stopMenuBGM();
+
             GameConfig p1 = new GameConfig(mode, GameConfig.Difficulty.NORMAL, false);
             GameConfig p2 = new GameConfig(mode, GameConfig.Difficulty.NORMAL, false);
             String gameRule = itemMode ? "ITEM" : "NORMAL";
 
-            if (onVersusStart != null) {
-                onVersusStart.accept(new VersusGameInfo(p1, p2, gameRule));
+            JFrame menuFrame = (JFrame) SwingUtilities.getWindowAncestor(MenuPanel.this);
+            if (menuFrame != null) {
+                menuFrame.setVisible(false);
+            }
+
+            VersusFrame versus = new VersusFrame(p1, p2, gameRule);
+
+            if (menuFrame != null) {
+                versus.addWindowListener(new java.awt.event.WindowAdapter() {
+                    @Override
+                    public void windowClosed(java.awt.event.WindowEvent e) {
+                        menuFrame.setVisible(true);
+                        SwingUtilities.invokeLater(() -> {
+                            menuFrame.toFront();
+                            menuFrame.requestFocusInWindow();
+                        });
+                    }
+
+                    @Override
+                    public void windowClosing(java.awt.event.WindowEvent e) {
+                        versus.dispose();
+                    }
+                });
             }
         }));
 
         row.add(makeGlassSmallButton("HARD", () -> {
             stopMenuBGM();
+
             GameConfig p1 = new GameConfig(mode, GameConfig.Difficulty.HARD, false);
             GameConfig p2 = new GameConfig(mode, GameConfig.Difficulty.HARD, false);
             String gameRule = itemMode ? "ITEM" : "NORMAL";
 
-            if (onVersusStart != null) {
-                onVersusStart.accept(new VersusGameInfo(p1, p2, gameRule));
+            JFrame menuFrame = (JFrame) SwingUtilities.getWindowAncestor(MenuPanel.this);
+            if (menuFrame != null) {
+                menuFrame.setVisible(false);
+            }
+
+            VersusFrame versus = new VersusFrame(p1, p2, gameRule);
+
+            if (menuFrame != null) {
+                versus.addWindowListener(new java.awt.event.WindowAdapter() {
+                    @Override
+                    public void windowClosed(java.awt.event.WindowEvent e) {
+                        menuFrame.setVisible(true);
+                        SwingUtilities.invokeLater(() -> {
+                            menuFrame.toFront();
+                            menuFrame.requestFocusInWindow();
+                        });
+                    }
+
+                    @Override
+                    public void windowClosing(java.awt.event.WindowEvent e) {
+                        versus.dispose();
+                    }
+                });
+            }
+        }));
+
+        return row;
+    }
+
+    // Local 2P (Same PC) – TIME row
+    private JPanel makeLocal2PTimeRow() {
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
+        row.setOpaque(false);
+        row.setAlignmentX(CENTER_ALIGNMENT);
+
+        row.add(makeGlassSmallButton("START", () -> {
+            stopMenuBGM();
+
+            GameConfig p1 = new GameConfig(
+                    GameConfig.Mode.TIME_ATTACK,
+                    GameConfig.Difficulty.NORMAL,
+                    false);
+
+            GameConfig p2 = new GameConfig(
+                    GameConfig.Mode.TIME_ATTACK,
+                    GameConfig.Difficulty.NORMAL,
+                    false);
+
+            String gameRule = "TIME_ATTACK";
+
+            JFrame menuFrame = (JFrame) SwingUtilities.getWindowAncestor(MenuPanel.this);
+            if (menuFrame != null) {
+                menuFrame.setVisible(false);
+            }
+
+            VersusFrame versus = new VersusFrame(p1, p2, gameRule);
+
+            if (menuFrame != null) {
+                versus.addWindowListener(new java.awt.event.WindowAdapter() {
+                    @Override
+                    public void windowClosed(java.awt.event.WindowEvent e) {
+                        menuFrame.setVisible(true);
+                        SwingUtilities.invokeLater(() -> {
+                            menuFrame.toFront();
+                            menuFrame.requestFocusInWindow();
+                        });
+                    }
+
+                    @Override
+                    public void windowClosing(java.awt.event.WindowEvent e) {
+                        versus.dispose();
+                    }
+                });
             }
         }));
 
@@ -686,33 +803,6 @@ public class MenuPanel extends JPanel {
         String gameRule = "ITEM";
 
         return new VersusFrame(p1, p2, gameRule);
-    }
-
-    // Local 2P (Same PC) – TIME row (simple version, adjust if you have a TIME
-    // mode)
-    private JPanel makeLocal2PTimeRow() {
-        JPanel row = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
-        row.setOpaque(false);
-        row.setAlignmentX(CENTER_ALIGNMENT);
-
-        row.add(makeGlassSmallButton("START", () -> {
-            stopMenuBGM();
-            GameConfig p1 = new GameConfig(
-                    GameConfig.Mode.TIME_ATTACK,
-                    GameConfig.Difficulty.NORMAL,
-                    false);
-            GameConfig p2 = new GameConfig(
-                    GameConfig.Mode.TIME_ATTACK,
-                    GameConfig.Difficulty.NORMAL,
-                    false);
-            String gameRule = "TIME_ATTACK";
-
-            if (onVersusStart != null) {
-                onVersusStart.accept(new VersusGameInfo(p1, p2, gameRule));
-            }
-        }));
-
-        return row;
     }
 
     // NAV LIST management
