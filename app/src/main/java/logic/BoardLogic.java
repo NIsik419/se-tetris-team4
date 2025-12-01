@@ -14,6 +14,7 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 import javax.swing.SwingUtilities;
+import javax.swing.Timer;
 
 import blocks.Block;
 import component.BlockBag;
@@ -26,6 +27,7 @@ import component.items.ItemBlock;
 public class BoardLogic {
     private final SoundManager sound = SoundManager.getInstance();
     private BoardView boardView;
+    private static final int GRAVITY_ANIMATION_DELAY = 40;
     public static final int WIDTH = GameState.WIDTH;
     public static final int HEIGHT = GameState.HEIGHT;
     private static final int MAX_GARBAGE = 10;
@@ -50,6 +52,16 @@ public class BoardLogic {
     public void setLoopControl(Runnable pause, Runnable resume) {
         this.pauseCallback = pause;
         this.resumeCallback = resume;
+    }
+
+    private boolean animatedGravityEnabled = true;
+
+    public void setAnimatedGravityEnabled(boolean enabled) {
+        this.animatedGravityEnabled = enabled;
+    }
+
+    public boolean isAnimatedGravityEnabled() {
+        return animatedGravityEnabled;
     }
 
     private int comboCount = 0;
@@ -248,6 +260,11 @@ public class BoardLogic {
             return;
         }
 
+        // 중력 애니메이션 동안 입력 차단
+        if (pauseCallback != null) {
+            pauseCallback.run();
+        }
+
         updateGarbageFlagsOnClear(clearedRows);
 
         if (lines >= 2 && onLinesClearedWithMasks != null) {
@@ -270,9 +287,6 @@ public class BoardLogic {
         recentPlacedInitialize();
         processScoreAndCombo(lines);
 
-        // 아이템은 단순 칸 중력
-        applySimpleCellGravity();
-
         if (onFrameUpdate != null)
             javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
 
@@ -282,7 +296,18 @@ public class BoardLogic {
                         javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
                 });
 
-        checkChainClearImmediate(afterClear);
+        //  애니메이션 중력만 실행
+        applySimpleCellGravityAnimated(() -> {
+            if (onFrameUpdate != null)
+                javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
+        }, () -> {
+            // 중력 완료 후 입력 재개
+            if (resumeCallback != null) {
+                resumeCallback.run();
+            }
+
+            checkChainClearImmediate(afterClear);
+        });
     }
 
     // 12. 아이템용 라인 체크 & 클리어 메서드
@@ -354,6 +379,77 @@ public class BoardLogic {
         System.out.println("[DEBUG] Simple cell gravity (item) applied after " + iterations + " iterations");
     }
 
+    private void applySimpleCellGravityAnimated(Runnable onFrameUpdate, Runnable onComplete) {
+        System.out.println("[DEBUG] Starting animated simple gravity with effects");
+
+        Timer gravityTimer = new Timer(80, null);
+
+        gravityTimer.addActionListener(e -> {
+            Color[][] board = state.getBoard();
+            int[][] pid = state.getPieceId();
+
+            boolean moved = false;
+            List<Point> landedBlocks = new ArrayList<>();
+
+            for (int y = HEIGHT - 2; y >= 0; y--) {
+                for (int x = 0; x < WIDTH; x++) {
+                    if (board[y][x] != null && board[y + 1][x] == null) {
+                        //  궤적 생성
+                        clear.getParticleSystem().createGravityTrailParticle(
+                                x, y, board[y][x], currentCellSize);
+
+                        //  먼지 파티클
+                        clear.getParticleSystem().createGravityDustParticle(
+                                x, y, board[y][x], currentCellSize);
+
+                        board[y + 1][x] = board[y][x];
+                        pid[y + 1][x] = pid[y][x];
+
+                        if (isGarbageRow[y]) {
+                            isGarbageRow[y + 1] = true;
+                        }
+
+                        board[y][x] = null;
+                        pid[y][x] = 0;
+                        moved = true;
+
+                        // 착지 감지
+                        if (y + 2 >= HEIGHT || board[y + 2][x] != null) {
+                            landedBlocks.add(new Point(x, y + 1));
+                        }
+                    }
+                }
+            }
+
+            // 착지 충격파
+            if (!landedBlocks.isEmpty()) {
+                clear.getParticleSystem().createClusterLandingImpact(
+                        landedBlocks, board, currentCellSize);
+            }
+
+            for (int y = 0; y < HEIGHT; y++) {
+                if (isRowEmpty(board[y])) {
+                    isGarbageRow[y] = false;
+                }
+            }
+
+            if (onFrameUpdate != null) {
+                onFrameUpdate.run();
+            }
+
+            if (!moved) {
+                ((Timer) e.getSource()).stop();
+                System.out.println("[DEBUG] Animated simple gravity complete");
+
+                if (onComplete != null) {
+                    onComplete.run();
+                }
+            }
+        });
+
+        gravityTimer.start();
+    }
+
     // ============================================
     // clearLinesAndThen - 일반 라인 클리어 (타이머 제거)
     // ============================================
@@ -379,6 +475,11 @@ public class BoardLogic {
             comboCount = 0;
             afterClear.run();
             return;
+        }
+
+        // 중력 애니메이션 동안 입력 차단
+        if (animatedGravityEnabled && pauseCallback != null) {
+            pauseCallback.run();
         }
 
         updateGarbageFlagsOnClear(clearedRows);
@@ -417,9 +518,6 @@ public class BoardLogic {
         recentPlacedInitialize();
         processScoreAndCombo(lines);
 
-        // 클러스터 기반 중력 적용
-        applyClusterGravityInstant();
-
         if (onFrameUpdate != null)
             javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
 
@@ -429,7 +527,25 @@ public class BoardLogic {
                         javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
                 });
 
-        checkChainClearImmediate(afterClear);
+        //  애니메이션 중력만 실행 (즉시 중력 제거)
+        if (animatedGravityEnabled) {
+            System.out.println("[DEBUG] Starting ANIMATED gravity (no instant gravity)");
+            applyClusterGravityAnimated(() -> {
+                if (onFrameUpdate != null)
+                    javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
+            }, () -> {
+                if (resumeCallback != null) {
+                    resumeCallback.run();
+                }
+                checkChainClearImmediate(afterClear);
+            });
+        } else {
+            // 애니메이션 끄면 즉시 중력
+            applyClusterGravityInstant();
+            if (onFrameUpdate != null)
+                javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
+            checkChainClearImmediate(afterClear);
+        }
     }
 
     // ============================================
@@ -562,51 +678,6 @@ public class BoardLogic {
             }
         }
     }
-
-    // // ============================================
-    // // 줄 단위 중력 (빈 줄을 제거하고 위 줄들을 한 번에 내림)
-    // // ============================================
-    // private void applyLineGravityOnly() {
-    // Color[][] board = state.getBoard();
-    // int[][] pid = state.getPieceId();
-
-    // // 임시 배열 생성
-    // Color[][] tempBoard = new Color[HEIGHT][WIDTH];
-    // int[][] tempPid = new int[HEIGHT][WIDTH];
-    // boolean[] tempGarbage = new boolean[HEIGHT];
-
-    // int writeRow = HEIGHT - 1;
-
-    // // 아래에서 위로 스캔하면서 비어있지 않은 줄만 복사
-    // for (int readRow = HEIGHT - 1; readRow >= 0; readRow--) {
-    // if (!isRowEmpty(board[readRow])) {
-    // for (int x = 0; x < WIDTH; x++) {
-    // tempBoard[writeRow][x] = board[readRow][x];
-    // tempPid[writeRow][x] = pid[readRow][x];
-    // }
-    // tempGarbage[writeRow] = isGarbageRow[readRow];
-    // writeRow--;
-    // }
-    // }
-
-    // // 위쪽 빈 줄 초기화
-    // for (int y = writeRow; y >= 0; y--) {
-    // for (int x = 0; x < WIDTH; x++) {
-    // tempBoard[y][x] = null;
-    // tempPid[y][x] = 0;
-    // }
-    // tempGarbage[y] = false;
-    // }
-
-    // // 원본에 복사
-    // for (int y = 0; y < HEIGHT; y++) {
-    // board[y] = tempBoard[y];
-    // pid[y] = tempPid[y];
-    // isGarbageRow[y] = tempGarbage[y];
-    // }
-
-    // System.out.println("[DEBUG] Line gravity applied (row-based compression)");
-    // }
 
     private void applyClusterGravityInstant() {
         Color[][] board = state.getBoard();
@@ -797,6 +868,87 @@ public class BoardLogic {
         for (int y = 0; y < HEIGHT; y++) {
             Arrays.fill(recentPlaced[y], false);
         }
+    }
+
+    private void applyClusterGravityAnimated(Runnable onFrameUpdate, Runnable onComplete) {
+        System.out.println("[DEBUG] Starting animated cluster gravity with trail effects");
+
+        Timer gravityTimer = new Timer(80, null);
+
+        gravityTimer.addActionListener(e -> {
+            Color[][] board = state.getBoard();
+            int[][] pid = state.getPieceId();
+
+            // 현재 떨어질 수 있는 클러스터 찾기
+            List<List<Point>> clusters = findConnectedClusters(board, pid);
+            clusters.sort((a, b) -> Integer.compare(maxY(b), maxY(a)));
+
+            List<List<Point>> fallingClusters = new ArrayList<>();
+            for (List<Point> cluster : clusters) {
+                if (canClusterFallOneStep(cluster, board, pid)) {
+                    fallingClusters.add(cluster);
+                }
+            }
+
+            boolean movedAny = false;
+            List<Point> allLandedBlocks = new ArrayList<>();
+
+            for (List<Point> cluster : fallingClusters) {
+                // 1. 이동 전 궤적 생성
+                clear.getParticleSystem().createClusterTrail(cluster, board, currentCellSize);
+
+                // 2. 먼지 파티클
+                for (Point p : cluster) {
+                    if (board[p.y][p.x] != null) {
+                        clear.getParticleSystem().createGravityDustParticle(
+                                p.x, p.y, board[p.y][p.x], currentCellSize);
+                    }
+                }
+
+                // 3. 착지 감지 (다음 이동이 불가능하면 착지)
+                moveClusterDownOneStep(cluster, board, pid);
+
+                // 이동 후 위치 확인
+                List<Point> movedCluster = new ArrayList<>();
+                for (Point p : cluster) {
+                    movedCluster.add(new Point(p.x, p.y + 1));
+                }
+
+                // 더 이상 떨어질 수 없으면 착지
+                if (!canClusterFallOneStep(movedCluster, board, pid)) {
+                    allLandedBlocks.addAll(movedCluster);
+                }
+
+                movedAny = true;
+            }
+
+            // 4. 착지 충격파 효과
+            if (!allLandedBlocks.isEmpty()) {
+                clear.getParticleSystem().createClusterLandingImpact(
+                        allLandedBlocks, board, currentCellSize);
+            }
+
+            if (onFrameUpdate != null) {
+                onFrameUpdate.run();
+            }
+
+            if (!movedAny) {
+                ((Timer) e.getSource()).stop();
+
+                Color[][] fade = state.getFadeLayer();
+                for (int y = 0; y < HEIGHT; y++) {
+                    Arrays.fill(fade[y], null);
+                }
+
+                System.out.println("[DEBUG] Animated cluster gravity complete");
+
+                if (onComplete != null) {
+                    onComplete.run();
+                }
+            }
+        });
+
+        gravityTimer.start();
     }
 
     // ============================================

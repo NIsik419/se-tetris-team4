@@ -46,23 +46,51 @@ public class ClearService {
     public void animateWithParticles(List<Integer> rows, Runnable onFrameUpdate, Runnable onComplete) {
         var board = state.getBoard();
         var pid = state.getPieceId();
+        var fade = state.getFadeLayer();
 
         final int CELL_SIZE = 25;
-        for (int row : rows) {
-            particleSystem.createLineParticles(row, board, CELL_SIZE, GameState.WIDTH);
-        }
 
+        // 1단계: 화면 플래시 효과 (흰색으로 번쩍)
         for (int row : rows) {
-            Arrays.fill(board[row], null);
-            Arrays.fill(pid[row], 0);
+            for (int x = 0; x < GameState.WIDTH; x++) {
+                if (board[row][x] != null) {
+                    fade[row][x] = FLASH_WHITE;
+                }
+            }
         }
 
         if (onFrameUpdate != null)
             onFrameUpdate.run();
 
+        // 2단계: 플래시 후 파티클 생성 (100ms 후)
+        Timer flashTimer = new Timer(100, null);
+        flashTimer.setRepeats(false);
+        flashTimer.addActionListener(e -> {
+            // 파티클 생성
+            for (int row : rows) {
+                particleSystem.createLineParticles(row, board, CELL_SIZE, GameState.WIDTH);
+            }
+
+            // 보드에서 블록 제거
+            for (int row : rows) {
+                Arrays.fill(board[row], null);
+                Arrays.fill(pid[row], 0);
+                Arrays.fill(fade[row], null); // 플래시 제거
+            }
+
+            if (onFrameUpdate != null)
+                onFrameUpdate.run();
+
+            // 3단계: 파티클 애니메이션 (더 긴 시간)
+            animateParticlesLonger(onFrameUpdate, onComplete);
+        });
+        flashTimer.start();
+    }
+
+    private void animateParticlesLonger(Runnable onFrameUpdate, Runnable onComplete) {
         Timer particleTimer = new Timer(16, null);
         final int[] frame = { 0 };
-        final int MAX_FRAMES = 12;
+        final int MAX_FRAMES = 20; // 12 → 20으로 증가
 
         particleTimer.addActionListener(e -> {
             frame[0]++;
@@ -99,7 +127,7 @@ public class ClearService {
 
         Timer particleTimer = new Timer(16, null);
         final int[] frame = { 0 };
-        final int MAX_FRAMES = 12;
+        final int MAX_FRAMES = 20;
 
         particleTimer.addActionListener(e -> {
             frame[0]++;
@@ -131,7 +159,7 @@ public class ClearService {
 
         Timer particleTimer = new Timer(16, null);
         final int[] frame = { 0 };
-        final int MAX_FRAMES = 12;
+        final int MAX_FRAMES = 20;
 
         particleTimer.addActionListener(e -> {
             frame[0]++;
@@ -237,44 +265,44 @@ public class ClearService {
         animateFastClear(singleRow, onFrameUpdate, onComplete);
     }
 
-    // ============================================
-    // 줄 단위 압축 - 수정 버전 (pieceId 제대로 처리)
-    // ============================================
-    private void compressBoardByRows() {
-        Color[][] board = state.getBoard();
-        int[][] pid = state.getPieceId();
+    // // ============================================
+    // // 줄 단위 압축 - 수정 버전 (pieceId 제대로 처리)
+    // // ============================================
+    // private void compressBoardByRows() {
+    //     Color[][] board = state.getBoard();
+    //     int[][] pid = state.getPieceId();
 
-        // ✅ 임시 배열 사용 (참조 복사 문제 방지)
-        Color[][] tempBoard = new Color[GameState.HEIGHT][GameState.WIDTH];
-        int[][] tempPid = new int[GameState.HEIGHT][GameState.WIDTH];
+    //     //  임시 배열 사용 (참조 복사 문제 방지)
+    //     Color[][] tempBoard = new Color[GameState.HEIGHT][GameState.WIDTH];
+    //     int[][] tempPid = new int[GameState.HEIGHT][GameState.WIDTH];
 
-        int writeRow = GameState.HEIGHT - 1;
+    //     int writeRow = GameState.HEIGHT - 1;
 
-        // 아래에서 위로 스캔하면서 비어있지 않은 줄만 복사
-        for (int readRow = GameState.HEIGHT - 1; readRow >= 0; readRow--) {
-            if (!isRowEmpty(board[readRow])) {
-                for (int x = 0; x < GameState.WIDTH; x++) {
-                    tempBoard[writeRow][x] = board[readRow][x];
-                    tempPid[writeRow][x] = pid[readRow][x];
-                }
-                writeRow--;
-            }
-        }
+    //     // 아래에서 위로 스캔하면서 비어있지 않은 줄만 복사
+    //     for (int readRow = GameState.HEIGHT - 1; readRow >= 0; readRow--) {
+    //         if (!isRowEmpty(board[readRow])) {
+    //             for (int x = 0; x < GameState.WIDTH; x++) {
+    //                 tempBoard[writeRow][x] = board[readRow][x];
+    //                 tempPid[writeRow][x] = pid[readRow][x];
+    //             }
+    //             writeRow--;
+    //         }
+    //     }
 
-        // 위쪽 빈 줄 초기화
-        for (int y = writeRow; y >= 0; y--) {
-            for (int x = 0; x < GameState.WIDTH; x++) {
-                tempBoard[y][x] = null;
-                tempPid[y][x] = 0;
-            }
-        }
+    //     // 위쪽 빈 줄 초기화
+    //     for (int y = writeRow; y >= 0; y--) {
+    //         for (int x = 0; x < GameState.WIDTH; x++) {
+    //             tempBoard[y][x] = null;
+    //             tempPid[y][x] = 0;
+    //         }
+    //     }
 
-        // ✅ 원본에 다시 복사
-        for (int y = 0; y < GameState.HEIGHT; y++) {
-            board[y] = tempBoard[y];
-            pid[y] = tempPid[y];
-        }
-    }
+    //     // 원본에 다시 복사
+    //     for (int y = 0; y < GameState.HEIGHT; y++) {
+    //         board[y] = tempBoard[y];
+    //         pid[y] = tempPid[y];
+    //     }
+    // }
 
     // ============================================
     // 즉시 중력 - 로직 개선
@@ -310,9 +338,7 @@ public class ClearService {
     public void applyLineGravity() {
         applyGravityInstantly();
     }
-    
-    
-    
+
     // ============================================
     // 클러스터 중력 애니메이션
     // ============================================
@@ -633,5 +659,52 @@ public class ClearService {
             if (finalComplete != null)
                 finalComplete.run();
         });
+    }
+
+    /**
+     * 🌊 중력 적용 중 블록 하이라이트 효과
+     * (떨어지는 블록을 fadeLayer로 표시)
+     */
+    public void highlightFallingBlocks(List<List<Point>> clusters) {
+        Color[][] fade = state.getFadeLayer();
+        Color[][] board = state.getBoard();
+
+        // 기존 페이드 레이어 초기화
+        for (int y = 0; y < GameState.HEIGHT; y++) {
+            Arrays.fill(fade[y], null);
+        }
+
+        // 떨어지고 있는 클러스터에 하이라이트 적용
+        for (List<Point> cluster : clusters) {
+            for (Point p : cluster) {
+                if (board[p.y][p.x] != null) {
+                    Color base = board[p.y][p.x];
+                    // 약간 밝게 표시
+                    fade[p.y][p.x] = new Color(
+                            Math.min(255, base.getRed() + 30),
+                            Math.min(255, base.getGreen() + 30),
+                            Math.min(255, base.getBlue() + 30),
+                            120 // 반투명
+                    );
+                }
+            }
+        }
+    }
+
+    /**
+     * 🌊 떨어지는 블록에 잔상 효과 추가
+     */
+    public void createGravityTrail(int x, int y, Color blockColor) {
+        Color[][] fade = state.getFadeLayer();
+
+        // 블록이 지나간 자리에 잔상 효과
+        if (y > 0 && fade[y - 1][x] == null) {
+            fade[y - 1][x] = new Color(
+                    blockColor.getRed(),
+                    blockColor.getGreen(),
+                    blockColor.getBlue(),
+                    60 // 매우 연한 잔상
+            );
+        }
     }
 }
