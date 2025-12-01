@@ -27,6 +27,7 @@ import javax.swing.DefaultListCellRenderer;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
+import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JList;
@@ -38,7 +39,6 @@ import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.border.Border;
-import javax.swing.text.JTextComponent;
 
 import component.ColorBlindPalette;
 import component.GameConfig;
@@ -59,76 +59,74 @@ public class SettingsScreen extends JPanel {
     private JLabel  lblError;
     private JButton btnApply;
 
-    // screen size label text (same as MenuPanel)
+    // 포커스/선택 이동 순서 (* 표시 기준)
+    private final java.util.List<Component> focusOrder = new ArrayList<>();
+    // 각 컴포넌트에 대응하는 라벨 (왼쪽 설명 텍스트)
+    private final Map<Component, JLabel> compLabels = new HashMap<>();
+    // 현재 선택 인덱스 (* 로 표시되는 위치)
+    private int selectedIndex = 0;
+
+    // 현재 키 설정이 유효한지 (중복 없는지)
+    private boolean keysValid = true;
+
+    // 화면 크기 라벨
     private String getScreenLabel(Settings.ScreenSize size) {
         if (size == null) return "";
-        switch (size) {
-            case SMALL:      // MenuPanel: 600 x 480
-                return "SMALL  (600 × 480) ";
-            case MEDIUM:     // MenuPanel: 900 x 720
-                return "MEDIUM (900 × 720) ";
-            case LARGE:      // MenuPanel: 1200 x 840
-                return "LARGE  (1200 × 840) ";
-            default:
-                return size.name();
-        }
+        return switch (size) {
+            case SMALL  -> "SMALL  (600 × 480) ";
+            case MEDIUM -> "MEDIUM (900 × 720) ";
+            case LARGE  -> "LARGE  (1200 × 840) ";
+        };
     }
-    // unified display text for keys (arrows + rotate)
-    private static String keyToDisplay(int keyCode) {                     
-        return switch (keyCode) {                                         
-            case KeyEvent.VK_LEFT  -> "⬅";                             
-            case KeyEvent.VK_RIGHT ->"➡";    
-            case KeyEvent.VK_UP    -> "↻";  
-            case KeyEvent.VK_DOWN  -> "⬇";                           
-            default -> KeyEvent.getKeyText(keyCode);             
-        };                                                   
-    }     
 
+    // 키 표시 (화살표 이모지)
+    private static String keyToDisplay(int keyCode) {
+        return switch (keyCode) {
+            case KeyEvent.VK_LEFT  -> "⬅";
+            case KeyEvent.VK_RIGHT -> "➡";
+            case KeyEvent.VK_UP    -> "↻";
+            case KeyEvent.VK_DOWN  -> "⬇";
+            default -> KeyEvent.getKeyText(keyCode);
+        };
+    }
 
-    // apply screen size to current window
+    // 화면 크기 적용
     private void applyScreenSize(Settings.ScreenSize size) {
         java.awt.Window w = SwingUtilities.getWindowAncestor(this);
-        if (!(w instanceof JFrame f)) {
-            return;
-        }
+        if (!(w instanceof JFrame f)) return;
 
         f.setExtendedState(JFrame.NORMAL);
         f.setResizable(true);
 
         switch (size) {
-            case SMALL -> f.setSize(new Dimension(600, 480));    // key 1
-            case MEDIUM -> f.setSize(new Dimension(900, 720));   // key 2
-            case LARGE -> f.setSize(new Dimension(1200, 840));   // key 3
+            case SMALL  -> f.setSize(new Dimension(600, 480));
+            case MEDIUM -> f.setSize(new Dimension(900, 720));
+            case LARGE  -> f.setSize(new Dimension(1200, 840));
         }
-
         f.setLocationRelativeTo(null);
     }
-    
 
     public SettingsScreen(Settings settings, ApplyListener applyListener, Runnable goBack) {
         this.settings       = settings;
         this.localSettings  = new Settings(settings);
         this.applyListener  = applyListener;
 
-        // dark, game-like background
         setOpaque(true);
-        setBackground(new Color(0x141B2A)); // slightly lighter than MenuPanel
-
+        setBackground(new Color(0x141B2A));
         setLayout(new BorderLayout(12, 12));
         setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
+
         // 상단 타이틀 + Back
         JPanel top = new JPanel(new BorderLayout());
         top.setOpaque(false);
         JLabel title = new JLabel("SETTINGS");
         title.setFont(title.getFont().deriveFont(Font.BOLD, 26f));
-        title.setForeground(new Color(235, 245, 255));    
+        title.setForeground(new Color(235, 245, 255));
 
         JButton btnBack = new JButton("← Back");
-        // style Back button
-        styleSecondaryButton(btnBack); // use same style helper
+        styleSecondaryButton(btnBack);
         btnBack.addActionListener(e -> {
-            // 변경사항 폐기: 원본 settings로 복원
-            localSettings = new Settings(settings);
+            localSettings = new Settings(settings); // 원복
             loadFromSettings();
             validateKeys();
             goBack.run();
@@ -136,7 +134,7 @@ public class SettingsScreen extends JPanel {
         top.add(title, BorderLayout.WEST);
         top.add(btnBack, BorderLayout.EAST);
 
-        // 메인 카드형 패널 (폼 감싸는 컨테이너) /Main card-type panel (foam-wrapped container)
+        // 메인 카드형 패널
         JPanel card = new JPanel(new BorderLayout());
         card.setOpaque(false);
         card.setBorder(BorderFactory.createCompoundBorder(
@@ -146,7 +144,7 @@ public class SettingsScreen extends JPanel {
 
         // 폼
         JPanel form = new JPanel(new GridBagLayout());
-        form.setOpaque(false); 
+        form.setOpaque(false);
         GridBagConstraints c = new GridBagConstraints();
         c.insets = new Insets(6, 6, 6, 6);
         c.fill = GridBagConstraints.HORIZONTAL;
@@ -154,49 +152,55 @@ public class SettingsScreen extends JPanel {
         c.gridy = 0;
         c.weightx = 1.0;
 
-        // Color-blind
+        // === Color-blind Mode ===
         JPanel colorRow = new JPanel(new BorderLayout(8, 0));
-        colorRow.setOpaque(false); 
+        colorRow.setOpaque(false);
         JLabel lblColor = new JLabel("Color-blind Mode");
         lblColor.setForeground(new Color(215, 225, 240));
         colorRow.add(lblColor, BorderLayout.WEST);
 
         cbBlindMode = new JComboBox<>(ColorBlindPalette.Mode.values());
-        // dark combo box, bright text
         cbBlindMode.setBackground(new Color(245, 247, 250));
-        cbBlindMode.setForeground(Color.BLACK); 
+        cbBlindMode.setForeground(Color.BLACK);
         cbBlindMode.setOpaque(true);
         cbBlindMode.setBorder(BorderFactory.createEmptyBorder(4, 10, 4, 10));
         cbBlindMode.setFont(cbBlindMode.getFont().deriveFont(14f));
-        
 
-        // renderer for popup list (dark text on light background)
-        cbBlindMode.setRenderer(new DefaultListCellRenderer() {          
+        cbBlindMode.setRenderer(new DefaultListCellRenderer() {
             @Override
-            public java.awt.Component getListCellRendererComponent(
+            public Component getListCellRendererComponent(
                     JList<?> list, Object value, int index,
                     boolean isSelected, boolean cellHasFocus) {
 
                 JLabel lbl = (JLabel) super.getListCellRendererComponent(
                         list, value, index, isSelected, cellHasFocus);
 
-                lbl.setBackground(isSelected ? new Color(220, 230, 245)
-                                             : Color.WHITE);
+                lbl.setBackground(isSelected ? new Color(220, 230, 245) : Color.WHITE);
                 lbl.setForeground(Color.BLACK);
                 return lbl;
             }
         });
-        // ensure selected text (editor) is also black on white
-        cbBlindMode.setEditable(true);                                   
-        JTextComponent blindEditor = (JTextComponent) cbBlindMode.getEditor().getEditorComponent();
-        blindEditor.setForeground(Color.BLACK);                               
-        blindEditor.setBackground(Color.WHITE);                               
 
         colorRow.add(cbBlindMode, BorderLayout.CENTER);
-        form.add(colorRow, c); 
-         
+        form.add(colorRow, c);
 
-        // Screen Size
+        focusOrder.add(cbBlindMode);
+        compLabels.put(cbBlindMode, lblColor);
+        unbindAltUpDown(cbBlindMode); // Alt+↑/↓는 우리가 처리
+
+        // 콤보가 포커스를 가지고 있을 때도 Alt+↑/↓를 메뉴 이동으로 사용
+        cbBlindMode.registerKeyboardAction(
+                e -> { closeAllPopups(); moveSelection(+1); },
+                KeyStroke.getKeyStroke("alt DOWN"),
+                JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT
+        );
+        cbBlindMode.registerKeyboardAction(
+                e -> { closeAllPopups(); moveSelection(-1); },
+                KeyStroke.getKeyStroke("alt UP"),
+                JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT
+        );
+
+        // === Screen Size ===
         c.gridy++;
         JPanel sizeRow = new JPanel(new BorderLayout(8, 0));
         sizeRow.setOpaque(false);
@@ -205,66 +209,65 @@ public class SettingsScreen extends JPanel {
         sizeRow.add(lblScreen, BorderLayout.WEST);
 
         cbScreen = new JComboBox<>(Settings.ScreenSize.values());
-
-        // dark combo, bright text
         cbScreen.setBackground(new Color(245, 247, 250));
         cbScreen.setForeground(Color.BLACK);
         cbScreen.setOpaque(true);
         cbScreen.setBorder(BorderFactory.createEmptyBorder(4, 10, 4, 10));
         cbScreen.setFont(cbScreen.getFont().deriveFont(14f));
-        
-        // custom renderer so list items show friendly labels & bright text
+
         cbScreen.setRenderer(new DefaultListCellRenderer() {
-        @Override
-        public Component getListCellRendererComponent(
-                JList<?> list, Object value, int index,
-                boolean isSelected, boolean cellHasFocus) {
+            @Override
+            public Component getListCellRendererComponent(
+                    JList<?> list, Object value, int index,
+                    boolean isSelected, boolean cellHasFocus) {
 
-            JLabel lbl = (JLabel) super.getListCellRendererComponent(
-                    list, value, index, isSelected, cellHasFocus);
+                JLabel lbl = (JLabel) super.getListCellRendererComponent(
+                        list, value, index, isSelected, cellHasFocus);
 
-            if (value instanceof Settings.ScreenSize sz) {
+                if (value instanceof Settings.ScreenSize sz) {
                     lbl.setText(getScreenLabel(sz));
                 }
-
-                lbl.setBackground(isSelected ? new Color(220, 230, 245)
-                                             : Color.WHITE);
+                lbl.setBackground(isSelected ? new Color(220, 230, 245) : Color.WHITE);
                 lbl.setForeground(Color.BLACK);
                 return lbl;
             }
         });
 
-        // editor text (selected value) → black on white
-        cbScreen.setEditable(true);                                       
-        JTextField editor2 = (JTextField) cbScreen.getEditor().getEditorComponent();
-        editor2.setForeground(Color.BLACK);                               
-        editor2.setBackground(Color.WHITE);      
-        
         cbScreen.addActionListener(e -> {
-        Settings.ScreenSize sz = (Settings.ScreenSize) cbScreen.getSelectedItem();
-        if (sz != null) {
-            applyScreenSize(sz);              
-            }
-     });
+            Settings.ScreenSize sz = (Settings.ScreenSize) cbScreen.getSelectedItem();
+            if (sz != null) applyScreenSize(sz);
+        });
 
         sizeRow.add(cbScreen, BorderLayout.CENTER);
         form.add(sizeRow, c);
-        
 
-        // Key Bindings
+        focusOrder.add(cbScreen);
+        compLabels.put(cbScreen, lblScreen);
+        unbindAltUpDown(cbScreen);
+
+        cbScreen.registerKeyboardAction(
+                e -> { closeAllPopups(); moveSelection(+1); },
+                KeyStroke.getKeyStroke("alt DOWN"),
+                JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT
+        );
+        cbScreen.registerKeyboardAction(
+                e -> { closeAllPopups(); moveSelection(-1); },
+                KeyStroke.getKeyStroke("alt UP"),
+                JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT
+        );
+
+        // === Key Bindings ===
         c.gridy++;
         JPanel keys = new JPanel(new GridBagLayout());
         keys.setOpaque(false);
 
-        // custom titled border with light title color
         javax.swing.border.TitledBorder tb = BorderFactory.createTitledBorder(
                 BorderFactory.createLineBorder(new Color(60, 90, 130, 200)),
                 "Key Bindings"
-        ); 
-        tb.setTitleColor(new Color(220, 230, 245));          // light text color
-        tb.setTitleFont(tb.getTitleFont().deriveFont(15f));  // a bit larger if you like
-        keys.setBorder(tb);                                  //  use our custom border
-
+        );
+        tb.setTitleColor(new Color(220, 230, 245));
+        tb.setTitleFont(tb.getTitleFont().deriveFont(15f));
+        keys.setBorder(tb);
 
         int r = 0;
         r = addKeyRow(keys, r, Settings.Action.Left,     "Left");
@@ -277,19 +280,18 @@ public class SettingsScreen extends JPanel {
         // 오류 표기
         c.gridy++;
         lblError = new JLabel(" ");
-        lblError.setForeground(new Color(255, 120,120));
+        lblError.setForeground(new Color(255, 120, 120));
         lblError.setFont(lblError.getFont().deriveFont(Font.PLAIN, 12f));
         form.add(lblError, c);
 
-        // 버튼들
+        // === 버튼들 ===
         JPanel bottom = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         bottom.setOpaque(false);
 
-        JButton btnDefaults    = new JButton("Reset to Defaults");
-        JButton btnResetScore  = new JButton("Reset Scoreboard");
-        btnApply               = new JButton("Apply");
+        JButton btnDefaults   = new JButton("Reset to Defaults");
+        JButton btnResetScore = new JButton("Reset Scoreboard");
+        btnApply              = new JButton("Apply");
 
-        //style buttons
         styleSecondaryButton(btnDefaults);
         styleSecondaryButton(btnResetScore);
         stylePrimaryButton(btnApply);
@@ -305,34 +307,93 @@ public class SettingsScreen extends JPanel {
             validateKeys();
         });
 
-        // Reset Scoreboard → 체크박스 다이얼로그
+        // Reset Scoreboard
         btnResetScore.addActionListener(e -> showScoreResetDialog());
 
         // Apply
         btnApply.addActionListener(e -> {
-            if (!validateKeys()) return; // 혹시 모를 찰나 누름 방지
-            saveToSettings(); 
+            if (!validateKeys()) return;
+            saveToSettings();
             if (applyListener != null) applyListener.onApply(settings);
         });
 
-        // ESC로 뒤로가기
+        // ESC → 뒤로
         getInputMap(WHEN_IN_FOCUSED_WINDOW)
                 .put(KeyStroke.getKeyStroke("ESCAPE"), "back");
         getActionMap().put("back", new AbstractAction() {
             @Override public void actionPerformed(java.awt.event.ActionEvent e) {
-                localSettings = new Settings(settings); // 원복
+                localSettings = new Settings(settings);
                 loadFromSettings();
                 validateKeys();
                 goBack.run();
             }
         });
 
-        // scroll with transparent background
+        // Option(Alt)+Down / Up → 다음/이전 항목 선택
+        KeyStroke altDown = KeyStroke.getKeyStroke("alt DOWN");
+        KeyStroke altUp   = KeyStroke.getKeyStroke("alt UP");
+
+        for (int cond : new int[] { WHEN_IN_FOCUSED_WINDOW, WHEN_ANCESTOR_OF_FOCUSED_COMPONENT }) {
+            getInputMap(cond).put(altDown, "focusNext");
+            getInputMap(cond).put(altUp,   "focusPrev");
+        }
+
+        getActionMap().put("focusNext", new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                closeAllPopups();
+                moveSelection(+1);
+            }
+        });
+
+        getActionMap().put("focusPrev", new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                closeAllPopups();
+                moveSelection(-1);
+            }
+        });
+
+        // Enter → 현재 * 가 가리키는 항목 실행 / 토글
+        getInputMap(WHEN_IN_FOCUSED_WINDOW)
+                .put(KeyStroke.getKeyStroke("ENTER"), "enterOnSelection");
+        getActionMap().put("enterOnSelection", new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                if (focusOrder.isEmpty()) return;
+                Component selected = focusOrder.get(selectedIndex);
+
+                if (selected == cbBlindMode) {
+                    cbBlindMode.requestFocusInWindow();
+                    cbBlindMode.showPopup();
+                } else if (selected == cbScreen) {
+                    cbScreen.requestFocusInWindow();
+                    cbScreen.showPopup();
+                } else if (selected instanceof KeyField keyField) {
+                    if (keyField.isFocusOwner()) {
+                        // 이미 키필드에 포커스 → 나가려고 하는 상황
+                        // 중복 에러가 있으면 나가지 못하도록 막기
+                        if (keysValid) {
+                            SettingsScreen.this.requestFocusInWindow();
+                        }
+                    } else {
+                        // 아직 포커스가 없으면 키 캡처 시작
+                        keyField.requestFocusInWindow();
+                    }
+                } else {
+                    if (btnApply.isEnabled()) {
+                        btnApply.doClick();
+                    }
+                }
+            }
+        });
+
+        // 스크롤
         JScrollPane scroll = new JScrollPane(form);
         scroll.setBorder(BorderFactory.createEmptyBorder());
         scroll.setOpaque(false);
         scroll.getViewport().setOpaque(false);
-        scroll.getVerticalScrollBar().setUnitIncrement(16); // smooth
+        scroll.getVerticalScrollBar().setUnitIncrement(16);
 
         card.add(scroll, BorderLayout.CENTER);
 
@@ -342,20 +403,52 @@ public class SettingsScreen extends JPanel {
 
         loadFromSettings();
         validateKeys();
+
+        // 초기 선택: Color-blind Mode 에 * 붙이기
+        selectedIndex = 0;
+        updateSelectionVisual();
     }
 
-     // small helper to style primary button
+    /** Option+위/아래로 선택 인덱스만 이동 (* 표시만 바뀜) */
+    private void moveSelection(int delta) {
+        if (focusOrder.isEmpty()) return;
+        int n = focusOrder.size();
+        selectedIndex = (selectedIndex + delta + n) % n;
+        updateSelectionVisual();
+    }
+
+    /** * 표시 업데이트 */
+    private void updateSelectionVisual() {
+        for (JLabel lbl : compLabels.values()) {
+            String t = lbl.getText();
+            if (t.startsWith("* ")) {
+                lbl.setText(t.substring(2));
+            }
+        }
+        if (focusOrder.isEmpty()) return;
+
+        Component comp = focusOrder.get(selectedIndex);
+        JLabel lbl = compLabels.get(comp);
+        if (lbl != null) {
+            String t = lbl.getText();
+            if (!t.startsWith("* ")) {
+                lbl.setText("* " + t);
+            }
+        }
+    }
+
+    // Primary 버튼 스타일
     private void stylePrimaryButton(JButton b) {
-        b.setFocusPainted(false);
+        b.setFocusPainted(true);
         b.setFont(b.getFont().deriveFont(Font.BOLD, 13f));
         b.setBackground(new Color(70, 130, 190));
         b.setForeground(new Color(235, 245, 255));
         b.setBorder(BorderFactory.createEmptyBorder(8, 18, 8, 18));
     }
 
-    // small helper to style secondary buttons
+    // Secondary 버튼 스타일
     private void styleSecondaryButton(JButton b) {
-        b.setFocusPainted(false);
+        b.setFocusPainted(true);
         b.setFont(b.getFont().deriveFont(Font.PLAIN, 13f));
         b.setBackground(new Color(35, 55, 90));
         b.setForeground(new Color(220, 230, 245));
@@ -365,9 +458,8 @@ public class SettingsScreen extends JPanel {
     // Scoreboard Reset Dialog
     private void showScoreResetDialog() {
         JPanel panel = new JPanel(new GridBagLayout());
-        // EDIT: use light background + dark text for better contrast
-        panel.setOpaque(true);                   
-        panel.setBackground(Color.WHITE);   
+        panel.setOpaque(true);
+        panel.setBackground(Color.WHITE);
 
         GridBagConstraints gc = new GridBagConstraints();
         gc.insets = new Insets(4, 8, 4, 8);
@@ -376,7 +468,7 @@ public class SettingsScreen extends JPanel {
         gc.gridy  = 0;
 
         JLabel lbl = new JLabel("Select which scoreboard(s) to reset:");
-        lbl.setForeground(new Color(30, 30, 30));         // EDIT: dark text
+        lbl.setForeground(new Color(30, 30, 30));
         panel.add(lbl, gc);
 
         gc.gridy++;
@@ -386,8 +478,8 @@ public class SettingsScreen extends JPanel {
         for (GameConfig.Mode mode : GameConfig.Mode.values()) {
             for (GameConfig.Difficulty diff : GameConfig.Difficulty.values()) {
                 JCheckBox cb = new JCheckBox(mode + " / " + diff);
-                cb.setOpaque(false);                     
-                cb.setForeground(new Color(30, 30, 30));  
+                cb.setOpaque(false);
+                cb.setForeground(new Color(30, 30, 30));
                 boxes[mode.ordinal()][diff.ordinal()] = cb;
                 gc.gridy++;
                 panel.add(cb, gc);
@@ -397,10 +489,9 @@ public class SettingsScreen extends JPanel {
         gc.gridy++;
         final JCheckBox cbAll = new JCheckBox("Reset ALL");
         cbAll.setOpaque(false);
-        cbAll.setForeground(new Color(30, 30, 30));       // EDIT: dark text
+        cbAll.setForeground(new Color(30, 30, 30));
         panel.add(cbAll, gc);
 
-        // 전체 체크 토글
         cbAll.addActionListener(e -> {
             boolean selected = cbAll.isSelected();
             for (JCheckBox[] row : boxes) {
@@ -415,8 +506,6 @@ public class SettingsScreen extends JPanel {
 
         if (result == JOptionPane.OK_OPTION) {
             boolean any = false;
-
-            // ALL 우선 처리
             if (cbAll.isSelected()) {
                 settings.resetScoreBoardAll();
                 any = true;
@@ -434,30 +523,30 @@ public class SettingsScreen extends JPanel {
             JOptionPane.showMessageDialog(
                     this,
                     any ? "Selected scoreboard(s) have been reset."
-                        : "No scoreboard selected.",
+                            : "No scoreboard selected.",
                     any ? "Done" : "Info",
                     JOptionPane.INFORMATION_MESSAGE
             );
         }
     }
 
-
-    // 유틸 메서드들
+    // Key Bindings row
     private int addKeyRow(JPanel panel, int row, Settings.Action action, String labelText) {
         Insets in = new Insets(4, 8, 4, 8);
 
         GridBagConstraints lc = new GridBagConstraints();
-        lc.gridx = 0; 
+        lc.gridx = 0;
         lc.gridy = row;
         lc.insets = in;
         lc.anchor = GridBagConstraints.LINE_END;
 
         JLabel lbl = new JLabel(labelText);
-        lbl.setForeground(new Color(215, 225, 240)); 
+        lbl.setForeground(new Color(215, 225, 240));
         panel.add(lbl, lc);
 
         GridBagConstraints fc = new GridBagConstraints();
-        fc.gridx = 1; fc.gridy = row;
+        fc.gridx = 1;
+        fc.gridy = row;
         fc.insets = in;
         fc.fill = GridBagConstraints.HORIZONTAL;
         fc.weightx = 1.0;
@@ -465,6 +554,9 @@ public class SettingsScreen extends JPanel {
         KeyField field = new KeyField(this::validateKeys);
         keyFields.put(action, field);
         panel.add(field, fc);
+
+        focusOrder.add(field);
+        compLabels.put(field, lbl);
 
         return row + 1;
     }
@@ -476,8 +568,8 @@ public class SettingsScreen extends JPanel {
             Integer code = localSettings.keymap.get(e.getKey());
             if (code != null) e.getValue().setKeyCode(code);
         }
+        updateSelectionVisual();
     }
-    
 
     private void saveToSettings() {
         localSettings.update(s -> {
@@ -495,7 +587,7 @@ public class SettingsScreen extends JPanel {
         });
     }
 
-    /** 중복 키 검증 */
+    // 키 중복 검증
     private boolean validateKeys() {
         for (KeyField f : keyFields.values()) f.setError(false, null);
 
@@ -522,13 +614,13 @@ public class SettingsScreen extends JPanel {
             }
         }
 
-        boolean ok = dups.isEmpty();
-        btnApply.setEnabled(ok);
-        lblError.setText(ok ? " " : ("Duplicate keys: " + String.join(", ", dups)));
-        return ok;
+        keysValid = dups.isEmpty();
+        btnApply.setEnabled(keysValid);
+        lblError.setText(keysValid ? " " : ("Duplicate keys: " + String.join(", ", dups)));
+        return keysValid;
     }
 
-    // 키캡처 전용 텍스트필드 (변경 시 콜백 호출 가능)
+    // 키 캡처용 필드
     private static class KeyField extends JTextField {
         private int keyCode = KeyEvent.VK_UNDEFINED;
         private final Runnable onChange;
@@ -541,32 +633,69 @@ public class SettingsScreen extends JPanel {
             setHorizontalAlignment(SwingConstants.CENTER);
             setToolTipText("Click and press a key");
 
-            // dark theme style
-            setBackground(new Color(32, 40, 58));   // dark but visible
-            setForeground(new Color(235, 245, 255)); // bright white text
+            setBackground(new Color(32, 40, 58));
+            setForeground(new Color(235, 245, 255));
             setCaretColor(new Color(235, 245, 255));
             setOpaque(true);
-            normalBorder = BorderFactory.createMatteBorder(    
-                    0, 0, 1, 0, new Color(70, 90, 140));    
-            setBorder(normalBorder);                          
-            setFont(getFont().deriveFont(Font.BOLD, 18f));    
+            normalBorder = BorderFactory.createMatteBorder(
+                    0, 0, 1, 0, new Color(70, 90, 140));
+            setBorder(normalBorder);
+            setFont(getFont().deriveFont(Font.BOLD, 18f));
+
+            // 키 입력 처리
             addKeyListener(new KeyAdapter() {
                 @Override public void keyPressed(KeyEvent e) {
-                    keyCode = e.getKeyCode();
-                    setText(SettingsScreen.keyToDisplay(keyCode));  
+                    // Alt(Option)+방향키 등은 키 바인딩으로 취급하지 않음
+                    if (e.isAltDown()) {
+                        e.consume();
+                        return;
+                    }
+
+                    int code = e.getKeyCode();
+
+                    // Enter 키는 바인딩 가능한 키로 취급하지 않음
+                    if (code == KeyEvent.VK_ENTER) {
+                        // 엔터는 여기서 키로 저장하지 않음 (위로 올라가서 토글 처리)
+                        return;
+                    }
+
+                    keyCode = code;
+                    setText(SettingsScreen.keyToDisplay(code));
                     if (onChange != null) onChange.run();
                     e.consume();
                 }
             });
 
             addMouseListener(new java.awt.event.MouseAdapter() {
-                @Override public void mousePressed(java.awt.event.MouseEvent e) { requestFocusInWindow(); }
+                @Override public void mousePressed(java.awt.event.MouseEvent e) {
+                    requestFocusInWindow();
+                }
             });
+
+            addFocusListener(new java.awt.event.FocusAdapter() {
+                @Override
+                public void focusGained(java.awt.event.FocusEvent e) {
+                    setBorder(BorderFactory.createLineBorder(new Color(120, 200, 255), 2));
+                }
+                @Override
+                public void focusLost(java.awt.event.FocusEvent e) {
+                    setBorder(normalBorder);
+                }
+            });
+
+            // Alt+방향키 기본 동작 제거 (상위로 넘기도록)
+            javax.swing.InputMap im = getInputMap(WHEN_FOCUSED);
+            if (im != null) {
+                im.remove(KeyStroke.getKeyStroke("alt LEFT"));
+                im.remove(KeyStroke.getKeyStroke("alt RIGHT"));
+                im.remove(KeyStroke.getKeyStroke("alt UP"));
+                im.remove(KeyStroke.getKeyStroke("alt DOWN"));
+            }
         }
 
         void setKeyCode(int code) {
             keyCode = code;
-            setText(SettingsScreen.keyToDisplay(code));   
+            setText(SettingsScreen.keyToDisplay(code));
         }
 
         int getKeyCode() { return keyCode; }
@@ -581,7 +710,8 @@ public class SettingsScreen extends JPanel {
             }
         }
     }
-    // paint gradient background (similar vibe to menu)
+
+    // 배경 그리기
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
@@ -598,5 +728,28 @@ public class SettingsScreen extends JPanel {
         g2.fillRect(0, 0, w, h);
 
         g2.dispose();
+    }
+
+    // 콤보박스 Alt+↑/↓ 단축키 제거 (우리가 처리할 거라)
+    private void unbindAltUpDown(JComponent c) {
+        KeyStroke altDown = KeyStroke.getKeyStroke("alt DOWN");
+        KeyStroke altUp   = KeyStroke.getKeyStroke("alt UP");
+        for (int condition : new int[] { WHEN_FOCUSED, WHEN_ANCESTOR_OF_FOCUSED_COMPONENT }) {
+            javax.swing.InputMap im = c.getInputMap(condition);
+            if (im != null) {
+                im.remove(altDown);
+                im.remove(altUp);
+            }
+        }
+    }
+
+    // 열려 있는 콤보 팝업 모두 닫기
+    private void closeAllPopups() {
+        if (cbBlindMode != null && cbBlindMode.isPopupVisible()) {
+            cbBlindMode.setPopupVisible(false);
+        }
+        if (cbScreen != null && cbScreen.isPopupVisible()) {
+            cbScreen.setPopupVisible(false);
+        }
     }
 }
