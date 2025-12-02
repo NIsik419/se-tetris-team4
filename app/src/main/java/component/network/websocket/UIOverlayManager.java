@@ -47,17 +47,6 @@ public class UIOverlayManager {
         this.onExecuteRestart = onExecuteRestart;
     }
 
-    public void updateRestartStatus(String msg) {
-        if (gameOverPanel != null && gameOverPanel.getComponentCount() > 0) {
-            Component c = gameOverPanel.getComponent(0);
-            if (c instanceof JLabel label) {
-                label.setText(msg);
-                label.setForeground(new Color(100, 200, 255));
-                gameOverPanel.repaint();
-            }
-        }
-    }
-
     public void triggerRestart() {
         // 오버레이 숨기기
         JRootPane root = SwingUtilities.getRootPane(parentPanel);
@@ -115,11 +104,8 @@ public class UIOverlayManager {
         startButton.setForeground(Color.WHITE);
         startButton.setFocusPainted(false);
         startButton.addActionListener(e -> {
-            // 서버가 GAME_START 메시지 전송
-            if (isServer) {
-                // NetworkManager를 통해 전송해야 함
-            }
-            onStartGame.run();
+            System.out.println("[UI] Start button clicked");
+            triggerGameStart();
         });
         overlayPanel.add(startButton);
 
@@ -226,14 +212,43 @@ public class UIOverlayManager {
     }
 
     public void updateStatus(String message) {
-        SwingUtilities.invokeLater(() -> statusLabel.setText(message));
+        SwingUtilities.invokeLater(() -> {
+            if (statusLabel != null) {
+                statusLabel.setText(message);
+            }
+        });
+    }
+
+    public void updateGameOverStatus(String message) {
+        SwingUtilities.invokeLater(() -> {
+            if (gameOverPanel != null) {
+                // 기존 게임오버 패널에 상태 라벨 추가
+                Component[] components = gameOverPanel.getComponents();
+                for (Component c : components) {
+                    if (c instanceof JLabel && ((JLabel) c).getText().contains("Waiting")) {
+                        gameOverPanel.remove(c);
+                        break;
+                    }
+                }
+
+                JLabel statusLabel = new JLabel(message);
+                statusLabel.setFont(new Font("Arial", Font.BOLD, 14));
+                statusLabel.setForeground(new Color(255, 200, 100));
+                statusLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+                gameOverPanel.add(statusLabel, 1); // 제목 바로 아래
+                gameOverPanel.revalidate();
+                gameOverPanel.repaint();
+            }
+        });
     }
 
     public void enableStartButton() {
         SwingUtilities.invokeLater(() -> {
             updateStatus("Ready! Press Start");
-            startButton.setEnabled(true);
-            startButton.setBackground(new Color(50, 180, 80));
+            if (startButton != null) {
+                startButton.setEnabled(true);
+                startButton.setBackground(new Color(50, 180, 80));
+            }
         });
     }
 
@@ -254,18 +269,25 @@ public class UIOverlayManager {
 
     public void showGameOverOverlay(boolean iLost, int myScore, int oppScore,
             int myTotalLines, long gameStartTime) {
+        System.out.println("[OVERLAY] showGameOverOverlay called: iLost=" + iLost);
+
         JRootPane root = SwingUtilities.getRootPane(parentPanel);
-        if (root == null)
+        if (root == null) {
+            System.err.println("[OVERLAY] ERROR: root is null!");
             return;
+        }
 
         long gameDuration = System.currentTimeMillis() - gameStartTime;
         int minutes = (int) (gameDuration / 60000);
         int seconds = (int) ((gameDuration % 60000) / 1000);
 
         JPanel glass = (JPanel) root.getGlassPane();
+        System.out.println("[OVERLAY] Glass pane: " + glass);
+
         glass.removeAll();
         glass.setLayout(null);
         glass.setVisible(true);
+        System.out.println("[OVERLAY] Glass pane visible: " + glass.isVisible());
 
         gameOverPanel = createGameOverPanel(iLost, myScore, oppScore,
                 myTotalLines, minutes, seconds);
@@ -277,8 +299,12 @@ public class UIOverlayManager {
                 w, h);
 
         glass.add(gameOverPanel);
+        System.out.println("[OVERLAY] Panel added at bounds: " + gameOverPanel.getBounds());
+
         glass.repaint();
         glass.revalidate();
+
+        System.out.println("[OVERLAY] Glass pane component count: " + glass.getComponentCount());
     }
 
     public void showTimeLimitGameOverOverlay(boolean iWon, int myScore, int oppScore,
@@ -323,6 +349,34 @@ public class UIOverlayManager {
         glass.add(gameOverPanel);
         glass.repaint();
         glass.revalidate();
+    }
+
+    /**
+     * 게임 시작 오버레이를 다시 표시 (재시작용)
+     */
+    public void showStartOverlay() {
+        SwingUtilities.invokeLater(() -> {
+            JRootPane root = SwingUtilities.getRootPane(parentPanel);
+            if (root == null)
+                return;
+
+            // 기존 게임오버 오버레이 제거
+            JPanel glass = (JPanel) root.getGlassPane();
+            glass.removeAll();
+            glass.setVisible(false);
+
+            // 처음 오버레이 다시 생성
+            createOverlay();
+
+            // 클라이언트는 모드 선택 불가
+            if (!isServer && modeSelector != null) {
+                modeSelector.setEnabled(false);
+            }
+
+            // 이미 연결되어 있으므로 바로 Ready 상태로
+            updateStatus("Ready! Press Start");
+            enableStartButton();
+        });
     }
 
     private JPanel createGameOverPanel(boolean iLost, int myScore, int oppScore,
@@ -387,17 +441,18 @@ public class UIOverlayManager {
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 15, 0));
         buttonPanel.setOpaque(false);
 
-        JButton restartBtn = new JButton("Restart");
-        restartBtn.setFont(new Font("Arial", Font.BOLD, 16));
-        restartBtn.setPreferredSize(new Dimension(120, 45));
-        restartBtn.setBackground(new Color(70, 150, 70));
-        restartBtn.setForeground(Color.WHITE);
-        restartBtn.setFocusPainted(false);
-        restartBtn.addActionListener(e -> {
-            onRestart.run();
-            updateGameOverStatus("Waiting for opponent...");
+        JButton confirmBtn = new JButton("OK");
+        confirmBtn.setFont(new Font("Arial", Font.BOLD, 16));
+        confirmBtn.setPreferredSize(new Dimension(120, 45));
+        confirmBtn.setBackground(new Color(70, 150, 70));
+        confirmBtn.setForeground(Color.WHITE);
+        confirmBtn.setFocusPainted(false);
+        confirmBtn.addActionListener(e -> {
+            if (onRestart != null) {
+                onRestart.run();
+            }
         });
-        buttonPanel.add(restartBtn);
+        buttonPanel.add(confirmBtn);
 
         JButton exitBtn = new JButton("Exit");
         exitBtn.setFont(new Font("Arial", Font.BOLD, 16));
@@ -416,13 +471,4 @@ public class UIOverlayManager {
         return buttonPanel;
     }
 
-    private void updateGameOverStatus(String msg) {
-        if (gameOverPanel != null && gameOverPanel.getComponentCount() > 0) {
-            Component c = gameOverPanel.getComponent(0);
-            if (c instanceof JLabel label) {
-                label.setText(msg);
-                gameOverPanel.repaint();
-            }
-        }
-    }
 }

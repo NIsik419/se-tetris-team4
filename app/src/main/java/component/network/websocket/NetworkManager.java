@@ -26,6 +26,7 @@ public class NetworkManager {
     private static final long LAG_THRESHOLD = 200;
     private static final long DISCONNECT_THRESHOLD = 5000;
     private boolean oppRestartReady = false;
+    private boolean isReconnecting = false;
 
     private final GameClient client;
     private BoardSyncAdapter adapter;
@@ -42,6 +43,20 @@ public class NetworkManager {
     private final JLabel lagLabel;
     private final Runnable onConnectionLost;
     private final Runnable onGameOver;
+    private Runnable onOpponentRestartReady;
+
+    public void setOnOpponentRestartReady(Runnable callback) {
+        this.onOpponentRestartReady = callback;
+    }
+
+    private void handleOpponentRestartReady() {
+        if (onOpponentRestartReady != null) {
+            onOpponentRestartReady.run();
+        }
+    }
+
+    // Time Limit 모드용 콜백 추가
+    private java.util.function.Consumer<Long> onTimeLimitStart;
 
     // 동기화 통계
     private long maxSyncDelay = 0;
@@ -51,6 +66,7 @@ public class NetworkManager {
     // UI 참조 (초기화용)
     private JPanel parentPanel;
     private UIOverlayManager overlayManager;
+    private Runnable onExecuteRestart;
 
     public NetworkManager(boolean isServer,
             java.util.function.Consumer<Message> messageHandler,
@@ -77,6 +93,33 @@ public class NetworkManager {
         });
 
         setupTimers();
+    }
+
+    public NetworkManager(
+            boolean isServer,
+            java.util.function.Consumer<Message> handler,
+            BoardLogic myLogic,
+            BoardLogic oppLogic,
+            JLabel lagLabel,
+            Runnable onConnectionLost,
+            Runnable onGameOver,
+            GameClient clientOverride) {
+        this.isServer = isServer;
+        this.lagLabel = lagLabel;
+        this.onConnectionLost = onConnectionLost;
+        this.onGameOver = onGameOver;
+
+        this.client = clientOverride;
+        this.adapter = new BoardSyncAdapter(myLogic, oppLogic, clientOverride);
+
+        setupTimers();
+    }
+
+    /**
+     * Time Limit 시작 콜백 설정
+     */
+    public void setOnTimeLimitStart(java.util.function.Consumer<Long> callback) {
+        this.onTimeLimitStart = callback;
     }
 
     /**
@@ -175,8 +218,13 @@ public class NetworkManager {
     }
 
     public void startHeartbeat() {
-        if (heartbeatTimer != null && !heartbeatTimer.isRunning()) {
+        if (heartbeatTimer != null && heartbeatTimer.isRunning()) {
+            System.out.println("[HEARTBEAT] Already running, skipping...");
+            return;
+        }
+        if (heartbeatTimer != null) {
             heartbeatTimer.start();
+            System.out.println("[HEARTBEAT] Started");
         }
     }
 
@@ -209,11 +257,18 @@ public class NetworkManager {
         if (!oppReady)
             return;
 
+        if (!isReady) {
+            return;
+        }
+
         long now = System.currentTimeMillis();
         long timeSinceLastPong = now - lastPongTime;
 
         if (timeSinceLastPong > DISCONNECT_THRESHOLD) {
+            System.err.println("[CONNECTION] Timeout detected: " + timeSinceLastPong + "ms");
             if (onConnectionLost != null) {
+                // 한 번만 호출되도록
+                connectionCheckTimer.stop();
                 onConnectionLost.run();
             }
         }
@@ -234,6 +289,7 @@ public class NetworkManager {
             case MODE_SELECT:
                 lastPongTime = System.currentTimeMillis();
                 String mode = (String) msg.data;
+                System.out.println("[MODE] Received mode from opponent: " + mode);
                 if (overlayManager != null) {
                     overlayManager.updateStatus("Mode: " + mode);
                 }
@@ -245,8 +301,19 @@ public class NetworkManager {
                     overlayManager.triggerGameStart();
                 }
                 break;
+
             case TIME_LIMIT_START:
                 lastPongTime = System.currentTimeMillis();
+                // 클라이언트도 타이머 시작
+                if (onTimeLimitStart != null && msg.data != null) {
+                    try {
+                        long startTime = Long.parseLong(msg.data.toString());
+                        System.out.println("[TIME_LIMIT] Received start time: " + startTime);
+                        onTimeLimitStart.accept(startTime);
+                    } catch (Exception e) {
+                        System.err.println("[TIME_LIMIT] Failed to parse start time: " + e.getMessage());
+                    }
+                }
                 break;
 
             case PING:
@@ -286,28 +353,18 @@ public class NetworkManager {
                 break;
 
             case RESTART_READY:
-                oppRestartReady = true;
                 if (overlayManager != null) {
-                    overlayManager.updateRestartStatus("Opponent ready! Starting...");
-                    if (isServer) {
-                        Timer restartTimer = new Timer(1000, e -> {
-                            client.send(new Message(MessageType.RESTART_START, null));
-
-                            // ⭐ 서버도 자기 자신에게 RESTART_START 처리!
-                            SwingUtilities.invokeLater(() -> {
-                                overlayManager.triggerRestart();
-                            });
-
-                            ((Timer) e.getSource()).stop();
-                        });
-                        restartTimer.setRepeats(false);
-                        restartTimer.start();
-                    }
+                    // OnlineVersusPanel에 알림
+                    SwingUtilities.invokeLater(() -> {
+                        // 콜백으로 oppRestartReady 설정
+                        handleOpponentRestartReady();
+                    });
                 }
                 break;
+
             case RESTART_START:
-                if (overlayManager != null) {
-                    overlayManager.triggerRestart();
+                if (onExecuteRestart != null) {
+                    onExecuteRestart.run();
                 }
                 break;
 
@@ -442,29 +499,40 @@ public class NetworkManager {
     }
 
     public void reconnect() throws Exception {
-        // 기존 연결 정리
-        if (client != null) {
-            client.disconnect();
+        if (isReconnecting) {
+            System.out.println("[RECONNECT] Already reconnecting, skipping...");
+            return;
         }
 
-        Thread.sleep(1000);
+        isReconnecting = true;
 
-        // 재연결
-        if (isServer) {
-            client.connect("ws://localhost:8081/game");
-        } else {
-            String lastIp = loadRecentServerIp();
-            if (lastIp == null)
-                lastIp = "localhost";
-            client.connect("ws://" + lastIp + ":8081/game");
+        try {
+            // 기존 연결 정리
+            if (client != null) {
+                client.disconnect();
+            }
+
+            Thread.sleep(1000);
+
+            // 재연결
+            if (isServer) {
+                client.connect("ws://localhost:8081/game");
+            } else {
+                String lastIp = loadRecentServerIp();
+                if (lastIp == null)
+                    lastIp = "localhost";
+                client.connect("ws://" + lastIp + ":8081/game");
+            }
+
+            // 재연결 후 상태 업데이트
+            isReady = true;
+            lastPongTime = System.currentTimeMillis();
+            client.send(new Message(MessageType.PLAYER_READY, "ready"));
+
+            System.out.println("[RECONNECT] Success!");
+        } finally {
+            isReconnecting = false;
         }
-
-        // 재연결 후 상태 업데이트
-        isReady = true;
-        lastPongTime = System.currentTimeMillis();
-        client.send(new Message(MessageType.PLAYER_READY, "ready"));
-
-        System.out.println("[RECONNECT] Success!");
     }
 
     public void sendBoardState() {
@@ -520,6 +588,9 @@ public class NetworkManager {
         maxSyncDelay = 0;
         avgSyncDelay = 0;
         syncCount = 0;
+
+        isReady = true; // 이미 연결된 상태 유지
+        oppReady = true;
     }
 
     public void cleanup() {
@@ -536,4 +607,27 @@ public class NetworkManager {
             GameServer.stopServer();
         }
     }
+
+    // ===============================
+    // TEST SUPPORT
+    // ===============================
+    public String test_loadRecentServerIp() { return loadRecentServerIp(); }
+    public void test_saveRecentServerIp(String ip) { saveRecentServerIp(ip); }
+
+    public long test_getLastPingTime() { return lastPingTime; }
+    public void test_setLastPingTime(long t) { lastPingTime = t; }
+
+    public long test_getLastPongTime() { return lastPongTime; }
+    public void test_setLastPongTime(long t) { lastPongTime = t; }
+
+    public boolean test_isReady() { return isReady; }
+    public void test_setReady(boolean v) { isReady = v; }
+
+    public boolean test_isOppReady() { return oppReady; }
+    public void test_setOppReady(boolean v) { oppReady = v; }
+
+    public void test_handlePong() { handlePong(); }
+    public void test_checkConnection() { checkConnection(); }
+
+
 }
