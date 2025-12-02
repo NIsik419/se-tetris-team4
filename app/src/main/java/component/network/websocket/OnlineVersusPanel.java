@@ -427,10 +427,12 @@ public class OnlineVersusPanel extends JPanel {
     }
 
     private void onGameOver() {
+        System.out.println("[GAMEOVER] onGameOver called");
         opponentGameOver = true;
 
         SwingUtilities.invokeLater(() -> {
-            loop.stopLoop(); // ⭐ 내 게임도 멈춤
+            System.out.println("[GAMEOVER] Inside SwingUtilities.invokeLater");
+            loop.stopLoop(); // 내 게임도 멈춤
             networkManager.printStats();
 
             // 상대 보드 클리어
@@ -442,8 +444,10 @@ public class OnlineVersusPanel extends JPanel {
             }
             oppView.repaint();
 
-            //  상대가 먼저 죽음
+            // 상대가 먼저 죽음
+            System.out.println("[GAMEOVER] About to trigger animation");
             triggerGameOverAnimation(myView, myLogic, () -> {
+                System.out.println("[GAMEOVER] Showing victory overlay");
                 overlayManager.showGameOverOverlay(false, myLogic.getScore(),
                         oppLogic.getScore(), myTotalLines, gameStartTime);
             });
@@ -543,25 +547,7 @@ public class OnlineVersusPanel extends JPanel {
         }).start();
     }
 
-    private void triggerDualGameOverAnimation() {
-        // 상대 보드 즉시 클리어
-        Color[][] oppBoard = oppLogic.getBoard();
-        for (int y = 0; y < BoardLogic.HEIGHT; y++) {
-            for (int x = 0; x < BoardLogic.WIDTH; x++) {
-                oppBoard[y][x] = null;
-            }
-        }
-        oppView.repaint();
-
-        // 내 보드만 애니메이션
-        triggerGameOverAnimation(myView, myLogic, () -> {
-            // 내가 진 경우
-            boolean iLost = true;
-            overlayManager.showGameOverOverlay(iLost, myLogic.getScore(),
-                    oppLogic.getScore(), myTotalLines, gameStartTime);
-        });
-    }
-
+    
     private void triggerGameOverAnimation(BoardView view, BoardLogic logic, Runnable afterAnimation) {
         Color[][] board = logic.getBoard();
         Color[][] boardCopy = new Color[BoardLogic.HEIGHT][BoardLogic.WIDTH];
