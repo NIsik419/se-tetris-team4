@@ -1,10 +1,10 @@
 package component.sidebar;
 
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.GridLayout;
-import java.awt.Component;
 import java.util.List;
 
 import javax.swing.BorderFactory;
@@ -14,7 +14,8 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
 
-import blocks.Block; 
+import blocks.Block;
+import component.ColorBlindPalette; 
 
 public class HUDSidebar extends JPanel {
     private final JLabel scoreLabel = value("0");
@@ -24,11 +25,18 @@ public class HUDSidebar extends JPanel {
 
     // smaller preview boxes
     private final NextBlockPanel next1 = new NextBlockPanel(80);
-    // private final NextBlockPanel next2 = new NextBlockPanel(96);
-    // private final NextBlockPanel next3 = new NextBlockPanel(96);
+    private JPanel timePanel;      //  for showTime()
+    
+  // === UI color constants (to match BoardPanel style) === 
+    private static final Color BG_SIDEBAR   = new Color(0x0F141C);
+    private static final Color BG_STAT      = new Color(0x181C26); 
+    private static final Color TEXT_TITLE   = new Color(0xB8D6FF); 
+    private static final Color TEXT_STAT    = new Color(0x8892B0); 
+    private static final Color TEXT_VALUE   = new Color(0xEDEFF2); 
+    private static final Color BORDER_PANEL = new Color(0x262C3A); 
 
     public HUDSidebar() {
-        setBackground(new Color(0x0F141C));
+        setBackground(BG_SIDEBAR);         
         setBorder(BorderFactory.createEmptyBorder(18, 18, 18, 18));
         setPreferredSize(new Dimension(220, 720));
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
@@ -42,9 +50,9 @@ public class HUDSidebar extends JPanel {
         nextWrap.add(next1);
         nextWrap.setMaximumSize(new Dimension(200, 150));
         nextWrap.setPreferredSize(new Dimension(200, 150));
+        nextWrap.setBorder(BorderFactory.createLineBorder(BORDER_PANEL, 1));
 
-        // nextWrap.add(next2);
-        // nextWrap.add(next3);
+        
         add(nextWrap);
 
         add(Box.createVerticalStrut(18));
@@ -52,11 +60,17 @@ public class HUDSidebar extends JPanel {
         add(Box.createVerticalStrut(10));
         add(statBox("Level", levelLabel)); 
         add(Box.createVerticalStrut(10));
+         // === Time box (was never shown before) === 
+        timePanel = statBoxCustom(timeTitleLabel, timeLabel);  
+        add(timePanel);                                        
+        add(Box.createVerticalStrut(10));                     
+
         add(Box.createVerticalGlue());
     }
 
     private JLabel title(String t) {
         JLabel l = new JLabel(t);
+        l.setForeground(TEXT_TITLE);  
         l.setForeground(new Color(0xB8D6FF));
         l.setFont(l.getFont().deriveFont(Font.BOLD, 20f));
         l.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -65,6 +79,7 @@ public class HUDSidebar extends JPanel {
     }
     private static JLabel value(String t) {
         JLabel l = new JLabel(t);
+        l.setForeground(TEXT_VALUE);    
         l.setForeground(new Color(0xEDEFF2));
         l.setFont(l.getFont().deriveFont(Font.BOLD, 17f));
         l.setAlignmentX(LEFT_ALIGNMENT);
@@ -99,12 +114,21 @@ public class HUDSidebar extends JPanel {
     }
 
     private JPanel statBox(String label, JLabel value) {
+        JLabel titleLabel = new JLabel(label.toUpperCase());
+        titleLabel.setForeground(TEXT_STAT);
+        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 13f));
+        titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
+
+        return statBoxCustom(titleLabel, value);     
+    }  
+     // 공통 stat 박스 빌더 (Time 포함) // NEW
+    private JPanel statBoxCustom(JLabel title, JLabel value) {
         JPanel p = new JPanel();
         p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
         p.setOpaque(true);
-        p.setBackground(new Color(0x181C26));
-        p.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
-
+        p.setBackground(BG_STAT);
+        p.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));       
         // width + height 고정
         Dimension boxSize = new Dimension(180, 70);
         p.setPreferredSize(boxSize);
@@ -114,9 +138,7 @@ public class HUDSidebar extends JPanel {
         // BoxLayout(Y_AXIS)에서 width를 강제로 줄이려면 반드시 필요
         p.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        JLabel title = new JLabel(label.toUpperCase());
-        title.setForeground(new Color(0x8892B0));
-        title.setFont(title.getFont().deriveFont(Font.BOLD, 13f));
+        
         title.setAlignmentX(Component.CENTER_ALIGNMENT);
         value.setAlignmentX(Component.CENTER_ALIGNMENT);
         title.setHorizontalAlignment(SwingConstants.CENTER);
@@ -128,15 +150,26 @@ public class HUDSidebar extends JPanel {
         return p;
     }
 
-    public void showTime(boolean visible) {
-        timeTitleLabel.setVisible(visible);
-        timeLabel.setVisible(visible);
+     public void showTime(boolean visible) {
+        // 이전: 라벨만 토글 → 실제로 안 보였음
+        timeTitleLabel.setVisible(visible);   
+        timeLabel.setVisible(visible);        
+        if (timePanel != null) {
+            timePanel.setVisible(visible);    
+        }
+        revalidate();                        
+        repaint();                            
     }
 
     public void reset() {
         setScore(0); setLevel(1); setTime(0);
         setNextQueue(java.util.Collections.emptyList());
     }
-    
-    
+     // 색맹 모드 적용 (SettingsScreen / BoardPanel에서 연결할 수 있게) 
+    public void setColorMode(ColorBlindPalette.Mode mode) {  
+        if (next1 != null) {
+            next1.setColorMode(mode);
+        }
+        repaint();
+    }
 }

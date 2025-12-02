@@ -18,6 +18,7 @@ import component.config.Settings.ScreenSize;
 import component.score.ScoreBoard;
 
 public class Settings {
+
     // 조작 키
     public enum Action { Left, Right, SoftDrop, HardDrop, Rotate }
 
@@ -35,7 +36,25 @@ public class Settings {
     }
 
     // 화면 크기
-    public enum ScreenSize { SMALL, MEDIUM, LARGE };
+
+    public static enum ScreenSize {                     
+        SMALL(600, 480),                            
+        MEDIUM(900, 720),                             
+        LARGE(1200, 840);                               
+
+        public final int width;                        
+        public final int height;                       
+
+        ScreenSize(int w, int h) {                     
+            this.width  = w;
+            this.height = h;
+        }
+
+        public java.awt.Dimension toDimension() {       
+            return new java.awt.Dimension(width, height);
+        }
+    }
+
     public ScreenSize screenSize = ScreenSize.MEDIUM; 
     
     // ===== 조작 키 =====
