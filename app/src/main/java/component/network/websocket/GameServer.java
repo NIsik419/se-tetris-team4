@@ -21,7 +21,6 @@ public class GameServer {
 
     @OnMessage
     public void onMessage(String msg, Session sender) {
-        System.out.println("[Server] recv from " + sender.getId() + ": " + msg);
 
         for (Session s : sessions) {
             if (!s.equals(sender) && s.isOpen()) {

@@ -71,6 +71,10 @@ public class BoardPanel extends JPanel {
     private ScoreboardOverlay scoreboardOverlay;
     public SoundManager soundManager;
 
+    private KeyBindingInstaller installer;
+    private KeyBindingInstaller.Deps keyDeps;
+    private final boolean useCustomKeymap = true;
+
     private final GameConfig config;
     private Settings settings;
     private boolean restarting = false;
@@ -143,7 +147,7 @@ public class BoardPanel extends JPanel {
                     });
                 });
             }
-        });
+        }, config.difficulty());
 
         this.soundManager = SoundManager.getInstance();
         if (startBGM) {
@@ -235,12 +239,12 @@ public class BoardPanel extends JPanel {
         loop.startLoop();
 
         // === 키 바인딩 통합 ===
-        KeyBindingInstaller installer = new KeyBindingInstaller();
+        this.installer = new KeyBindingInstaller();
 
-        KeyBindingInstaller.Deps deps = new KeyBindingInstaller.Deps(
+        this.keyDeps = new KeyBindingInstaller.Deps(
                 logic,
-                boardView::repaint, // 보드 갱신
-                () -> { // 풀스크린 (현재 없음)
+                boardView::repaint,
+                () -> {
                     JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
                     if (frame != null)
                         frame.setExtendedState(JFrame.MAXIMIZED_BOTH);
@@ -248,39 +252,53 @@ public class BoardPanel extends JPanel {
                 () -> { // ESC → 메뉴 복귀
                     onExitToMenu.run();
                 },
-                () -> pausePanel != null && pausePanel.isVisible(), // 현재 일시정지 여부
-                () -> {
-                    if (pausePanel != null)
-                        pausePanel.showPanel();
-                }, // 일시정지 ON
-                () -> {
-                    if (pausePanel != null)
-                        pausePanel.hidePanel();
-                }, // 일시정지 OFF
-                loop::resumeLoop, // 일시정지 해제 시 루프 재개
-                loop::pauseLoop, // 일시정지 시 루프 정지
-                title -> { // 타이틀 설정
+                () -> pausePanel != null && pausePanel.isVisible(),
+                () -> { if (pausePanel != null) pausePanel.showPanel(); },
+                () -> { if (pausePanel != null) pausePanel.hidePanel(); },
+                loop::resumeLoop,
+                loop::pauseLoop,
+                title -> {
                     JFrame f = (JFrame) SwingUtilities.getWindowAncestor(this);
-                    if (f != null)
-                        f.setTitle(title);
+                    if (f != null) f.setTitle(title);
                 },
-                () -> settings != null ? settings.colorBlindMode : ColorBlindPalette.Mode.NORMAL, // 현재 색맹모드
+                () -> settings != null ? settings.colorBlindMode : ColorBlindPalette.Mode.NORMAL,
                 mode -> {
                     boardView.setColorMode(mode);
-                    // nextPanel.setColorMode(mode);
+                    nextPanel.setColorMode(mode);
                 },
-
-                // onColorModeChanged: Settings 에 저장
                 mode -> {
                     if (settings != null) {
                         settings.colorBlindMode = mode;
                     }
                 });
+
         if (enableControls) {
-            if (wasMode) {
-                installer.install(boardView, deps, KeyBindingInstaller.KeySet.WASD, false, false);
+            // onGameOver == null 이면 "일반 1인용"이라고 가정
+            boolean isSinglePlayer = (onGameOver == null);
+
+            if (isSinglePlayer) {
+                // 설정 기반 커스텀 키맵 사용
+                installer.installCustom(
+                        boardView,
+                        keyDeps,
+                        settings.keymap,
+                        /* enableDebug */ true,
+                        /* enablePauseKey */ false  // P는 BoardPanel.bindPauseKey()에서 처리
+                );
+                
             } else {
-                installer.install(boardView, deps, KeyBindingInstaller.KeySet.ARROWS, true, false);
+                // 멀티/Versus 모드는 기존 프리셋 유지
+                if (wasMode) {
+                    installer.install(boardView, keyDeps,
+                            KeyBindingInstaller.KeySet.WASD,
+                            /* enableDebug */ false,
+                            /* enablePauseKey */ false);
+                } else {
+                    installer.install(boardView, keyDeps,
+                            KeyBindingInstaller.KeySet.ARROWS,
+                            /* enableDebug */ true,
+                            /* enablePauseKey */ false);
+                }
             }
         } else {
             boardView.setFocusable(false);
@@ -667,6 +685,38 @@ public class BoardPanel extends JPanel {
                 frame.pack();                                    
             }
             frame.setLocationRelativeTo(null);                    
+        this.settings = s;
+        if (s == null) return;
+
+        if (boardView != null) {
+            boardView.updateSettings(s);
+            boardView.setColorMode(s.colorBlindMode);
+
+            // 🔥 현재 게임에도 키 변경 즉시 적용
+            if (enableControls /* && useCustomKeymap 같은 조건 */) {
+                installer.installCustom(
+                        boardView,
+                        keyDeps,
+                        s.keymap,
+                        /* enableDebug */ true,
+                        /* enablePauseKey */ false
+                );
+            }
+        }
+
+        // NEXT 패널
+        if (nextPanel != null) {
+            nextPanel.setColorMode(s.colorBlindMode);
+        }
+
+        revalidate();
+        repaint();
+
+        SwingUtilities.invokeLater(() -> {
+            JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
+            if (frame != null) {
+                frame.pack();
+                frame.setLocationRelativeTo(null);
             }
         });
     }

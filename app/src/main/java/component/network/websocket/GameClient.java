@@ -116,7 +116,7 @@ public class GameClient {
 
     @OnMessage
     public void onMessage(String msg) {
-        System.out.println("[Client] Received message: " + msg.substring(0, Math.min(100, msg.length())));
+        // System.out.println("[Client] Received message: " + msg.substring(0, Math.min(100, msg.length())));
         Message m = WebSocketUtil.fromJson(msg, Message.class);
         if (onMessageHandler != null)
             onMessageHandler.accept(m);
@@ -148,7 +148,7 @@ public class GameClient {
     public void send(Message msg) {
         if (session != null && session.isOpen()) {
             String json = WebSocketUtil.toJson(msg);
-            System.out.println("[Client] Sending: " + json.substring(0, Math.min(100, json.length())));
+            // System.out.println("[Client] Sending: " + json.substring(0, Math.min(100, json.length())));
             session.getAsyncRemote().sendText(json);
         } else {
             System.err.println("[Client] Cannot send - session is null or closed!");
