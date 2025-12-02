@@ -124,7 +124,7 @@ public class BoardLogic {
     }
 
     public BoardLogic(Consumer<Integer> onGameOver, GameConfig.Difficulty diff) {
-        System.out.println("✅[BoardLogic] difficulty = " + diff); 
+        System.out.println("✅[BoardLogic] difficulty = " + diff);
         this.onGameOver = onGameOver;
         this.difficulty = diff;
 
@@ -328,7 +328,7 @@ public class BoardLogic {
                         javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
                 });
 
-        //  애니메이션 중력만 실행
+        // 애니메이션 중력만 실행
         applySimpleCellGravityAnimated(() -> {
             if (onFrameUpdate != null)
                 javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
@@ -426,11 +426,11 @@ public class BoardLogic {
             for (int y = HEIGHT - 2; y >= 0; y--) {
                 for (int x = 0; x < WIDTH; x++) {
                     if (board[y][x] != null && board[y + 1][x] == null) {
-                        //  궤적 생성
+                        // 궤적 생성
                         clear.getParticleSystem().createGravityTrailParticle(
                                 x, y, board[y][x], currentCellSize);
 
-                        //  먼지 파티클
+                        // 먼지 파티클
                         clear.getParticleSystem().createGravityDustParticle(
                                 x, y, board[y][x], currentCellSize);
 
@@ -559,7 +559,7 @@ public class BoardLogic {
                         javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
                 });
 
-        //  애니메이션 중력만 실행 (즉시 중력 제거)
+        // 애니메이션 중력만 실행 (즉시 중력 제거)
         if (animatedGravityEnabled) {
             System.out.println("[DEBUG] Starting ANIMATED gravity (no instant gravity)");
             applyClusterGravityAnimated(() -> {
@@ -1490,8 +1490,6 @@ public class BoardLogic {
         }
     }
 
-    // BoardLogic.java에 추가할 메서드들
-
     // ============================================
     // 가비지 수신 시 화면 진동 트리거
     // ============================================
@@ -1516,6 +1514,25 @@ public class BoardLogic {
                 }
             }).start();
         }
+    }
+
+    // =====================================
+    // ======= TESTING HELPERS =============
+    // =====================================
+
+    /** JUnit에서 incomingGarbageQueue 크기를 검사하기 위한 getter */
+    public int getIncomingQueueSize() {
+        return incomingGarbageQueue.size();
+    }
+
+    /** private applyIncomingGarbage() 테스트용 wrapper */
+    public void testApplyIncomingGarbage() {
+        applyIncomingGarbage();
+    }
+
+    /** recentPlaced 배열 접근용 (공격 마스크 테스트에 필요) */
+    public boolean[][] getRecentPlacedForTest() {
+        return recentPlaced;
     }
 
 }

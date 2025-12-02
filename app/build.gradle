@@ -59,11 +59,39 @@ jacocoTestReport {
     dependsOn test
     reports {
         xml.required = true
-        html.required= true
+        html.required = true
         csv.required = false
         html.outputLocation = layout.buildDirectory.dir("reports/jacocoHtml")
     }
+
+    //  UI 패키지 전체 제외 (Swing 기반이라 테스트 불가)
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: [
+                // UI & 프레임 제외
+                '**/component/MenuPanel.class',
+                '**/component/*Frame.class',
+                '**/component/*Panel.class',
+                '**/component/*View.class',
+                '**/component/sidebar/*.class',
+                // '**/component/*Renderer.class',
+                
+                // launcher 패키지 전체 제외 (JFrame 기반)
+                '**/launcher/**',
+
+                //websocket
+                '**/component/network/websocket/UIOverlayManager.class',
+
+                // versus (대전 UI)
+                //'**/versus/**',
+
+                // 사운드/리소스 관리 (환경 의존적)
+                '**/logic/SoundManager.class'
+            ])
+        }))
+    }
 }
+
 
 jacocoTestCoverageVerification {
     violationRules {

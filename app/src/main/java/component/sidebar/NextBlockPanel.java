@@ -1,15 +1,15 @@
 package component.sidebar;
 
+import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.FontMetrics;
 import java.awt.GradientPaint;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
-import java.awt.RenderingHints;
-import java.awt.Font;
-import java.awt.FontMetrics;
-import java.awt.BasicStroke;
 import java.awt.Polygon;
+import java.awt.RenderingHints;
 import java.util.List;
 
 import javax.swing.BorderFactory;
@@ -17,18 +17,22 @@ import javax.swing.JPanel;
 
 import blocks.Block;
 import component.ColorBlindPalette;
-import component.items.ItemBlock;
-import component.items.LineClearItem;
-import component.items.WeightItem;
-import component.items.SpinLockItem;
 import component.items.ColorBombItem;
+import component.items.ItemBlock;
 import component.items.LightningItem;
+import component.items.LineClearItem;
+import component.items.SpinLockItem;
+import component.items.WeightItem;
 
 public class NextBlockPanel extends JPanel {
     private char[][] shape; // maintained
     private Block block;    // maintained
     private final int box;
     private ColorBlindPalette.Mode colorMode = ColorBlindPalette.Mode.NORMAL;
+    // 배경/테두리 색 통일용 상수 
+    private static final Color BG_NEXT     = new Color(0x191E28); 
+    private static final Color BORDER_NEXT = new Color(0x303540); 
+
 
     public NextBlockPanel(int sizePx) {
         this.box = sizePx;
@@ -36,9 +40,9 @@ public class NextBlockPanel extends JPanel {
         setPreferredSize(new Dimension(box, box));
         setMinimumSize(d);
         setMaximumSize(d); 
-        setBackground(new Color(0x191E28));
+        setBackground(BG_NEXT);  
         setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(new Color(0x303540), 2),
+                BorderFactory.createLineBorder(BORDER_NEXT, 2),
                 BorderFactory.createEmptyBorder(6, 10, 6, 10)));
     }
 
@@ -72,7 +76,17 @@ public class NextBlockPanel extends JPanel {
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
-        if (block == null) return;
+        if (block == null && shape == null) {
+            // 아무 것도 없을 때는 은은한 가이드 박스만 남기기 
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                                RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(new Color(255, 255, 255, 25));
+            int m = 10;
+            g2.drawRoundRect(m, m, getWidth() - 2*m, getHeight() - 2*m, 12, 12);
+            g2.dispose();
+            return;
+        }
 
         Graphics2D g2 = (Graphics2D) g.create();
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
@@ -80,6 +94,14 @@ public class NextBlockPanel extends JPanel {
 
         int w = getWidth();
         int h = getHeight();
+        
+        // 살짝 위로 그라데이션 추가 (배경에 깊이감) 
+        GradientPaint gp = new GradientPaint(
+                0, 0, new Color(30, 36, 50),
+                0, h, BG_NEXT);
+        g2.setPaint(gp);
+        g2.fillRect(0, 0, w, h);
+
 
         // 안쪽 여백 (테두리 빼고 실제로 블록 놓을 영역)
         int margin = 12;
