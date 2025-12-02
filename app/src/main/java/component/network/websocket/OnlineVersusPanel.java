@@ -121,7 +121,7 @@ public class OnlineVersusPanel extends JPanel {
                 loop.stopLoop();
                 networkManager.sendGameOver();
                 networkManager.printStats();
-                triggerGameOverAnimation(myView, myLogic, () -> {
+                triggerGlassShatterEffect(myView, myLogic, () -> {
                     overlayManager.showGameOverOverlay(true, myLogic.getScore(),
                             oppLogic.getScore(), myTotalLines, gameStartTime);
                 });
@@ -343,7 +343,7 @@ public class OnlineVersusPanel extends JPanel {
 
     private void onRestart() {
         networkManager.sendRestartReady();
-        overlayManager.updateRestartStatus("Waiting for opponent...");
+        overlayManager.showStartOverlay();
     }
 
     public void executeRestart() {
@@ -396,7 +396,7 @@ public class OnlineVersusPanel extends JPanel {
         boolean iWon = myScore > oppScore;
 
         networkManager.sendGameOver();
-        triggerGameOverAnimation(myView, myLogic, () -> {
+        triggerGlassShatterEffect(myView, myLogic, () -> {
             overlayManager.showTimeLimitGameOverOverlay(iWon, myScore, oppScore,
                     myTotalLines, TIME_LIMIT_SECONDS);
         });
@@ -432,21 +432,12 @@ public class OnlineVersusPanel extends JPanel {
 
         SwingUtilities.invokeLater(() -> {
             System.out.println("[GAMEOVER] Inside SwingUtilities.invokeLater");
-            loop.stopLoop(); // 내 게임도 멈춤
+            loop.stopLoop();
             networkManager.printStats();
 
-            // 상대 보드 클리어
-            Color[][] oppBoard = oppLogic.getBoard();
-            for (int y = 0; y < BoardLogic.HEIGHT; y++) {
-                for (int x = 0; x < BoardLogic.WIDTH; x++) {
-                    oppBoard[y][x] = null;
-                }
-            }
-            oppView.repaint();
+            System.out.println("[GAMEOVER] About to trigger OPPONENT collapse");
 
-            // 상대가 먼저 죽음
-            System.out.println("[GAMEOVER] About to trigger animation");
-            triggerGameOverAnimation(myView, myLogic, () -> {
+            triggerGlassShatterEffect(oppView, oppLogic, () -> {
                 System.out.println("[GAMEOVER] Showing victory overlay");
                 overlayManager.showGameOverOverlay(false, myLogic.getScore(),
                         oppLogic.getScore(), myTotalLines, gameStartTime);
@@ -547,19 +538,78 @@ public class OnlineVersusPanel extends JPanel {
         }).start();
     }
 
-    private void triggerGameOverAnimation(BoardView view, BoardLogic logic, Runnable afterAnimation) {
-        Color[][] board = logic.getBoard();
-        Color[][] boardCopy = new Color[BoardLogic.HEIGHT][BoardLogic.WIDTH];
+    /**
+     * 보드 전체가 유리처럼 깨지는 효과
+     */
+    private void triggerGlassShatterEffect(BoardView view, BoardLogic logic, Runnable afterAnimation) {
+        System.out.println("[GLASS] Starting glass shatter effect for " + (view == myView ? "MY" : "OPP"));
 
-        for (int y = 0; y < BoardLogic.HEIGHT; y++) {
-            for (int x = 0; x < BoardLogic.WIDTH; x++) {
-                boardCopy[y][x] = board[y][x];
-                board[y][x] = null;
+        Color[][] board = logic.getBoard();
+
+        // 보드를 격자 조각으로 나누기 (각 조각은 여러 셀)
+        List<GlassShard> shards = new ArrayList<>();
+        int shardSize = 3; // 3x3 셀 크기의 조각
+
+        for (int sy = 0; sy < BoardLogic.HEIGHT; sy += shardSize) {
+            for (int sx = 0; sx < BoardLogic.WIDTH; sx += shardSize) {
+                GlassShard shard = new GlassShard();
+                shard.startX = sx;
+                shard.startY = sy;
+                shard.width = Math.min(shardSize, BoardLogic.WIDTH - sx);
+                shard.height = Math.min(shardSize, BoardLogic.HEIGHT - sy);
+
+                // 조각의 색상 (있는 블록들의 평균)
+                int colorCount = 0;
+                int r = 0, g = 0, b = 0;
+                for (int y = sy; y < sy + shard.height && y < BoardLogic.HEIGHT; y++) {
+                    for (int x = sx; x < sx + shard.width && x < BoardLogic.WIDTH; x++) {
+                        if (board[y][x] != null) {
+                            r += board[y][x].getRed();
+                            g += board[y][x].getGreen();
+                            b += board[y][x].getBlue();
+                            colorCount++;
+                        }
+                    }
+                }
+
+                if (colorCount > 0) {
+                    shard.color = new Color(r / colorCount, g / colorCount, b / colorCount);
+                } else {
+                    shard.color = new Color(50, 50, 50); // 회색 (빈 칸)
+                }
+
+                // 중심에서 바깥으로 날아가는 방향
+                double centerX = BoardLogic.WIDTH / 2.0;
+                double centerY = BoardLogic.HEIGHT / 2.0;
+                double dx = (sx + shard.width / 2.0) - centerX;
+                double dy = (sy + shard.height / 2.0) - centerY;
+                double distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance > 0) {
+                    shard.velocityX = (dx / distance) * (3 + Math.random() * 3);
+                    shard.velocityY = (dy / distance) * (3 + Math.random() * 3);
+                } else {
+                    shard.velocityX = (Math.random() - 0.5) * 5;
+                    shard.velocityY = (Math.random() - 0.5) * 5;
+                }
+
+                shard.rotationSpeed = (Math.random() - 0.5) * 15;
+
+                shards.add(shard);
             }
         }
 
+        // 보드 클리어
+        for (int y = 0; y < BoardLogic.HEIGHT; y++) {
+            for (int x = 0; x < BoardLogic.WIDTH; x++) {
+                board[y][x] = null;
+            }
+        }
         view.repaint();
 
+        System.out.println("[GLASS] Created " + shards.size() + " shards");
+
+        // glassPane에 조각들을 그리기
         JPanel glassPane = new JPanel(null);
         glassPane.setOpaque(false);
 
@@ -573,93 +623,100 @@ public class OnlineVersusPanel extends JPanel {
         parentFrame.setGlassPane(glassPane);
         glassPane.setVisible(true);
 
-        List<JPanel> blocks = new ArrayList<>();
+        // 각 조각을 JPanel로 생성
+        List<JPanel> shardPanels = new ArrayList<>();
 
-        for (int y = 0; y < BoardLogic.HEIGHT; y++) {
-            for (int x = 0; x < BoardLogic.WIDTH; x++) {
-                if (boardCopy[y][x] != null) {
-                    JPanel block = new JPanel();
-                    block.setBackground(boardCopy[y][x]);
-                    block.setBorder(BorderFactory.createLineBorder(boardCopy[y][x].darker(), 1));
+        for (GlassShard shard : shards) {
+            JPanel shardPanel = new JPanel();
+            shardPanel.setBackground(shard.color);
+            shardPanel.setBorder(BorderFactory.createLineBorder(Color.BLACK, 1));
+            shardPanel.setOpaque(true);
 
-                    Point screenPos = SwingUtilities.convertPoint(
-                            view,
-                            x * CELL_SIZE + CELL_GAP,
-                            y * CELL_SIZE + CELL_GAP,
-                            glassPane);
+            Point screenPos = SwingUtilities.convertPoint(
+                    view,
+                    shard.startX * CELL_SIZE,
+                    shard.startY * CELL_SIZE,
+                    glassPane);
 
-                    block.setBounds(
-                            screenPos.x,
-                            screenPos.y,
-                            CELL_SIZE - CELL_GAP * 2,
-                            CELL_SIZE - CELL_GAP * 2);
+            shard.currentX = screenPos.x;
+            shard.currentY = screenPos.y;
 
-                    glassPane.add(block);
-                    blocks.add(block);
-                }
-            }
+            shardPanel.setBounds(
+                    screenPos.x,
+                    screenPos.y,
+                    shard.width * CELL_SIZE,
+                    shard.height * CELL_SIZE);
+
+            glassPane.add(shardPanel);
+            shardPanels.add(shardPanel);
         }
 
-        Timer explosionTimer = new Timer(12, null);
+        // 애니메이션
+        Timer shatterTimer = new Timer(16, null); // 60fps
         final int[] frameCount = { 0 };
-        final int maxFrames = 30;
+        final int maxFrames = 60;
 
-        List<double[]> velocities = new ArrayList<>();
-        for (int i = 0; i < blocks.size(); i++) {
-            velocities.add(new double[] {
-                    (Math.random() - 0.5) * 60,
-                    -(Math.random() * 25 + 15),
-                    (Math.random() - 0.5) * 30
-            });
-        }
-
-        explosionTimer.addActionListener(e -> {
+        shatterTimer.addActionListener(e -> {
             frameCount[0]++;
 
-            for (int i = 0; i < blocks.size(); i++) {
-                JPanel block = blocks.get(i);
-                double[] vel = velocities.get(i);
+            for (int i = 0; i < shards.size(); i++) {
+                GlassShard shard = shards.get(i);
+                JPanel panel = shardPanels.get(i);
 
-                Rectangle bounds = block.getBounds();
-                bounds.x += (int) vel[0];
-                bounds.y += (int) vel[1];
-                vel[1] += 10;
+                // 물리 시뮬레이션
+                shard.velocityY += 0.3; // 중력
+                shard.currentX += shard.velocityX;
+                shard.currentY += shard.velocityY;
+                shard.rotation += shard.rotationSpeed;
 
-                block.setBounds(bounds);
-
+                // 페이드 아웃
                 float alpha = 1.0f - (frameCount[0] / (float) maxFrames);
                 alpha = Math.max(0, alpha);
 
-                Color originalColor = block.getBackground();
-                block.setBackground(new Color(
-                        originalColor.getRed(),
-                        originalColor.getGreen(),
-                        originalColor.getBlue(),
+                Color c = shard.color;
+                panel.setBackground(new Color(
+                        c.getRed(),
+                        c.getGreen(),
+                        c.getBlue(),
                         (int) (255 * alpha)));
+
+                panel.setBounds(
+                        (int) shard.currentX,
+                        (int) shard.currentY,
+                        shard.width * CELL_SIZE,
+                        shard.height * CELL_SIZE);
             }
 
             glassPane.repaint();
 
             if (frameCount[0] >= maxFrames) {
-                // 모든 블록 제거
-                glassPane.removeAll(); // 전체 제거
-                glassPane.revalidate();
-                glassPane.repaint();
-
+                glassPane.removeAll();
+                glassPane.setVisible(false);
                 ((Timer) e.getSource()).stop();
+
                 if (afterAnimation != null) {
-                    // 약간의 딜레이 후 콜백 실행
-                    Timer callbackTimer = new Timer(100, evt -> {
+                    Timer delayTimer = new Timer(100, evt -> {
                         SwingUtilities.invokeLater(afterAnimation);
                         ((Timer) evt.getSource()).stop();
                     });
-                    callbackTimer.setRepeats(false);
-                    callbackTimer.start();
+                    delayTimer.setRepeats(false);
+                    delayTimer.start();
                 }
             }
         });
 
-        explosionTimer.start();
+        shatterTimer.start();
+    }
+
+    // 유리 조각 클래스
+    private static class GlassShard {
+        int startX, startY;
+        int width, height;
+        Color color;
+        double currentX, currentY;
+        double velocityX, velocityY;
+        double rotation;
+        double rotationSpeed;
     }
 
     @Override

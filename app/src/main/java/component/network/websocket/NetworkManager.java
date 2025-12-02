@@ -288,21 +288,17 @@ public class NetworkManager {
             case RESTART_READY:
                 oppRestartReady = true;
                 if (overlayManager != null) {
-                    overlayManager.updateRestartStatus("Opponent ready! Starting...");
-                    if (isServer) {
-                        Timer restartTimer = new Timer(1000, e -> {
+
+                    // 양쪽 다 준비되면 바로 시작
+                    Timer restartTimer = new Timer(1000, e -> {
+                        if (isServer) {
                             client.send(new Message(MessageType.RESTART_START, null));
-
-                            // ⭐ 서버도 자기 자신에게 RESTART_START 처리!
-                            SwingUtilities.invokeLater(() -> {
-                                overlayManager.triggerRestart();
-                            });
-
-                            ((Timer) e.getSource()).stop();
-                        });
-                        restartTimer.setRepeats(false);
-                        restartTimer.start();
-                    }
+                        }
+                        overlayManager.triggerRestart();
+                        ((Timer) e.getSource()).stop();
+                    });
+                    restartTimer.setRepeats(false);
+                    restartTimer.start();
                 }
                 break;
             case RESTART_START:

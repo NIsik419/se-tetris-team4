@@ -47,17 +47,6 @@ public class UIOverlayManager {
         this.onExecuteRestart = onExecuteRestart;
     }
 
-    public void updateRestartStatus(String msg) {
-        if (gameOverPanel != null && gameOverPanel.getComponentCount() > 0) {
-            Component c = gameOverPanel.getComponent(0);
-            if (c instanceof JLabel label) {
-                label.setText(msg);
-                label.setForeground(new Color(100, 200, 255));
-                gameOverPanel.repaint();
-            }
-        }
-    }
-
     public void triggerRestart() {
         // 오버레이 숨기기
         JRootPane root = SwingUtilities.getRootPane(parentPanel);
@@ -271,7 +260,7 @@ public class UIOverlayManager {
 
         glass.removeAll();
         glass.setLayout(null);
-        glass.setVisible(true); 
+        glass.setVisible(true);
         System.out.println("[OVERLAY] Glass pane visible: " + glass.isVisible());
 
         gameOverPanel = createGameOverPanel(iLost, myScore, oppScore,
@@ -336,6 +325,31 @@ public class UIOverlayManager {
         glass.revalidate();
     }
 
+    /**
+     * 게임 시작 오버레이를 다시 표시 (재시작용)
+     */
+    /**
+     * 게임 시작 오버레이를 다시 표시 (재시작용)
+     */
+    public void showStartOverlay() {
+        JRootPane root = SwingUtilities.getRootPane(parentPanel);
+        if (root == null)
+            return;
+
+        // 기존 게임오버 오버레이 제거
+        JPanel glass = (JPanel) root.getGlassPane();
+        glass.removeAll();
+        glass.setVisible(false);
+
+        // 처음 오버레이 다시 생성
+        SwingUtilities.invokeLater(() -> {
+            createOverlay();
+            // 이미 연결되어 있으므로 바로 Ready 상태로
+            updateStatus("Ready! Press Start");
+            enableStartButton();
+        });
+    }
+
     private JPanel createGameOverPanel(boolean iLost, int myScore, int oppScore,
             int myTotalLines, int minutes, int seconds) {
         JPanel panel = new JPanel();
@@ -398,17 +412,16 @@ public class UIOverlayManager {
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 15, 0));
         buttonPanel.setOpaque(false);
 
-        JButton restartBtn = new JButton("Restart");
-        restartBtn.setFont(new Font("Arial", Font.BOLD, 16));
-        restartBtn.setPreferredSize(new Dimension(120, 45));
-        restartBtn.setBackground(new Color(70, 150, 70));
-        restartBtn.setForeground(Color.WHITE);
-        restartBtn.setFocusPainted(false);
-        restartBtn.addActionListener(e -> {
-            onRestart.run();
-            updateGameOverStatus("Waiting for opponent...");
+        JButton confirmBtn = new JButton("OK");
+        confirmBtn.setFont(new Font("Arial", Font.BOLD, 16));
+        confirmBtn.setPreferredSize(new Dimension(120, 45));
+        confirmBtn.setBackground(new Color(70, 150, 70));
+        confirmBtn.setForeground(Color.WHITE);
+        confirmBtn.setFocusPainted(false);
+        confirmBtn.addActionListener(e -> {
+            showStartOverlay();
         });
-        buttonPanel.add(restartBtn);
+        buttonPanel.add(confirmBtn);
 
         JButton exitBtn = new JButton("Exit");
         exitBtn.setFont(new Font("Arial", Font.BOLD, 16));
@@ -427,13 +440,4 @@ public class UIOverlayManager {
         return buttonPanel;
     }
 
-    private void updateGameOverStatus(String msg) {
-        if (gameOverPanel != null && gameOverPanel.getComponentCount() > 0) {
-            Component c = gameOverPanel.getComponent(0);
-            if (c instanceof JLabel label) {
-                label.setText(msg);
-                gameOverPanel.repaint();
-            }
-        }
-    }
 }
