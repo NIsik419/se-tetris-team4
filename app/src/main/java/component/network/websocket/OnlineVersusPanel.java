@@ -547,7 +547,6 @@ public class OnlineVersusPanel extends JPanel {
         }).start();
     }
 
-    
     private void triggerGameOverAnimation(BoardView view, BoardLogic logic, Runnable afterAnimation) {
         Color[][] board = logic.getBoard();
         Color[][] boardCopy = new Color[BoardLogic.HEIGHT][BoardLogic.WIDTH];
@@ -642,7 +641,13 @@ public class OnlineVersusPanel extends JPanel {
             glassPane.repaint();
 
             if (frameCount[0] >= maxFrames) {
-                glassPane.setVisible(false);
+                // glassPane을 숨기지 말고 컴포넌트만 제거
+                for (JPanel block : blocks) {
+                    glassPane.remove(block);
+                }
+                glassPane.revalidate();
+                glassPane.repaint();
+
                 ((Timer) e.getSource()).stop();
                 if (afterAnimation != null) {
                     SwingUtilities.invokeLater(afterAnimation);

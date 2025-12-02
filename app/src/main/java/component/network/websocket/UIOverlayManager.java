@@ -254,18 +254,25 @@ public class UIOverlayManager {
 
     public void showGameOverOverlay(boolean iLost, int myScore, int oppScore,
             int myTotalLines, long gameStartTime) {
+        System.out.println("[OVERLAY] showGameOverOverlay called: iLost=" + iLost);
+
         JRootPane root = SwingUtilities.getRootPane(parentPanel);
-        if (root == null)
+        if (root == null) {
+            System.err.println("[OVERLAY] ERROR: root is null!");
             return;
+        }
 
         long gameDuration = System.currentTimeMillis() - gameStartTime;
         int minutes = (int) (gameDuration / 60000);
         int seconds = (int) ((gameDuration % 60000) / 1000);
 
         JPanel glass = (JPanel) root.getGlassPane();
+        System.out.println("[OVERLAY] Glass pane: " + glass);
+
         glass.removeAll();
         glass.setLayout(null);
-        glass.setVisible(true);
+        glass.setVisible(true); 
+        System.out.println("[OVERLAY] Glass pane visible: " + glass.isVisible());
 
         gameOverPanel = createGameOverPanel(iLost, myScore, oppScore,
                 myTotalLines, minutes, seconds);
@@ -277,8 +284,12 @@ public class UIOverlayManager {
                 w, h);
 
         glass.add(gameOverPanel);
+        System.out.println("[OVERLAY] Panel added at bounds: " + gameOverPanel.getBounds());
+
         glass.repaint();
         glass.revalidate();
+
+        System.out.println("[OVERLAY] Glass pane component count: " + glass.getComponentCount());
     }
 
     public void showTimeLimitGameOverOverlay(boolean iWon, int myScore, int oppScore,
