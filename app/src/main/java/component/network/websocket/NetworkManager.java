@@ -95,6 +95,26 @@ public class NetworkManager {
         setupTimers();
     }
 
+    public NetworkManager(
+            boolean isServer,
+            java.util.function.Consumer<Message> handler,
+            BoardLogic myLogic,
+            BoardLogic oppLogic,
+            JLabel lagLabel,
+            Runnable onConnectionLost,
+            Runnable onGameOver,
+            GameClient clientOverride) {
+        this.isServer = isServer;
+        this.lagLabel = lagLabel;
+        this.onConnectionLost = onConnectionLost;
+        this.onGameOver = onGameOver;
+
+        this.client = clientOverride;
+        this.adapter = new BoardSyncAdapter(myLogic, oppLogic, clientOverride);
+
+        setupTimers();
+    }
+
     /**
      * Time Limit 시작 콜백 설정
      */
@@ -587,4 +607,27 @@ public class NetworkManager {
             GameServer.stopServer();
         }
     }
+
+    // ===============================
+    // TEST SUPPORT
+    // ===============================
+    public String test_loadRecentServerIp() { return loadRecentServerIp(); }
+    public void test_saveRecentServerIp(String ip) { saveRecentServerIp(ip); }
+
+    public long test_getLastPingTime() { return lastPingTime; }
+    public void test_setLastPingTime(long t) { lastPingTime = t; }
+
+    public long test_getLastPongTime() { return lastPongTime; }
+    public void test_setLastPongTime(long t) { lastPongTime = t; }
+
+    public boolean test_isReady() { return isReady; }
+    public void test_setReady(boolean v) { isReady = v; }
+
+    public boolean test_isOppReady() { return oppReady; }
+    public void test_setOppReady(boolean v) { oppReady = v; }
+
+    public void test_handlePong() { handlePong(); }
+    public void test_checkConnection() { checkConnection(); }
+
+
 }

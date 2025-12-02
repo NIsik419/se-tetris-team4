@@ -137,4 +137,6 @@ public class HUDSidebar extends JPanel {
         setScore(0); setLevel(1); setTime(0);
         setNextQueue(java.util.Collections.emptyList());
     }
+    
+    
 }

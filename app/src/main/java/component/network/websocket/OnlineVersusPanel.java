@@ -606,7 +606,7 @@ public class OnlineVersusPanel extends JPanel {
 
         // 보드를 격자 조각으로 나누기 (각 조각은 여러 셀)
         List<GlassShard> shards = new ArrayList<>();
-        int shardSize = 3; // 3x3 셀 크기의 조각
+        int shardSize = 1; // 2x2 셀 크기의 조각
 
         for (int sy = 0; sy < BoardLogic.HEIGHT; sy += shardSize) {
             for (int sx = 0; sx < BoardLogic.WIDTH; sx += shardSize) {
@@ -710,9 +710,9 @@ public class OnlineVersusPanel extends JPanel {
         }
 
         // 애니메이션
-        Timer shatterTimer = new Timer(16, null); // 60fps
+        Timer shatterTimer = new Timer(8, null); // 60fps
         final int[] frameCount = { 0 };
-        final int maxFrames = 60;
+        final int maxFrames = 30;
 
         shatterTimer.addActionListener(e -> {
             frameCount[0]++;
@@ -722,7 +722,7 @@ public class OnlineVersusPanel extends JPanel {
                 JPanel panel = shardPanels.get(i);
 
                 // 물리 시뮬레이션
-                shard.velocityY += 0.3; // 중력
+                shard.velocityY += 0.4; // 중력
                 shard.currentX += shard.velocityX;
                 shard.currentY += shard.velocityY;
                 shard.rotation += shard.rotationSpeed;
