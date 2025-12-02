@@ -1,5 +1,7 @@
 package component.board;
 
+import component.config.Settings;
+
 import component.ColorBlindPalette;
 import component.items.*;
 import logic.BoardLogic;
@@ -304,4 +306,67 @@ public class KeyBindingInstaller {
     public void installForP2(JComponent comp, Deps d) {
         install(comp, d, KeySet.WASD, /* enableDebug= */true, true);
     }
+
+    // ===== Settings 기반 커스텀 키맵 설치 =====
+    public void installCustom(JComponent comp,
+                              Deps d,
+                              java.util.Map<Settings.Action, Integer> keymap,
+                              boolean enableDebug,
+                              boolean enablePauseKey) {
+
+    // 🔥 DEBUG LOG
+    System.out.println("[INSTALL CUSTOM] called");
+    keymap.forEach((k, v) ->
+            System.out.println("  " + k + " -> " + v));
+
+        InputMap im = comp.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        ActionMap am = comp.getActionMap();
+
+        // 혹시 이전 바인딩이 남아있을 수 있으니 정리
+        im.clear();
+        am.clear();
+
+        // 편의용 바인딩 헬퍼
+        java.util.function.BiConsumer<Settings.Action, String> bind = (action, actName) -> {
+            Integer code = keymap.get(action);
+            if (code != null) {
+                im.put(KeyStroke.getKeyStroke(code, 0), actName);
+            }
+        };
+
+        // Settings.Action → 내부 액션 이름 매핑
+        bind.accept(Settings.Action.Left,   ACT_LEFT);
+        bind.accept(Settings.Action.Right,  ACT_RIGHT);
+        bind.accept(Settings.Action.SoftDrop, ACT_DOWN);
+        bind.accept(Settings.Action.Rotate, ACT_ROT);
+        bind.accept(Settings.Action.HardDrop, ACT_DROP);
+
+        // ESC는 항상 일시정지 토글
+        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "pause");
+
+        // 필요하면 P/R도 일시정지에 묶기
+        if (enablePauseKey) {
+            im.put(KeyStroke.getKeyStroke("P"), "pause");
+        }
+
+        // F11: 전체화면, F12: 강제 종료, C: 색맹 모드 토글
+        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_F11, 0), "fullscreen");
+        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_F12, 0), "forceExit");
+
+        im.put(KeyStroke.getKeyStroke("pressed C"), "toggleColorBlind_pressed");
+        im.put(KeyStroke.getKeyStroke("released C"), "toggleColorBlind_released");
+
+        // 디버그 키 (필요할 때만)
+        if (enableDebug) {
+            im.put(KeyStroke.getKeyStroke("1"), "debugLineClear");
+            im.put(KeyStroke.getKeyStroke("2"), "debugWeight");
+            im.put(KeyStroke.getKeyStroke("3"), "debugSpinLock");
+            im.put(KeyStroke.getKeyStroke("4"), "debugColorBomb");
+            im.put(KeyStroke.getKeyStroke("5"), "debugLightning");
+        }
+
+        // 실제 동작들은 기존처럼 한 번에 등록
+        registerCoreActions(am, d, comp);
+    }
+
 }
