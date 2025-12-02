@@ -21,6 +21,7 @@ public class OnlineVersusPanel extends JPanel {
 
     private static final int CELL_SIZE = 25;
     private static final int CELL_GAP = 0;
+    private boolean opponentGameOver = false;
 
     private final JLabel myIncoming = new JLabel("0");
     private final JLabel oppIncoming = new JLabel("0");
@@ -120,7 +121,10 @@ public class OnlineVersusPanel extends JPanel {
                 loop.stopLoop();
                 networkManager.sendGameOver();
                 networkManager.printStats();
-                triggerDualGameOverAnimation();
+                triggerGameOverAnimation(myView, myLogic, () -> {
+                    overlayManager.showGameOverOverlay(true, myLogic.getScore(),
+                            oppLogic.getScore(), myTotalLines, gameStartTime);
+                });
             });
         });
 
@@ -423,12 +427,26 @@ public class OnlineVersusPanel extends JPanel {
     }
 
     private void onGameOver() {
+        opponentGameOver = true;
+
         SwingUtilities.invokeLater(() -> {
-            loop.stopLoop();
+            loop.stopLoop(); // ⭐ 내 게임도 멈춤
             networkManager.printStats();
 
-            // 양쪽 동시에 애니메이션
-            triggerDualGameOverAnimation();
+            // 상대 보드 클리어
+            Color[][] oppBoard = oppLogic.getBoard();
+            for (int y = 0; y < BoardLogic.HEIGHT; y++) {
+                for (int x = 0; x < BoardLogic.WIDTH; x++) {
+                    oppBoard[y][x] = null;
+                }
+            }
+            oppView.repaint();
+
+            //  상대가 먼저 죽음
+            triggerGameOverAnimation(myView, myLogic, () -> {
+                overlayManager.showGameOverOverlay(false, myLogic.getScore(),
+                        oppLogic.getScore(), myTotalLines, gameStartTime);
+            });
         });
     }
 
@@ -537,7 +555,9 @@ public class OnlineVersusPanel extends JPanel {
 
         // 내 보드만 애니메이션
         triggerGameOverAnimation(myView, myLogic, () -> {
-            overlayManager.showGameOverOverlay(false, myLogic.getScore(),
+            // 내가 진 경우
+            boolean iLost = true;
+            overlayManager.showGameOverOverlay(iLost, myLogic.getScore(),
                     oppLogic.getScore(), myTotalLines, gameStartTime);
         });
     }
