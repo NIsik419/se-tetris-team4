@@ -86,23 +86,23 @@ public class SettingsScreen extends JPanel {
 
 
     // apply screen size to current window
-    private void applyScreenSize(Settings.ScreenSize size) {
+    private void applyScreenSize(Settings.ScreenSize size) {         
         java.awt.Window w = SwingUtilities.getWindowAncestor(this);
-        if (!(w instanceof JFrame f)) {
+        if (!(w instanceof JFrame f) || size == null) {               
             return;
         }
 
         f.setExtendedState(JFrame.NORMAL);
         f.setResizable(true);
 
-        switch (size) {
-            case SMALL -> f.setSize(new Dimension(600, 480));    // key 1
-            case MEDIUM -> f.setSize(new Dimension(900, 720));   // key 2
-            case LARGE -> f.setSize(new Dimension(1200, 840));   // key 3
-        }
+        // 🔹 enum 에 정의된 해상도 사용
+        Dimension d = size.toDimension();                            
+        f.setMinimumSize(d);                                        
+        f.setSize(d);                                               
 
         f.setLocationRelativeTo(null);
     }
+
     
 
     public SettingsScreen(Settings settings, ApplyListener applyListener, Runnable goBack) {
@@ -241,11 +241,15 @@ public class SettingsScreen extends JPanel {
         editor2.setBackground(Color.WHITE);      
         
         cbScreen.addActionListener(e -> {
-        Settings.ScreenSize sz = (Settings.ScreenSize) cbScreen.getSelectedItem();
-        if (sz != null) {
-            applyScreenSize(sz);              
+            Settings.ScreenSize sz =
+                    (Settings.ScreenSize) cbScreen.getSelectedItem();
+            
+            // just update localSettings, no resize yet
+            if (sz != null) {
+                localSettings.screenSize = sz;   // optional but nice
             }
-     });
+        });
+
 
         sizeRow.add(cbScreen, BorderLayout.CENTER);
         form.add(sizeRow, c);
@@ -311,9 +315,18 @@ public class SettingsScreen extends JPanel {
         // Apply
         btnApply.addActionListener(e -> {
             if (!validateKeys()) return; // 혹시 모를 찰나 누름 방지
-            saveToSettings(); 
+            saveToSettings();
+
+            // Apply 누를 때도 Screen Size 바로 적용
+            Settings.ScreenSize sz =
+                    (Settings.ScreenSize) cbScreen.getSelectedItem();     
+            if (sz != null) {                                             
+                applyScreenSize(sz);                                      
+            }                                                            
+
             if (applyListener != null) applyListener.onApply(settings);
         });
+
 
         // ESC로 뒤로가기
         getInputMap(WHEN_IN_FOCUSED_WINDOW)

@@ -5,31 +5,30 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.awt.event.HierarchyEvent;
 import java.awt.event.HierarchyListener;
-import java.awt.Graphics;
-import java.awt.Graphics2D;
-import java.util.function.Consumer;
 
 import javax.swing.AbstractAction;
+import javax.swing.ActionMap;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
+import javax.swing.InputMap;
 import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JLayeredPane;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.border.EmptyBorder;
-import javax.swing.InputMap;
-import javax.swing.ActionMap;
+
 import component.board.KeyBindingInstaller;
 import component.config.Settings;
 import component.items.ColorBombItem;
@@ -78,6 +77,15 @@ public class BoardPanel extends JPanel {
     private final Runnable onExitToMenu;
     private java.util.function.Consumer<Integer> onGameOver;
 
+// ================= UI THEME CONSTANTS =================
+    private static final Color BG_MAIN = new Color(20, 25, 35);         
+    private static final Color BG_HUD  = new Color(24, 30, 44);         
+    private static final Color BG_STAT = new Color(30, 35, 50);         
+    private static final Color TEXT_MUTED = new Color(136, 146, 176);    
+    private static final Color TEXT_HINT  = new Color(130, 140, 160);    
+    private static final Color ACCENT_CYAN = new Color(100, 255, 218); 
+
+
     /** 기본 생성자: 키맵(화살표/Space/P) 사용 */
     public BoardPanel(GameConfig config, Runnable onExitToMenu) {
         this(config, onExitToMenu, false, true, null, true, true);
@@ -109,7 +117,8 @@ public class BoardPanel extends JPanel {
 
         // === 기본 패널 설정 ===
         setLayout(new BorderLayout(10, 0));
-        setBackground(new Color(20, 25, 35));
+        setBackground(BG_MAIN);   
+        setOpaque(true);     
         setBorder(new EmptyBorder(10, 10, 10, 10));
 
         // === 로직 초기화 ===
@@ -280,12 +289,20 @@ public class BoardPanel extends JPanel {
         if (enableControls) {
             bindPauseKey();
         }
+   // ==== Screen resize support (maintain board center + maintain HUD spacing) ==== 
+        addComponentListener(new ComponentAdapter() {                    
+            @Override                                                  
+            public void componentResized(ComponentEvent e) {            
+                revalidate();                                          
+                repaint();                                              
+            }                                                          
+        });                                                             
     }
 
     // 중앙에 BoardView를 넣고 비율 유지
     private Component centerBoard(JComponent view) {
         JPanel wrapper = new JPanel(new GridBagLayout());
-        wrapper.setBackground(new Color(20, 25, 35));
+        wrapper.setBackground(BG_MAIN);  
         wrapper.setFocusable(false); // 포커스 훔치지 않도록
         wrapper.add(view);
 
@@ -298,17 +315,19 @@ public class BoardPanel extends JPanel {
     private JPanel createHUDPanel() {
         JPanel hud = new JPanel();
         hud.setLayout(new BoxLayout(hud, BoxLayout.Y_AXIS));
-        hud.setBackground(new Color(20, 25, 35));
+        hud.setBackground(BG_HUD);                      
+        hud.setBorder(new EmptyBorder(10, 16, 10, 16)); 
+
 
         JLabel title = new JLabel("TETRIS");
-        title.setFont(new Font("Arial", Font.BOLD, 32));
-        title.setForeground(new Color(100, 255, 218));
+        title.setFont(new Font("Arial", Font.BOLD, 30));        
+        title.setForeground(ACCENT_CYAN);                 
         title.setAlignmentX(Component.CENTER_ALIGNMENT);
         hud.add(title);
         hud.add(Box.createRigidArea(new Dimension(0, 15)));
 
         JLabel nextLabel = new JLabel("NEXT");
-        nextLabel.setFont(new Font("Arial", Font.BOLD, 18));
+        nextLabel.setFont(new Font("Arial", Font.BOLD, 16));  
         nextLabel.setForeground(Color.WHITE);
         nextLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         hud.add(nextLabel);
@@ -316,7 +335,7 @@ public class BoardPanel extends JPanel {
 
         // Next panel wrapper (높이 제한)
         JPanel nextWrapper = new JPanel(new BorderLayout());
-        nextWrapper.setBackground(new Color(20, 25, 35));
+        nextWrapper.setBackground(BG_HUD);
 
         // 원하는 높이 지정
         int nextHeight = 110;
@@ -340,26 +359,27 @@ public class BoardPanel extends JPanel {
 
         JLabel controls = new JLabel("P:Pause | F11:Full | ESC:Exit");
         controls.setFont(new Font("Arial", Font.PLAIN, 11));
-        controls.setForeground(new Color(130, 140, 160));
+        controls.setForeground(TEXT_HINT);          
         controls.setAlignmentX(Component.CENTER_ALIGNMENT);
         hud.add(Box.createRigidArea(new Dimension(0, 20)));
         hud.add(controls);
+        hud.add(Box.createVerticalGlue());
         return hud;
     }
 
     private JPanel createStatPanel(String label, JLabel value) {
         JPanel p = new JPanel();
         p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
-        p.setBackground(new Color(30, 35, 50));
+        p.setBackground(BG_STAT);    
         p.setBorder(new EmptyBorder(10, 20, 10, 20));
         p.setMaximumSize(new Dimension(180, 70));
 
         JLabel name = new JLabel(label);
         name.setFont(new Font("Arial", Font.BOLD, 12));
-        name.setForeground(new Color(136, 146, 176));
+        name.setForeground(TEXT_MUTED);   
         name.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        value.setFont(new Font("Arial", Font.BOLD, 24));
+        value.setFont(new Font("Consolas", Font.BOLD, 24));     // EDITED (숫자 가독성 ↑)
         value.setForeground(Color.WHITE);
         value.setAlignmentX(Component.CENTER_ALIGNMENT);
 
@@ -620,29 +640,37 @@ public class BoardPanel extends JPanel {
     }
 
     public void applySettings(Settings s) {
-        this.settings = s;
-        if (s == null)
-            return;
+    this.settings = s;
+    if (s == null)
+        return;
 
-        // BoardView에 Settings 전달
-        if (boardView != null) {
-            boardView.updateSettings(s);
-            boardView.setColorMode(s.colorBlindMode);
-        }
+    // BoardView에 Settings 전달
+    if (boardView != null) {
+        boardView.updateSettings(s);
+        boardView.setColorMode(s.colorBlindMode);
+    }
 
-        // 부모 컨테이너 갱신
-        revalidate();
-        repaint();
+    // 부모 컨테이너 갱신
+    revalidate();
+    repaint();
 
-        // JFrame 리사이즈
-        SwingUtilities.invokeLater(() -> {
-            JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
-            if (frame != null) {
-                frame.pack();
-                frame.setLocationRelativeTo(null); // 화면 중앙 재배치
+    // JFrame 리사이즈
+    SwingUtilities.invokeLater(() -> {
+        JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
+        if (frame != null) {
+            Settings.ScreenSize screenSize = s.screenSize;        
+            if (screenSize != null) {                            
+                Dimension d = screenSize.toDimension();          
+                frame.setMinimumSize(d);                         
+                frame.setSize(d);                                 
+            } else {                                             
+                frame.pack();                                    
+            }
+            frame.setLocationRelativeTo(null);                    
             }
         });
     }
+
 
     public void startLoop() {
         loop.startLoop();
