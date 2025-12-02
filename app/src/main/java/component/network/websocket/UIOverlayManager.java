@@ -104,11 +104,8 @@ public class UIOverlayManager {
         startButton.setForeground(Color.WHITE);
         startButton.setFocusPainted(false);
         startButton.addActionListener(e -> {
-            // 서버가 GAME_START 메시지 전송
-            if (isServer) {
-                // NetworkManager를 통해 전송해야 함
-            }
-            onStartGame.run();
+            System.out.println("[UI] Start button clicked");
+            triggerGameStart();
         });
         overlayPanel.add(startButton);
 
@@ -215,14 +212,43 @@ public class UIOverlayManager {
     }
 
     public void updateStatus(String message) {
-        SwingUtilities.invokeLater(() -> statusLabel.setText(message));
+        SwingUtilities.invokeLater(() -> {
+            if (statusLabel != null) {
+                statusLabel.setText(message);
+            }
+        });
+    }
+
+    public void updateGameOverStatus(String message) {
+        SwingUtilities.invokeLater(() -> {
+            if (gameOverPanel != null) {
+                // 기존 게임오버 패널에 상태 라벨 추가
+                Component[] components = gameOverPanel.getComponents();
+                for (Component c : components) {
+                    if (c instanceof JLabel && ((JLabel) c).getText().contains("Waiting")) {
+                        gameOverPanel.remove(c);
+                        break;
+                    }
+                }
+
+                JLabel statusLabel = new JLabel(message);
+                statusLabel.setFont(new Font("Arial", Font.BOLD, 14));
+                statusLabel.setForeground(new Color(255, 200, 100));
+                statusLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+                gameOverPanel.add(statusLabel, 1); // 제목 바로 아래
+                gameOverPanel.revalidate();
+                gameOverPanel.repaint();
+            }
+        });
     }
 
     public void enableStartButton() {
         SwingUtilities.invokeLater(() -> {
             updateStatus("Ready! Press Start");
-            startButton.setEnabled(true);
-            startButton.setBackground(new Color(50, 180, 80));
+            if (startButton != null) {
+                startButton.setEnabled(true);
+                startButton.setBackground(new Color(50, 180, 80));
+            }
         });
     }
 
@@ -328,22 +354,20 @@ public class UIOverlayManager {
     /**
      * 게임 시작 오버레이를 다시 표시 (재시작용)
      */
-    /**
-     * 게임 시작 오버레이를 다시 표시 (재시작용)
-     */
     public void showStartOverlay() {
-        JRootPane root = SwingUtilities.getRootPane(parentPanel);
-        if (root == null)
-            return;
-
-        // 기존 게임오버 오버레이 제거
-        JPanel glass = (JPanel) root.getGlassPane();
-        glass.removeAll();
-        glass.setVisible(false);
-
-        // 처음 오버레이 다시 생성
         SwingUtilities.invokeLater(() -> {
+            JRootPane root = SwingUtilities.getRootPane(parentPanel);
+            if (root == null)
+                return;
+
+            // 기존 게임오버 오버레이 제거
+            JPanel glass = (JPanel) root.getGlassPane();
+            glass.removeAll();
+            glass.setVisible(false);
+
+            // 처음 오버레이 다시 생성
             createOverlay();
+
             // 이미 연결되어 있으므로 바로 Ready 상태로
             updateStatus("Ready! Press Start");
             enableStartButton();
@@ -419,7 +443,9 @@ public class UIOverlayManager {
         confirmBtn.setForeground(Color.WHITE);
         confirmBtn.setFocusPainted(false);
         confirmBtn.addActionListener(e -> {
-            showStartOverlay();
+            if (onRestart != null) {
+                onRestart.run();
+            }
         });
         buttonPanel.add(confirmBtn);
 

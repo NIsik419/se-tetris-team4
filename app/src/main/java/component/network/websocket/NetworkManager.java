@@ -42,6 +42,20 @@ public class NetworkManager {
     private final JLabel lagLabel;
     private final Runnable onConnectionLost;
     private final Runnable onGameOver;
+    private Runnable onOpponentRestartReady;
+    
+    public void setOnOpponentRestartReady(Runnable callback) {
+        this.onOpponentRestartReady = callback;
+    }
+
+    private void handleOpponentRestartReady() {
+        if (onOpponentRestartReady != null) {
+            onOpponentRestartReady.run();
+        }
+    }
+
+    // Time Limit 모드용 콜백 추가
+    private java.util.function.Consumer<Long> onTimeLimitStart;
 
     // 동기화 통계
     private long maxSyncDelay = 0;
@@ -51,6 +65,7 @@ public class NetworkManager {
     // UI 참조 (초기화용)
     private JPanel parentPanel;
     private UIOverlayManager overlayManager;
+    private Runnable onExecuteRestart;
 
     public NetworkManager(boolean isServer,
             java.util.function.Consumer<Message> messageHandler,
@@ -77,6 +92,13 @@ public class NetworkManager {
         });
 
         setupTimers();
+    }
+
+    /**
+     * Time Limit 시작 콜백 설정
+     */
+    public void setOnTimeLimitStart(java.util.function.Consumer<Long> callback) {
+        this.onTimeLimitStart = callback;
     }
 
     /**
@@ -245,8 +267,19 @@ public class NetworkManager {
                     overlayManager.triggerGameStart();
                 }
                 break;
+
             case TIME_LIMIT_START:
                 lastPongTime = System.currentTimeMillis();
+                // 클라이언트도 타이머 시작
+                if (onTimeLimitStart != null && msg.data != null) {
+                    try {
+                        long startTime = Long.parseLong(msg.data.toString());
+                        System.out.println("[TIME_LIMIT] Received start time: " + startTime);
+                        onTimeLimitStart.accept(startTime);
+                    } catch (Exception e) {
+                        System.err.println("[TIME_LIMIT] Failed to parse start time: " + e.getMessage());
+                    }
+                }
                 break;
 
             case PING:
@@ -286,24 +319,18 @@ public class NetworkManager {
                 break;
 
             case RESTART_READY:
-                oppRestartReady = true;
                 if (overlayManager != null) {
-
-                    // 양쪽 다 준비되면 바로 시작
-                    Timer restartTimer = new Timer(1000, e -> {
-                        if (isServer) {
-                            client.send(new Message(MessageType.RESTART_START, null));
-                        }
-                        overlayManager.triggerRestart();
-                        ((Timer) e.getSource()).stop();
+                    // OnlineVersusPanel에 알림
+                    SwingUtilities.invokeLater(() -> {
+                        // 콜백으로 oppRestartReady 설정
+                        handleOpponentRestartReady();
                     });
-                    restartTimer.setRepeats(false);
-                    restartTimer.start();
                 }
                 break;
+
             case RESTART_START:
-                if (overlayManager != null) {
-                    overlayManager.triggerRestart();
+                if (onExecuteRestart != null) {
+                    onExecuteRestart.run();
                 }
                 break;
 

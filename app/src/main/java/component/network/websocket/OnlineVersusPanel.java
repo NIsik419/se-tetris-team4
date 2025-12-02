@@ -22,6 +22,8 @@ public class OnlineVersusPanel extends JPanel {
     private static final int CELL_SIZE = 25;
     private static final int CELL_GAP = 0;
     private boolean opponentGameOver = false;
+    private boolean myRestartReady = false;
+    private boolean oppRestartReady = false;
 
     private final JLabel myIncoming = new JLabel("0");
     private final JLabel oppIncoming = new JLabel("0");
@@ -100,6 +102,27 @@ public class OnlineVersusPanel extends JPanel {
                 lagLabel,
                 this::onConnectionLost,
                 this::onGameOver);
+
+        networkManager.setOnTimeLimitStart(startTime -> {
+            if (timeLimitManager != null) {
+                // syncStart를 사용하여 서버 시간과 동기화
+                timeLimitManager.syncStart(startTime, TIME_LIMIT_SECONDS);
+            }
+        });
+
+        networkManager.setOnOpponentRestartReady(() -> {
+            oppRestartReady = true;
+
+            // 내가 이미 준비됐으면 시작 화면으로
+            if (myRestartReady) {
+                executeRestart();
+                overlayManager.showStartOverlay();
+            } else {
+                // 상대방만 준비된 상태
+                overlayManager.updateGameOverStatus("Opponent ready! Press OK to continue");
+            }
+        });
+
         myLogic.setOnLinesClearedWithMasks(masks -> {
             if (masks != null && masks.length > 0) {
                 myTotalLines += masks.length; // masks 개수가 라인 수
@@ -310,10 +333,12 @@ public class OnlineVersusPanel extends JPanel {
             System.out.println("[GAME] Already started, returning");
             return;
         }
+
+        gameStarted = true;
         if (isServer) {
             networkManager.getClient().send(new Message(MessageType.GAME_START, null));
         }
-        gameStarted = true;
+
         gameStartTime = System.currentTimeMillis();
         myTotalLines = 0;
         oppTotalLines = 0;
@@ -342,13 +367,27 @@ public class OnlineVersusPanel extends JPanel {
     }
 
     private void onRestart() {
+        System.out.println("[RESTART] onRestart called");
+
+        myRestartReady = true;
         networkManager.sendRestartReady();
-        overlayManager.showStartOverlay();
+
+        // 상대방도 준비됐으면 시작 화면으로
+        if (oppRestartReady) {
+            executeRestart();
+            overlayManager.showStartOverlay();
+        } else {
+            // 상대방 대기 중 표시
+            overlayManager.updateGameOverStatus("Waiting for opponent...");
+        }
     }
 
     public void executeRestart() {
         System.out.println("[RESTART] executeRestart called");
+
         gameStarted = false;
+        myRestartReady = false;
+        oppRestartReady = false;
         System.out.println("[RESTART] gameStarted set to false");
 
         gameStartTime = 0;
@@ -382,7 +421,7 @@ public class OnlineVersusPanel extends JPanel {
         oppView.repaint();
 
         System.out.println("[RESTART] About to call onStartGame");
-        onStartGame();
+        // onStartGame();
     }
 
     private void applyGameMode(String mode) {
