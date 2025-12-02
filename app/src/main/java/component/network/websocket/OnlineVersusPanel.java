@@ -526,20 +526,20 @@ public class OnlineVersusPanel extends JPanel {
     }
 
     private void triggerDualGameOverAnimation() {
-        // 내 보드 애니메이션
-        triggerGameOverAnimation(myView, myLogic, null);
+        // 상대 보드 즉시 클리어
+        Color[][] oppBoard = oppLogic.getBoard();
+        for (int y = 0; y < BoardLogic.HEIGHT; y++) {
+            for (int x = 0; x < BoardLogic.WIDTH; x++) {
+                oppBoard[y][x] = null;
+            }
+        }
+        oppView.repaint();
 
-        // 상대 보드 애니메이션 (약간 딜레이)
-        Timer delayTimer = new Timer(500, e -> {
-            triggerGameOverAnimation(oppView, oppLogic, () -> {
-                // 모든 애니메이션 끝난 후 오버레이 표시
-                overlayManager.showGameOverOverlay(false, myLogic.getScore(),
-                        oppLogic.getScore(), myTotalLines, gameStartTime);
-            });
-            ((Timer) e.getSource()).stop();
+        // 내 보드만 애니메이션
+        triggerGameOverAnimation(myView, myLogic, () -> {
+            overlayManager.showGameOverOverlay(false, myLogic.getScore(),
+                    oppLogic.getScore(), myTotalLines, gameStartTime);
         });
-        delayTimer.setRepeats(false);
-        delayTimer.start();
     }
 
     private void triggerGameOverAnimation(BoardView view, BoardLogic logic, Runnable afterAnimation) {
