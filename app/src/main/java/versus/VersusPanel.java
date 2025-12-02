@@ -10,6 +10,7 @@ import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
+import java.util.List;
 
 /**
  * VersusPanel
@@ -43,8 +44,6 @@ public class VersusPanel extends JPanel {
     // 🔹 선택된 게임 룰 (Normal / Item / Time Limit (3min) 등)
     private final String gameRule;
 
-    // private Image bgImage;
-
     // ─── 게임 오버 오버레이 관련 ───
     private JComponent p1BoardRef;
     private JComponent p2BoardRef;
@@ -57,21 +56,6 @@ public class VersusPanel extends JPanel {
         this.p2Config = p2Config;
         this.gameRule = (gameRule != null) ? gameRule : "Normal";
         this.soundManager = SoundManager.getInstance();
-
-        // // 배경 이미지 로드
-        // try {
-        // // 예시: src/main/resources/images/versus_bg.jpg
-        // java.net.URL url = getClass().getResource("/images/versusBG.jpeg");
-        // if (url != null) {
-        // bgImage = new ImageIcon(url).getImage();
-        // } else {
-        // System.err.println("[VersusPanel] 배경 이미지 리소스를 찾을 수 없습니다:
-        // /images/versus_bg.jpg");
-        // }
-        // } catch (Exception ex) {
-        // ex.printStackTrace();
-        // bgImage = null; // 이미지 로드 실패해도 게임은 돌아가도록
-        // }
 
         setLayout(new BorderLayout(0, 0));
         setBackground(new Color(18, 22, 30));
@@ -103,9 +87,7 @@ public class VersusPanel extends JPanel {
 
             // VersusFrame 찾아서 제대로 종료
             JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
-            if (frame instanceof VersusFrame) {
-                VersusFrame vf = (VersusFrame) frame;
-                // 사용자가 나가기를 선택한 것으로 플래그 설정
+            if (frame instanceof VersusFrame vf) {
                 vf.closeAfterGameOver();
             } else if (frame != null) {
                 frame.dispose();
@@ -114,22 +96,32 @@ public class VersusPanel extends JPanel {
 
         // ───── 가운데 영역(좌 HUD + 보드 2개 + 우 HUD) ─────
         JPanel centerContainer = new JPanel(new BorderLayout(0, 0));
-        // centerContainer.setBackground(new Color(18, 22, 30));
         centerContainer.setOpaque(false);
 
-        // 사이드바
+        // 사이드 HUD (안에 Next + Score/Level + Garbage 미니보드까지 포함돼 있음)
         p1Sidebar = new HUDSidebar();
-        p1Sidebar.setPreferredSize(new Dimension(160, 0));
-        p1Sidebar.setOpaque(false);
-        centerContainer.add(p1Sidebar, BorderLayout.WEST);
-
         p2Sidebar = new HUDSidebar();
-        p2Sidebar.setPreferredSize(new Dimension(160, 0));
-        p2Sidebar.setOpaque(false);
-        centerContainer.add(p2Sidebar, BorderLayout.EAST);
 
         p1Sidebar.showTime(false);
         p2Sidebar.showTime(false);
+
+        // 좌/우 래퍼 (너비만 고정)
+        JPanel p1HudWrapper = new JPanel();
+        p1HudWrapper.setOpaque(false);
+        p1HudWrapper.setLayout(new BoxLayout(p1HudWrapper, BoxLayout.Y_AXIS));
+        p1HudWrapper.setPreferredSize(new Dimension(160, 0));
+        p1Sidebar.setMaximumSize(new Dimension(160, Integer.MAX_VALUE));
+        p1HudWrapper.add(p1Sidebar);
+
+        JPanel p2HudWrapper = new JPanel();
+        p2HudWrapper.setOpaque(false);
+        p2HudWrapper.setLayout(new BoxLayout(p2HudWrapper, BoxLayout.Y_AXIS));
+        p2HudWrapper.setPreferredSize(new Dimension(160, 0));
+        p2Sidebar.setMaximumSize(new Dimension(160, Integer.MAX_VALUE));
+        p2HudWrapper.add(p2Sidebar);
+
+        centerContainer.add(p1HudWrapper, BorderLayout.WEST);
+        centerContainer.add(p2HudWrapper, BorderLayout.EAST);
 
         // === 게임 매니저 초기화 (보드/플레이어 생성 포함) ===
         manager = new VersusGameManager(
@@ -148,13 +140,13 @@ public class VersusPanel extends JPanel {
                         p2Sidebar.setNextBlocks(blocks);
                     }
                 }),
-                this::handleGameFinished // ★ 게임 종료 콜백
+                this::handleGameFinished,          // 게임 종료 콜백
+                this::updateP1GarbagePreview,      // P1 가비지 미니보드 업데이트
+                this::updateP2GarbagePreview       // P2 가비지 미니보드 업데이트
         );
 
         // 가운데 보드 2개
         JPanel boardsContainer = new JPanel(new GridBagLayout());
-        // boardsContainer.setBackground(new Color(18, 22, 30));
-        // boardsContainer.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
         boardsContainer.setOpaque(false);
 
         GridBagConstraints gbc = new GridBagConstraints();
@@ -166,7 +158,6 @@ public class VersusPanel extends JPanel {
         gbc.insets = new Insets(0, 10, 0, 10);
 
         JPanel boardsPanel = new JPanel(new GridLayout(1, 2, 40, 0));
-        // boardsPanel.setBackground(new Color(18, 22, 30));
         boardsPanel.setOpaque(false);
         JComponent p1Board = manager.getP1Component();
         JComponent p2Board = manager.getP2Component();
@@ -188,8 +179,6 @@ public class VersusPanel extends JPanel {
             p1Sidebar.setNextBlocks(manager.getP1NextBlocks());
             p2Sidebar.setNextBlocks(manager.getP2NextBlocks());
         });
-
-        // === 초기 HUD 동기화 ===
 
         // 🔹 타임어택 여부 판정
         boolean isTimeAttack = p1Config.mode() == GameConfig.Mode.TIME_ATTACK
@@ -234,18 +223,14 @@ public class VersusPanel extends JPanel {
                         frame.pack();
                         frame.setLocationRelativeTo(null);
 
-                        // 🔹 새 패널에도 오버레이 부착
                         newPanel.attachOverlayToFrame(frame);
                     },
                     () -> { // EXIT 
                         manager.pauseBoth();
                         stopTimeAttackTimer();
 
-                        // VersusFrame을 제대로 종료
-                        if (frame instanceof VersusFrame) {
-                            VersusFrame vf = (VersusFrame) frame;
-
-                            // cleanup 먼저
+                        JFrame f = (JFrame) SwingUtilities.getWindowAncestor(VersusPanel.this);
+                        if (f instanceof VersusFrame vf) {
                             if (manager != null) {
                                 manager.cleanup();
                             }
@@ -261,6 +246,24 @@ public class VersusPanel extends JPanel {
 
         // ★ 게임 오버 오버레이 초기화 (레이어드팬에 추가)
         initGameOverOverlay();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 보드/매니저 쪽에서 호출할 가비지 프리뷰 업데이트 메서드
+    // ─────────────────────────────────────────────────────────────
+
+    /** P1 쪽 가비지 미니 보드 업데이트 */
+    public void updateP1GarbagePreview(List<boolean[]> lines) {
+        if (p1Sidebar != null) {
+            SwingUtilities.invokeLater(() -> p1Sidebar.setGarbageLines(lines));
+        }
+    }
+
+    /** P2 쪽 가비지 미니 보드 업데이트 */
+    public void updateP2GarbagePreview(List<boolean[]> lines) {
+        if (p2Sidebar != null) {
+            SwingUtilities.invokeLater(() -> p2Sidebar.setGarbageLines(lines));
+        }
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -310,11 +313,9 @@ public class VersusPanel extends JPanel {
                 board.getBounds(),
                 gameOverOverlay);
 
-        // 어두운 반투명 사각형 (보드 영역만)
         g2.setColor(new Color(0, 0, 0, 170));
         g2.fillRect(r.x, r.y, r.width, r.height);
 
-        // WIN / LOSE / DRAW 텍스트
         if (text != null && !text.isEmpty()) {
             g2.setFont(new Font("Arial", Font.BOLD, 32));
             g2.setColor(new Color(255, 255, 255, 230));
@@ -359,12 +360,11 @@ public class VersusPanel extends JPanel {
         resultDialogPanel = new JPanel();
         resultDialogPanel.setLayout(new BoxLayout(resultDialogPanel, BoxLayout.Y_AXIS));
         resultDialogPanel.setBackground(new Color(30, 38, 56));
-        // 회색 테두리 + 안쪽 여백
-        Color borderGray = new Color(150, 160, 175); // 원하는 톤으로 조절
+        Color borderGray = new Color(150, 160, 175);
         resultDialogPanel.setBorder(
                 BorderFactory.createCompoundBorder(
-                        BorderFactory.createLineBorder(borderGray, 1, true), // 바깥 회색 선
-                        new EmptyBorder(16, 24, 16, 24) // 안쪽 여백
+                        BorderFactory.createLineBorder(borderGray, 1, true),
+                        new EmptyBorder(16, 24, 16, 24)
                 ));
 
         JLabel title = new JLabel("RESULT", SwingConstants.CENTER);
@@ -426,7 +426,6 @@ public class VersusPanel extends JPanel {
 
         // 버튼 콜백
         retry.addActionListener(e -> {
-            // 1) 이 패널 쪽 상태 정리
             lastResult = null;
 
             if (resultDialogPanel != null && gameOverOverlay != null) {
@@ -438,7 +437,6 @@ public class VersusPanel extends JPanel {
                 gameOverOverlay.setVisible(false);
             }
 
-            // 2) 프레임에서 기존 오버레이 제거 + 새 VersusPanel로 완전 교체
             JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(VersusPanel.this);
             if (frame != null) {
                 JLayeredPane lp = frame.getLayeredPane();
@@ -448,15 +446,10 @@ public class VersusPanel extends JPanel {
                 lp.revalidate();
                 lp.repaint();
 
-                // 새 게임 패널 생성
                 VersusPanel newPanel = new VersusPanel(p1Config, p2Config, this.gameRule);
                 frame.setContentPane(newPanel);
-
-                // 레이아웃 다시 계산 + 위치 보정
                 frame.pack();
                 frame.setLocationRelativeTo(null);
-
-                // 🔹 새 게임의 오버레이를 레이어드팬에 다시 붙이기
                 newPanel.attachOverlayToFrame(frame);
             }
         });
@@ -503,28 +496,8 @@ public class VersusPanel extends JPanel {
         });
     }
 
-    private JPanel buildHud(String title, JLabel value) {
-        JPanel p = new JPanel();
-        p.setBackground(new Color(24, 28, 38));
-        p.setBorder(BorderFactory.createEmptyBorder(8, 12, 8, 12));
-        p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
+    // 타임어택 타이머 관련 -----------------------------------------------------------------
 
-        JLabel t = new JLabel(title);
-        t.setForeground(new Color(160, 180, 200));
-        t.setFont(new Font("Arial", Font.PLAIN, 12));
-        t.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        value.setForeground(Color.WHITE);
-        value.setFont(new Font("Arial", Font.BOLD, 20));
-        value.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        p.add(t);
-        p.add(Box.createVerticalStrut(4));
-        p.add(value);
-        return p;
-    }
-
-    // ───── 타임어택 타이머 로직 ─────
     private void startTimeAttackTimer() {
         updateTimerLabel();
 
@@ -573,7 +546,6 @@ public class VersusPanel extends JPanel {
 
     @Override
     public Dimension getPreferredSize() {
-        // P1 보드 컴포넌트 기준으로 크기 계산 (BoardPanel)
         JComponent p1Comp = manager != null ? manager.getP1Component() : null;
 
         int boardWidth;
@@ -601,7 +573,7 @@ public class VersusPanel extends JPanel {
         JLabel label = new JLabel(title, SwingConstants.CENTER);
         label.setForeground(new Color(210, 220, 240));
         label.setFont(new Font("Arial", Font.BOLD, 20));
-        label.setBorder(BorderFactory.createEmptyBorder(0, 0, 6, 0)); // 보드와 살짝 간격
+        label.setBorder(BorderFactory.createEmptyBorder(0, 0, 6, 0));
 
         panel.add(label, BorderLayout.NORTH);
         panel.add(board, BorderLayout.CENTER);
@@ -637,39 +609,6 @@ public class VersusPanel extends JPanel {
         });
     }
 
-    // @Override
-    // protected void paintComponent(Graphics g) {
-    // super.paintComponent(g);
-
-    // if (bgImage == null) return;
-
-    // Graphics2D g2 = (Graphics2D) g.create();
-
-    // int pw = getWidth();
-    // int ph = getHeight();
-    // int iw = bgImage.getWidth(null);
-    // int ih = bgImage.getHeight(null);
-
-    // double panelRatio = (double) pw / ph;
-    // double imageRatio = (double) iw / ih;
-
-    // int drawW, drawH;
-
-    // // 패널이 더 넓으면 → 높이에 맞춰서 스케일 후 좌우 크롭
-    // if (panelRatio > imageRatio) {
-    // drawH = ph;
-    // drawW = (int) (ih * panelRatio);
-    // } else { // 패널이 더 세로로 길면 → 넓이에 맞춰서 스케일 후 상하 크롭
-    // drawW = pw;
-    // drawH = (int) (pw / imageRatio);
-    // }
-
-    // int x = (pw - drawW) / 2;
-    // int y = (ph - drawH) / 2;
-
-    // g2.drawImage(bgImage, x, y, drawW, drawH, this);
-    // g2.dispose();
-    // }
     public void stopGame() {
         System.out.println("[VersusPanel] Stopping game...");
 

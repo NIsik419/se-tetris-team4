@@ -14,7 +14,8 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
 
-import blocks.Block; 
+import blocks.Block;
+import versus.GarbagePreviewPanel;   // ★ 추가 import
 
 public class HUDSidebar extends JPanel {
     private final JLabel scoreLabel = value("0");
@@ -27,12 +28,16 @@ public class HUDSidebar extends JPanel {
     // private final NextBlockPanel next2 = new NextBlockPanel(96);
     // private final NextBlockPanel next3 = new NextBlockPanel(96);
 
+    // 가비지 미니 보드 (맨 아래에 배치)
+    private final GarbagePreviewPanel garbagePreview = new GarbagePreviewPanel("INCOMING");
+
     public HUDSidebar() {
         setBackground(new Color(0x0F141C));
         setBorder(BorderFactory.createEmptyBorder(18, 18, 18, 18));
         setPreferredSize(new Dimension(220, 720));
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 
+        // NEXT 영역 -------------------------------------------------
         add(title("Next"));
         add(Box.createVerticalStrut(4));
 
@@ -42,17 +47,30 @@ public class HUDSidebar extends JPanel {
         nextWrap.add(next1);
         nextWrap.setMaximumSize(new Dimension(200, 150));
         nextWrap.setPreferredSize(new Dimension(200, 150));
-
-        // nextWrap.add(next2);
-        // nextWrap.add(next3);
         add(nextWrap);
 
+        // 스탯 박스들 -----------------------------------------------
         add(Box.createVerticalStrut(18));
-        add(statBox("Score", scoreLabel));  
+        add(statBox("Score", scoreLabel));
         add(Box.createVerticalStrut(10));
-        add(statBox("Level", levelLabel)); 
+        add(statBox("Level", levelLabel));
         add(Box.createVerticalStrut(10));
+
+        // Time은 필요할 때만
+        JPanel timeBox = statBox("Time", timeLabel);
+        timeTitleLabel.setVisible(false);
+        timeLabel.setVisible(false);
+        timeBox.setVisible(false); 
+        // add(timeBox);  
+
+        // 나머지 공간은 비우고, 맨 아래에 가비지 미니보드 배치 ----------------
         add(Box.createVerticalGlue());
+
+        garbagePreview.setAlignmentX(Component.CENTER_ALIGNMENT);
+        // 사이드바 폭 안에서 예쁘게 보이도록 최대 크기 약간 조정
+        garbagePreview.setMaximumSize(new Dimension(200, 320));
+        add(Box.createVerticalStrut(8));
+        add(garbagePreview);
     }
 
     private JLabel title(String t) {
@@ -63,6 +81,7 @@ public class HUDSidebar extends JPanel {
         l.setHorizontalAlignment(SwingConstants.CENTER);
         return l;
     }
+
     private static JLabel value(String t) {
         JLabel l = new JLabel(t);
         l.setForeground(new Color(0xEDEFF2));
@@ -74,6 +93,7 @@ public class HUDSidebar extends JPanel {
 
     public void setScore(int s) { scoreLabel.setText(String.valueOf(s)); }
     public void setLevel(int lv) { levelLabel.setText(String.valueOf(lv)); }
+
     public void setTime(long seconds) {
         long m = seconds / 60, s = seconds % 60;
         timeLabel.setText(String.format("%02d:%02d", m, s));
@@ -86,7 +106,7 @@ public class HUDSidebar extends JPanel {
         // next3.setShape(shapes.size() > 2 ? shapes.get(2) : null);
     }
 
-    // Block 리스트를 직접 받는 메서드 추가
+    // Block 리스트를 직접 받는 메서드
     public void setNextBlocks(List<Block> blocks) {
         if (blocks == null || blocks.isEmpty()) {
             next1.setBlock(null);
@@ -105,13 +125,10 @@ public class HUDSidebar extends JPanel {
         p.setBackground(new Color(0x181C26));
         p.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
 
-        // width + height 고정
         Dimension boxSize = new Dimension(180, 70);
         p.setPreferredSize(boxSize);
         p.setMaximumSize(boxSize);
         p.setMinimumSize(boxSize);
-
-        // BoxLayout(Y_AXIS)에서 width를 강제로 줄이려면 반드시 필요
         p.setAlignmentX(Component.CENTER_ALIGNMENT);
 
         JLabel title = new JLabel(label.toUpperCase());
@@ -134,7 +151,16 @@ public class HUDSidebar extends JPanel {
     }
 
     public void reset() {
-        setScore(0); setLevel(1); setTime(0);
+        setScore(0);
+        setLevel(1);
+        setTime(0);
         setNextQueue(java.util.Collections.emptyList());
+        setGarbageLines(java.util.Collections.emptyList());
+    }
+
+    // VersusPanel / VersusGameManager 에서 호출할 가비지 프리뷰 업데이트
+    public void setGarbageLines(List<boolean[]> lines) {
+        garbagePreview.setGarbageLines(lines);
+        repaint();
     }
 }

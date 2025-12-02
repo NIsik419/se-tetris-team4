@@ -77,6 +77,8 @@ public class BoardLogic {
     private Runnable beforeSpawnHook;
     private java.util.function.Consumer<int[]> onLinesClearedWithMasks;
     private java.util.function.IntConsumer onIncomingChanged;
+    // 가비지 미리보기용 콜백 (각 줄을 boolean[WIDTH] 로 표현)
+    private java.util.function.Consumer<List<boolean[]>> onGarbagePreviewChanged;
 
     private final boolean[][] recentPlaced = new boolean[HEIGHT][WIDTH];
 
@@ -145,6 +147,31 @@ public class BoardLogic {
         this.onIncomingChanged = cb;
     }
 
+    // ★ VersusGameManager → VersusPanel → GarbagePreviewPanel 로 보내줄 콜백
+    public void setOnGarbagePreviewChanged(java.util.function.Consumer<List<boolean[]>> cb) {
+        this.onGarbagePreviewChanged = cb;
+    }
+
+    // ★ 현재 incomingGarbageQueue 를 미리보기용 boolean[] 리스트로 변환
+    private List<boolean[]> buildGarbagePreviewFromQueue() {
+        List<boolean[]> preview = new ArrayList<>();
+        for (int mask : incomingGarbageQueue) {
+            boolean[] row = new boolean[WIDTH];
+            for (int x = 0; x < WIDTH; x++) {
+                row[x] = ((mask >> x) & 1) != 0; // 비트 1이면 블록, 0이면 구멍
+            }
+            preview.add(row);
+        }
+        return preview;
+    }
+
+    // ★ 큐가 바뀔 때마다 한 번씩 호출해 주면 됨
+    private void fireGarbagePreviewChanged() {
+        if (onGarbagePreviewChanged != null) {
+            onGarbagePreviewChanged.accept(buildGarbagePreviewFromQueue());
+        }
+    }
+    
     private void refillPreview() {
         while (previewQueue.size() < 4) {
             previewQueue.add(bag.next());
@@ -1013,6 +1040,12 @@ public class BoardLogic {
         if (available <= 0) {
             System.out.println("[WARN] Max garbage limit reached, clearing queue");
             incomingGarbageQueue.clear();
+
+            // 큐가 비었으니까 HUD/미리보기도 0으로
+            if (onIncomingChanged != null) {
+                onIncomingChanged.accept(0);
+            }
+            fireGarbagePreviewChanged();
             return;
         }
 
@@ -1048,11 +1081,13 @@ public class BoardLogic {
 
             addedLines++;
             garbageCount++;
-
-            if (onIncomingChanged != null) {
-                onIncomingChanged.accept(incomingGarbageQueue.size());
-            }
         }
+
+        // ★ while 끝난 뒤, 남은 큐 길이 + 미리보기 한 번에 갱신
+        if (onIncomingChanged != null) {
+            onIncomingChanged.accept(incomingGarbageQueue.size());
+        }
+        fireGarbagePreviewChanged();
 
         System.out.println("[DEBUG] Garbage applied: " + addedLines + " lines, total garbage: " + garbageCount);
     }
@@ -1097,6 +1132,7 @@ public class BoardLogic {
         if (onIncomingChanged != null) {
             onIncomingChanged.accept(incomingGarbageQueue.size());
         }
+        fireGarbagePreviewChanged();
 
         // 진동 효과 트리거 (라인 수에 비례)
         triggerShakeEffect(masks.length);
@@ -1121,6 +1157,7 @@ public class BoardLogic {
                 garbageCount--;
                 System.out.println("[DEBUG] Garbage row cleared at y=" + y + ", remaining: " + garbageCount);
             }
+            isGarbageRow[y] = false;
         }
     }
 
@@ -1386,6 +1423,11 @@ public class BoardLogic {
         recentPlacedInitialize();
         Arrays.fill(isGarbageRow, false);
         garbageCount = 0;
+
+        if (onIncomingChanged != null) {
+            onIncomingChanged.accept(0);
+        }
+        fireGarbagePreviewChanged();
 
         previewQueue.clear();
         bag.reset();

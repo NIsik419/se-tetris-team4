@@ -941,23 +941,17 @@ public class MenuPanel extends JPanel {
                 setBorder(BorderFactory.createEmptyBorder(10, 28, 10, 28));
                 setFocusPainted(false);
                 setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+                setFocusable(false);  
                 t.start();
+                // 🔹 마우스 리스너 하나로 통합 + 선택 상태 동기화
                 addMouseListener(new MouseAdapter() {
                     @Override
                     public void mouseEntered(MouseEvent e) {
                         over = true;
-                    }
+                        sound.play(SoundManager.Sound.MENU_HOVER, 0.2f);
 
-                    @Override
-                    public void mouseExited(MouseEvent e) {
-                        over = false;
-                    }
-                });
-                addMouseListener(new MouseAdapter() {
-                    @Override
-                    public void mouseEntered(MouseEvent e) {
-                        over = true;
-                        sound.play(SoundManager.Sound.MENU_HOVER, 0.2f); // 조용하게
+                        // 👇 마우스로 올라간 버튼을 "현재 선택된 메뉴"로 만듦
+                        MenuPanel.this.selectButton((JButton) e.getSource());
                     }
 
                     @Override
@@ -1036,6 +1030,7 @@ public class MenuPanel extends JPanel {
                 setBorder(BorderFactory.createEmptyBorder(8, 20, 8, 20));
                 setFocusPainted(false);
                 setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+                setFocusable(false);        
                 t.start();
                 addMouseListener(new MouseAdapter() {
                     @Override
@@ -1052,7 +1047,8 @@ public class MenuPanel extends JPanel {
                     @Override
                     public void mouseEntered(MouseEvent e) {
                         over = true;
-                        sound.play(SoundManager.Sound.MENU_HOVER, 0.15f); // 더 조용하게
+                        sound.play(SoundManager.Sound.MENU_HOVER, 0.15f);
+                        MenuPanel.this.selectButton((JButton) e.getSource()); // ★
                     }
 
                     @Override
@@ -1132,6 +1128,7 @@ public class MenuPanel extends JPanel {
                 setBorder(BorderFactory.createEmptyBorder(5, 14, 5, 14));
                 setFocusPainted(false);
                 setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+                setFocusable(false);    
                 t.start();
                 addMouseListener(new MouseAdapter() {
                     @Override
@@ -1149,6 +1146,7 @@ public class MenuPanel extends JPanel {
                     public void mouseEntered(MouseEvent e) {
                         over = true;
                         sound.play(SoundManager.Sound.MENU_HOVER, 0.15f);
+                        MenuPanel.this.selectButton((JButton) e.getSource()); // ★
                     }
 
                     @Override
@@ -1272,5 +1270,14 @@ public class MenuPanel extends JPanel {
             anim.stop();
         }
         System.out.println("[MenuPanel] Cleanup completed");
+    }
+
+    // MenuPanel 내부
+    private void selectButton(JButton target) {
+        int idx = navOrder.indexOf(target);
+        if (idx >= 0) {
+            navIndex = idx;
+            setSelection(idx); // 기존 키보드용 선택 로직 재사용
+        }
     }
 }
