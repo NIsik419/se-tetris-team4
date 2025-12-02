@@ -641,16 +641,20 @@ public class OnlineVersusPanel extends JPanel {
             glassPane.repaint();
 
             if (frameCount[0] >= maxFrames) {
-                // glassPane을 숨기지 말고 컴포넌트만 제거
-                for (JPanel block : blocks) {
-                    glassPane.remove(block);
-                }
+                // 모든 블록 제거
+                glassPane.removeAll(); // 전체 제거
                 glassPane.revalidate();
                 glassPane.repaint();
 
                 ((Timer) e.getSource()).stop();
                 if (afterAnimation != null) {
-                    SwingUtilities.invokeLater(afterAnimation);
+                    // 약간의 딜레이 후 콜백 실행
+                    Timer callbackTimer = new Timer(100, evt -> {
+                        SwingUtilities.invokeLater(afterAnimation);
+                        ((Timer) evt.getSource()).stop();
+                    });
+                    callbackTimer.setRepeats(false);
+                    callbackTimer.start();
                 }
             }
         });
