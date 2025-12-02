@@ -368,6 +368,11 @@ public class UIOverlayManager {
             // 처음 오버레이 다시 생성
             createOverlay();
 
+            // 클라이언트는 모드 선택 불가
+            if (!isServer && modeSelector != null) {
+                modeSelector.setEnabled(false);
+            }
+
             // 이미 연결되어 있으므로 바로 Ready 상태로
             updateStatus("Ready! Press Start");
             enableStartButton();

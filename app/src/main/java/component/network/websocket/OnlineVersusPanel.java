@@ -420,6 +420,11 @@ public class OnlineVersusPanel extends JPanel {
         myView.repaint();
         oppView.repaint();
 
+        // 서버는 현재 모드를 다시 전송
+        if (isServer) {
+            networkManager.sendModeSelect(selectedMode);
+        }
+
         System.out.println("[RESTART] About to call onStartGame");
         // onStartGame();
     }
@@ -524,55 +529,69 @@ public class OnlineVersusPanel extends JPanel {
     /**
      * 자동 재연결 (최대 3회 시도)
      */
+    private boolean isAutoReconnecting = false;
+
     private void autoReconnect() {
+        if (isAutoReconnecting) {
+            System.out.println("[RECONNECT] Already reconnecting...");
+            return;
+        }
+
+        isAutoReconnecting = true;
+
         final int MAX_RETRIES = 3;
-        final int RETRY_DELAY = 2000; // 2초
+        final int RETRY_DELAY = 2000;
 
         new Thread(() -> {
-            for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-                try {
-                    System.out.println("[RECONNECT] Attempt " + attempt + "/" + MAX_RETRIES);
+            try {
+                for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+                    try {
+                        System.out.println("[RECONNECT] Attempt " + attempt + "/" + MAX_RETRIES);
 
-                    final int currentAttempt = attempt;
-                    SwingUtilities.invokeLater(() -> lagLabel.setText("RECONNECTING... (" + currentAttempt + "/3)"));
+                        final int currentAttempt = attempt;
+                        SwingUtilities
+                                .invokeLater(() -> lagLabel.setText("RECONNECTING... (" + currentAttempt + "/3)"));
 
-                    Thread.sleep(RETRY_DELAY);
+                        Thread.sleep(RETRY_DELAY);
 
-                    // 재연결 시도
-                    networkManager.reconnect();
+                        // 재연결 시도
+                        networkManager.reconnect();
 
-                    // 성공 시
-                    SwingUtilities.invokeLater(() -> {
-                        lagLabel.setText("RECONNECTED");
-                        lagLabel.setForeground(new Color(100, 255, 100));
-                        if (gameStarted) {
-                            loop.resume();
-                        }
-                    });
-                    return;
-
-                } catch (Exception e) {
-                    System.err.println("[RECONNECT] Attempt " + attempt + " failed: " + e.getMessage());
-
-                    if (attempt == MAX_RETRIES) {
+                        // 성공 시
                         SwingUtilities.invokeLater(() -> {
-                            lagLabel.setText("DISCONNECTED");
-                            lagLabel.setForeground(Color.RED);
-
-                            int choice = JOptionPane.showConfirmDialog(
-                                    OnlineVersusPanel.this,
-                                    "Failed to reconnect after 3 attempts.\nReturn to main menu?",
-                                    "Connection Failed",
-                                    JOptionPane.YES_NO_OPTION);
-
-                            if (choice == JOptionPane.YES_OPTION) {
-                                returnToMainMenu();
-                            } else {
-                                lagLabel.setText("OFFLINE MODE");
+                            lagLabel.setText("RECONNECTED");
+                            lagLabel.setForeground(new Color(100, 255, 100));
+                            if (gameStarted) {
+                                loop.resume();
                             }
                         });
+                        return;
+
+                    } catch (Exception e) {
+                        System.err.println("[RECONNECT] Attempt " + attempt + " failed: " + e.getMessage());
+
+                        if (attempt == MAX_RETRIES) {
+                            SwingUtilities.invokeLater(() -> {
+                                lagLabel.setText("DISCONNECTED");
+                                lagLabel.setForeground(Color.RED);
+
+                                int choice = JOptionPane.showConfirmDialog(
+                                        OnlineVersusPanel.this,
+                                        "Failed to reconnect after 3 attempts.\nReturn to main menu?",
+                                        "Connection Failed",
+                                        JOptionPane.YES_NO_OPTION);
+
+                                if (choice == JOptionPane.YES_OPTION) {
+                                    returnToMainMenu();
+                                } else {
+                                    lagLabel.setText("OFFLINE MODE");
+                                }
+                            });
+                        }
                     }
                 }
+            } finally {
+                isAutoReconnecting = false;
             }
         }).start();
     }

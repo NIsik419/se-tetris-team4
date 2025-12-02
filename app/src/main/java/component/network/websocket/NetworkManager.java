@@ -26,6 +26,7 @@ public class NetworkManager {
     private static final long LAG_THRESHOLD = 200;
     private static final long DISCONNECT_THRESHOLD = 5000;
     private boolean oppRestartReady = false;
+    private boolean isReconnecting = false;
 
     private final GameClient client;
     private BoardSyncAdapter adapter;
@@ -43,7 +44,7 @@ public class NetworkManager {
     private final Runnable onConnectionLost;
     private final Runnable onGameOver;
     private Runnable onOpponentRestartReady;
-    
+
     public void setOnOpponentRestartReady(Runnable callback) {
         this.onOpponentRestartReady = callback;
     }
@@ -197,8 +198,13 @@ public class NetworkManager {
     }
 
     public void startHeartbeat() {
-        if (heartbeatTimer != null && !heartbeatTimer.isRunning()) {
+        if (heartbeatTimer != null && heartbeatTimer.isRunning()) {
+            System.out.println("[HEARTBEAT] Already running, skipping...");
+            return;
+        }
+        if (heartbeatTimer != null) {
             heartbeatTimer.start();
+            System.out.println("[HEARTBEAT] Started");
         }
     }
 
@@ -231,11 +237,18 @@ public class NetworkManager {
         if (!oppReady)
             return;
 
+        if (!isReady) {
+            return;
+        }
+
         long now = System.currentTimeMillis();
         long timeSinceLastPong = now - lastPongTime;
 
         if (timeSinceLastPong > DISCONNECT_THRESHOLD) {
+            System.err.println("[CONNECTION] Timeout detected: " + timeSinceLastPong + "ms");
             if (onConnectionLost != null) {
+                // 한 번만 호출되도록
+                connectionCheckTimer.stop();
                 onConnectionLost.run();
             }
         }
@@ -256,6 +269,7 @@ public class NetworkManager {
             case MODE_SELECT:
                 lastPongTime = System.currentTimeMillis();
                 String mode = (String) msg.data;
+                System.out.println("[MODE] Received mode from opponent: " + mode);
                 if (overlayManager != null) {
                     overlayManager.updateStatus("Mode: " + mode);
                 }
@@ -465,29 +479,40 @@ public class NetworkManager {
     }
 
     public void reconnect() throws Exception {
-        // 기존 연결 정리
-        if (client != null) {
-            client.disconnect();
+        if (isReconnecting) {
+            System.out.println("[RECONNECT] Already reconnecting, skipping...");
+            return;
         }
 
-        Thread.sleep(1000);
+        isReconnecting = true;
 
-        // 재연결
-        if (isServer) {
-            client.connect("ws://localhost:8081/game");
-        } else {
-            String lastIp = loadRecentServerIp();
-            if (lastIp == null)
-                lastIp = "localhost";
-            client.connect("ws://" + lastIp + ":8081/game");
+        try {
+            // 기존 연결 정리
+            if (client != null) {
+                client.disconnect();
+            }
+
+            Thread.sleep(1000);
+
+            // 재연결
+            if (isServer) {
+                client.connect("ws://localhost:8081/game");
+            } else {
+                String lastIp = loadRecentServerIp();
+                if (lastIp == null)
+                    lastIp = "localhost";
+                client.connect("ws://" + lastIp + ":8081/game");
+            }
+
+            // 재연결 후 상태 업데이트
+            isReady = true;
+            lastPongTime = System.currentTimeMillis();
+            client.send(new Message(MessageType.PLAYER_READY, "ready"));
+
+            System.out.println("[RECONNECT] Success!");
+        } finally {
+            isReconnecting = false;
         }
-
-        // 재연결 후 상태 업데이트
-        isReady = true;
-        lastPongTime = System.currentTimeMillis();
-        client.send(new Message(MessageType.PLAYER_READY, "ready"));
-
-        System.out.println("[RECONNECT] Success!");
     }
 
     public void sendBoardState() {
@@ -543,6 +568,9 @@ public class NetworkManager {
         maxSyncDelay = 0;
         avgSyncDelay = 0;
         syncCount = 0;
+
+        isReady = true; // 이미 연결된 상태 유지
+        oppReady = true;
     }
 
     public void cleanup() {
