@@ -343,10 +343,6 @@ public class BoardView extends JPanel {
             float alpha, int height, int cellSize) {
         int centerX = beam.x;
 
-        System.out.println("[BEAM] Color: R=" + beam.color.getRed() +
-                " G=" + beam.color.getGreen() +
-                " B=" + beam.color.getBlue());
-
         //  중앙 레이저만 그리기 (진한 단색)
         int beamWidth = (int) (beam.width * 0.8f); // 블록 너비의 80%
 

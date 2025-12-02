@@ -59,15 +59,12 @@ public class BoardSyncAdapter {
         // 라인 클리어 시 공격 마스크 전송 + 즉시 보드 동기화
         myLogic.setOnLinesClearedWithMasks(masks -> {
             client.send(new Message(MessageType.LINE_ATTACK, masks));
-            System.out.println("[SEND] LINE_ATTACK → " + masks.length + " lines");
             sendBoardStateImmediate();
 
         });
 
         // 🔹 게임오버 시 알림 전송
         myLogic.setOnGameOverCallback(this::sendGameOver);
-
-        System.out.println("[SYNC] BoardSyncAdapter initialized (Delta mode: " + enableDeltaSync + ")");
     }
 
     /**
@@ -226,7 +223,6 @@ public class BoardSyncAdapter {
         int boardSize = GameState.HEIGHT * GameState.WIDTH;
         totalFullBytes += boardSize * 2;
 
-        System.out.println("[SYNC] Full sync sent (periodic safety check)");
     }
 
     /**
@@ -279,7 +275,6 @@ public class BoardSyncAdapter {
                 BoardDeltaTracker.BoardDelta fullDelta = WebSocketUtil.fromJson(msg.data,
                         BoardDeltaTracker.BoardDelta.class);
                 applyDeltaToOppLogic(fullDelta);
-                System.out.println("[SYNC] Full sync received and applied");
             }
 
             // case LINE_ATTACK -> {
@@ -393,7 +388,6 @@ public class BoardSyncAdapter {
      */
     public void setDeltaSyncEnabled(boolean enabled) {
         this.enableDeltaSync = enabled;
-        System.out.println("[SYNC] Delta sync " + (enabled ? "enabled" : "disabled"));
     }
 
     /**
@@ -401,7 +395,6 @@ public class BoardSyncAdapter {
      */
     public void setCompressionEnabled(boolean enabled) {
         this.enableCompression = enabled;
-        System.out.println("[SYNC] Compression " + (enabled ? "enabled" : "disabled"));
     }
 
     /**
@@ -417,7 +410,6 @@ public class BoardSyncAdapter {
         totalFullBytes = 0;
         lastFullSyncTime = 0;
         deltasWithoutFullSync = 0;
-        System.out.println("[SYNC] Delta tracker reset");
     }
 
     /**
