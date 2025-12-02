@@ -109,12 +109,14 @@ public class ScoreboardPanel extends JPanel {
 
         JButton btnRefresh = new JButton("Refresh");
         btnRefresh.setToolTipText("파일 재로딩 후 새로 고침");
-        stylePrimaryButton(btnRefresh);
+        stylePrimaryButton(btnRefresh);        
+        btnRefresh.setForeground(Color.WHITE);  
         btnRefresh.addActionListener(e -> {
             scoreBoard.load(); // 파일에서 다시 로드
             reloadTable();
         });
         top.add(btnRefresh);
+
 
         // (선택) 리셋 버튼들
         JButton btnResetBucket = new JButton("Reset This Bucket");
