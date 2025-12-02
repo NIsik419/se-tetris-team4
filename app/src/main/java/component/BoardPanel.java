@@ -81,14 +81,13 @@ public class BoardPanel extends JPanel {
     private final Runnable onExitToMenu;
     private java.util.function.Consumer<Integer> onGameOver;
 
-// ================= UI THEME CONSTANTS =================
-    private static final Color BG_MAIN = new Color(20, 25, 35);         
-    private static final Color BG_HUD  = new Color(24, 30, 44);         
-    private static final Color BG_STAT = new Color(30, 35, 50);         
-    private static final Color TEXT_MUTED = new Color(136, 146, 176);    
-    private static final Color TEXT_HINT  = new Color(130, 140, 160);    
-    private static final Color ACCENT_CYAN = new Color(100, 255, 218); 
-
+    // ================= UI THEME CONSTANTS =================
+    private static final Color BG_MAIN = new Color(20, 25, 35);
+    private static final Color BG_HUD = new Color(24, 30, 44);
+    private static final Color BG_STAT = new Color(30, 35, 50);
+    private static final Color TEXT_MUTED = new Color(136, 146, 176);
+    private static final Color TEXT_HINT = new Color(130, 140, 160);
+    private static final Color ACCENT_CYAN = new Color(100, 255, 218);
 
     /** 기본 생성자: 키맵(화살표/Space/P) 사용 */
     public BoardPanel(GameConfig config, Runnable onExitToMenu) {
@@ -121,8 +120,8 @@ public class BoardPanel extends JPanel {
 
         // === 기본 패널 설정 ===
         setLayout(new BorderLayout(10, 0));
-        setBackground(BG_MAIN);   
-        setOpaque(true);     
+        setBackground(BG_MAIN);
+        setOpaque(true);
         setBorder(new EmptyBorder(10, 10, 10, 10));
 
         // === 로직 초기화 ===
@@ -253,13 +252,20 @@ public class BoardPanel extends JPanel {
                     onExitToMenu.run();
                 },
                 () -> pausePanel != null && pausePanel.isVisible(),
-                () -> { if (pausePanel != null) pausePanel.showPanel(); },
-                () -> { if (pausePanel != null) pausePanel.hidePanel(); },
+                () -> {
+                    if (pausePanel != null)
+                        pausePanel.showPanel();
+                },
+                () -> {
+                    if (pausePanel != null)
+                        pausePanel.hidePanel();
+                },
                 loop::resumeLoop,
                 loop::pauseLoop,
                 title -> {
                     JFrame f = (JFrame) SwingUtilities.getWindowAncestor(this);
-                    if (f != null) f.setTitle(title);
+                    if (f != null)
+                        f.setTitle(title);
                 },
                 () -> settings != null ? settings.colorBlindMode : ColorBlindPalette.Mode.NORMAL,
                 mode -> {
@@ -283,9 +289,9 @@ public class BoardPanel extends JPanel {
                         keyDeps,
                         settings.keymap,
                         /* enableDebug */ true,
-                        /* enablePauseKey */ false  // P는 BoardPanel.bindPauseKey()에서 처리
+                        /* enablePauseKey */ false // P는 BoardPanel.bindPauseKey()에서 처리
                 );
-                
+
             } else {
                 // 멀티/Versus 모드는 기존 프리셋 유지
                 if (wasMode) {
@@ -307,20 +313,21 @@ public class BoardPanel extends JPanel {
         if (enableControls) {
             bindPauseKey();
         }
-   // ==== Screen resize support (maintain board center + maintain HUD spacing) ==== 
-        addComponentListener(new ComponentAdapter() {                    
-            @Override                                                  
-            public void componentResized(ComponentEvent e) {            
-                revalidate();                                          
-                repaint();                                              
-            }                                                          
-        });                                                             
+        // ==== Screen resize support (maintain board center + maintain HUD spacing)
+        // ====
+        addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent e) {
+                revalidate();
+                repaint();
+            }
+        });
     }
 
     // 중앙에 BoardView를 넣고 비율 유지
     private Component centerBoard(JComponent view) {
         JPanel wrapper = new JPanel(new GridBagLayout());
-        wrapper.setBackground(BG_MAIN);  
+        wrapper.setBackground(BG_MAIN);
         wrapper.setFocusable(false); // 포커스 훔치지 않도록
         wrapper.add(view);
 
@@ -333,19 +340,18 @@ public class BoardPanel extends JPanel {
     private JPanel createHUDPanel() {
         JPanel hud = new JPanel();
         hud.setLayout(new BoxLayout(hud, BoxLayout.Y_AXIS));
-        hud.setBackground(BG_HUD);                      
-        hud.setBorder(new EmptyBorder(10, 16, 10, 16)); 
-
+        hud.setBackground(BG_HUD);
+        hud.setBorder(new EmptyBorder(10, 16, 10, 16));
 
         JLabel title = new JLabel("TETRIS");
-        title.setFont(new Font("Arial", Font.BOLD, 30));        
-        title.setForeground(ACCENT_CYAN);                 
+        title.setFont(new Font("Arial", Font.BOLD, 30));
+        title.setForeground(ACCENT_CYAN);
         title.setAlignmentX(Component.CENTER_ALIGNMENT);
         hud.add(title);
         hud.add(Box.createRigidArea(new Dimension(0, 15)));
 
         JLabel nextLabel = new JLabel("NEXT");
-        nextLabel.setFont(new Font("Arial", Font.BOLD, 16));  
+        nextLabel.setFont(new Font("Arial", Font.BOLD, 16));
         nextLabel.setForeground(Color.WHITE);
         nextLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         hud.add(nextLabel);
@@ -377,7 +383,7 @@ public class BoardPanel extends JPanel {
 
         JLabel controls = new JLabel("P:Pause | F11:Full | ESC:Exit");
         controls.setFont(new Font("Arial", Font.PLAIN, 11));
-        controls.setForeground(TEXT_HINT);          
+        controls.setForeground(TEXT_HINT);
         controls.setAlignmentX(Component.CENTER_ALIGNMENT);
         hud.add(Box.createRigidArea(new Dimension(0, 20)));
         hud.add(controls);
@@ -388,16 +394,16 @@ public class BoardPanel extends JPanel {
     private JPanel createStatPanel(String label, JLabel value) {
         JPanel p = new JPanel();
         p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
-        p.setBackground(BG_STAT);    
+        p.setBackground(BG_STAT);
         p.setBorder(new EmptyBorder(10, 20, 10, 20));
         p.setMaximumSize(new Dimension(180, 70));
 
         JLabel name = new JLabel(label);
         name.setFont(new Font("Arial", Font.BOLD, 12));
-        name.setForeground(TEXT_MUTED);   
+        name.setForeground(TEXT_MUTED);
         name.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        value.setFont(new Font("Consolas", Font.BOLD, 24));     // EDITED (숫자 가독성 ↑)
+        value.setFont(new Font("Consolas", Font.BOLD, 24)); // EDITED (숫자 가독성 ↑)
         value.setForeground(Color.WHITE);
         value.setAlignmentX(Component.CENTER_ALIGNMENT);
 
@@ -658,53 +664,26 @@ public class BoardPanel extends JPanel {
     }
 
     public void applySettings(Settings s) {
-    this.settings = s;
-    if (s == null)
-        return;
-
-    // BoardView에 Settings 전달
-    if (boardView != null) {
-        boardView.updateSettings(s);
-        boardView.setColorMode(s.colorBlindMode);
-    }
-
-    // 부모 컨테이너 갱신
-    revalidate();
-    repaint();
-
-    // JFrame 리사이즈
-    SwingUtilities.invokeLater(() -> {
-        JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
-        if (frame != null) {
-            Settings.ScreenSize screenSize = s.screenSize;        
-            if (screenSize != null) {                            
-                Dimension d = screenSize.toDimension();          
-                frame.setMinimumSize(d);                         
-                frame.setSize(d);                                 
-            } else {                                             
-                frame.pack();                                    
-            }
-            frame.setLocationRelativeTo(null);                    
         this.settings = s;
-        if (s == null) return;
+        if (s == null)
+            return;
+
 
         if (boardView != null) {
             boardView.updateSettings(s);
             boardView.setColorMode(s.colorBlindMode);
 
-            // 🔥 현재 게임에도 키 변경 즉시 적용
-            if (enableControls /* && useCustomKeymap 같은 조건 */) {
+            // 키 매핑 즉시 적용
+            if (enableControls) {
                 installer.installCustom(
                         boardView,
                         keyDeps,
                         s.keymap,
                         /* enableDebug */ true,
-                        /* enablePauseKey */ false
-                );
+                        /* enablePauseKey */ false);
             }
         }
 
-        // NEXT 패널
         if (nextPanel != null) {
             nextPanel.setColorMode(s.colorBlindMode);
         }
@@ -715,12 +694,23 @@ public class BoardPanel extends JPanel {
         SwingUtilities.invokeLater(() -> {
             JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
             if (frame != null) {
-                frame.pack();
+
+                Settings.ScreenSize screenSize = s.screenSize;
+                if (screenSize != null) {
+                    // 사용자 선택한 화면 크기 강제 적용
+                    Dimension d = screenSize.toDimension();
+                    frame.setMinimumSize(d);
+                    frame.setSize(d);
+                } else {
+                    // 설정값 없으면 자동 크기 조정
+                    frame.pack();
+                }
+
+                // 창 가운데 배치
                 frame.setLocationRelativeTo(null);
             }
         });
     }
-
 
     public void startLoop() {
         loop.startLoop();

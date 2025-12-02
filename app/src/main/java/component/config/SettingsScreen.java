@@ -89,17 +89,6 @@ public class SettingsScreen extends JPanel {
             default -> KeyEvent.getKeyText(keyCode);
         };
     }
-    // unified display text for keys (arrows + rotate)
-    private static String keyToDisplay(int keyCode) {                     
-        return switch (keyCode) {                                         
-            case KeyEvent.VK_LEFT  -> "⬅";                             
-            case KeyEvent.VK_RIGHT ->"➡";    
-            case KeyEvent.VK_UP    -> "↻";  
-            case KeyEvent.VK_DOWN  -> "⬇";                           
-            default -> KeyEvent.getKeyText(keyCode);             
-        };                                                   
-    }     
-
 
     // apply screen size to current window
     private void applyScreenSize(Settings.ScreenSize size) {         
