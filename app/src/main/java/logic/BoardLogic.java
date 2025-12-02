@@ -23,6 +23,7 @@ import component.GameConfig;
 import component.GameConfig.Difficulty;
 import component.SpeedManager;
 import component.items.ItemBlock;
+import component.GameSettings;
 
 public class BoardLogic {
     private final SoundManager sound = SoundManager.getInstance();
@@ -31,7 +32,8 @@ public class BoardLogic {
     public static final int WIDTH = GameState.WIDTH;
     public static final int HEIGHT = GameState.HEIGHT;
     private static final int MAX_GARBAGE = 10;
-    private static final int ITEM_LINES_INTERVAL = 2; // ⭐ 아이템 등장 주기 (누적 라인)
+    private static final int ITEM_LINES_INTERVAL = 10; // 아이템 등장 주기 (누적 라인)
+    private static final int LINES_PER_LEVEL = 10;
     private int deletedLinesTotal = 0;
     private final boolean[] isGarbageRow = new boolean[HEIGHT];
     private int garbageCount = 0;
@@ -67,6 +69,7 @@ public class BoardLogic {
     private int comboCount = 0;
     private long lastClearTime = 0;
     private int shakeOffset = 0;
+    private boolean lastClearWasTetris = false;
 
     private Color[][] opponentBoard = new Color[HEIGHT][WIDTH];
 
@@ -91,7 +94,7 @@ public class BoardLogic {
     private final BlockBag bag;
     private final Difficulty difficulty;
 
-    private final SpeedManager speedManager = new SpeedManager();
+    private final SpeedManager speedManager;
     private final MovementService move = new MovementService(state);
     private final ClearService clear = new ClearService(state);
     private final BuffManager buff = new BuffManager();
@@ -113,18 +116,20 @@ public class BoardLogic {
     private final LinkedList<Block> previewQueue = new LinkedList<>();
     private Consumer<List<Block>> onNextQueueUpdate;
 
+    // GameSettings에서 난이도를 읽어오는 기본 생성자
     public BoardLogic(Consumer<Integer> onGameOver) {
-        this(onGameOver, GameConfig.Difficulty.NORMAL);
+        this(onGameOver, GameSettings.getDifficulty());
     }
 
     public BoardLogic(Consumer<Integer> onGameOver, GameConfig.Difficulty diff) {
+        System.out.println("✅[BoardLogic] difficulty = " + diff); 
         this.onGameOver = onGameOver;
         this.difficulty = diff;
 
         this.bag = new BlockBag(diff);
         this.item = new ItemManager(bag);
 
-        speedManager.setDifficulty(diff);
+        this.speedManager = new SpeedManager(diff);
         clear.setAnimationManager(animMgr);
 
         refillPreview();
@@ -638,17 +643,31 @@ public class BoardLogic {
             playComboSound(comboBonus);
         }
 
-        if (clearedLines % 10 == 0) {
-            speedManager.increaseLevel();
+        // Back-to-Back TETRIS 보너스 (4줄 + 바로 또 4줄)
+        boolean isTetris = (lines == 4);
+        if (isTetris && lastClearWasTetris) {
+            int b2bBonus = 200; // 보너스 점수, 필요하면 조정 가능
+            addScore(b2bBonus);
+        }
+        lastClearWasTetris = isTetris;
 
-            // SpeedUp 어워드 표시
+        int prevStepForSpeed = prevDeleted / LINES_PER_LEVEL;
+        int currStepForSpeed = deletedLinesTotal / LINES_PER_LEVEL;
+
+        if (currStepForSpeed > prevStepForSpeed) {
+            int levelUps = currStepForSpeed - prevStepForSpeed;
+            for (int i = 0; i < levelUps; i++) {
+                speedManager.increaseLevel();
+                int bonus = speedManager.getLevel() * 100;
+                addScore(bonus);
+            }
+
             if (boardView != null) {
                 int currentLevel = speedManager.getLevel();
-                SwingUtilities.invokeLater(() -> {
-                    boardView.showSpeedUp(currentLevel);
-                });
+                SwingUtilities.invokeLater(() -> boardView.showSpeedUp(currentLevel));
             }
         }
+
         if (itemMode) {
             int prevStep = prevDeleted / ITEM_LINES_INTERVAL;
             int currStep = deletedLinesTotal / ITEM_LINES_INTERVAL;
@@ -1375,6 +1394,7 @@ public class BoardLogic {
         fireNextQueueChanged();
 
         speedManager.resetLevel();
+        lastClearWasTetris = false;
 
         SwingUtilities.invokeLater(() -> {
             if (onFrameUpdate != null)
