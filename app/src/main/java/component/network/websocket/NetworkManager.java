@@ -340,7 +340,14 @@ public class NetworkManager {
                 if (msg.data != null && oppView != null) {
                     try {
                         com.google.gson.Gson gson = new com.google.gson.Gson();
-                        VisualEffect effect = gson.fromJson(msg.data.toString(), VisualEffect.class);
+
+                        // 이중 직렬화 문제 해결
+                        String jsonString = msg.data.toString();
+                        if (jsonString.startsWith("\"")) {
+                            jsonString = gson.fromJson(jsonString, String.class);
+                        }
+
+                        VisualEffect effect = gson.fromJson(jsonString, VisualEffect.class);
 
                         SwingUtilities.invokeLater(() -> {
                             switch (effect.type) {
@@ -357,6 +364,37 @@ public class NetworkManager {
                 }
                 break;
 
+            // case GARBAGE_PREVIEW:
+            //     System.out.println("[NETWORK] Received GARBAGE_PREVIEW message");
+            //     lastPongTime = System.currentTimeMillis();
+            //     if (msg.data != null && oppSidebar != null) {
+            //         try {
+            //             com.google.gson.Gson gson = new com.google.gson.Gson();
+
+            //             // 이중 직렬화 문제 해결: String으로 한번 파싱 후 다시 파싱
+            //             String jsonString = msg.data.toString();
+            //             if (jsonString.startsWith("\"")) {
+            //                 // 따옴표로 시작하면 이중 직렬화된 것
+            //                 jsonString = gson.fromJson(jsonString, String.class);
+            //             }
+
+            //             boolean[][] preview = gson.fromJson(jsonString, boolean[][].class);
+            //             List<boolean[]> previewList = java.util.Arrays.asList(preview);
+            //             System.out.println("[NETWORK] Parsed preview: " + previewList.size() + " lines");
+
+            //             SwingUtilities.invokeLater(() -> {
+            //                 System.out.println("[NETWORK] Setting garbage on oppSidebar");
+            //                 oppSidebar.setGarbageLines(previewList);
+            //             });
+            //         } catch (Exception e) {
+            //             System.err.println("[GARBAGE_PREVIEW] Error: " + e.getMessage());
+            //             e.printStackTrace();
+            //         }
+            //     } else {
+            //         System.out.println("[NETWORK] GARBAGE_PREVIEW skipped: data=" + (msg.data != null) + ", oppSidebar="
+            //                 + (oppSidebar != null));
+            //     }
+            //     break;
             case TIME_LIMIT_SCORE:
                 lastPongTime = System.currentTimeMillis();
                 // 상대방 점수 업데이트
@@ -406,8 +444,18 @@ public class NetworkManager {
                 break;
 
             case LINE_ATTACK:
+                lastPongTime = System.currentTimeMillis();
                 int[] masks = WebSocketUtil.fromJson(msg.data, int[].class);
+                System.out.println("[ATTACK] Received " + masks.length + " lines");
+
+                // ★ addGarbageMasks를 호출하면 내부에서 자동으로:
+                // 1. incomingGarbageQueue에 추가
+                // 2. fireGarbagePreviewChanged() 호출
+                // 3. onIncomingChanged 콜백 호출
+                // 따라서 추가 작업 불필요!
                 myLogic.addGarbageMasks(masks);
+
+                // 즉시 보드 상태 전송 (상대방이 내 보드를 볼 수 있도록)
                 adapter.sendBoardStateImmediate();
                 myView.repaint();
                 break;
@@ -681,6 +729,13 @@ public class NetworkManager {
         if (isServer) {
             GameServer.stopServer();
         }
+    }
+
+    public void sendGarbagePreview(List<boolean[]> lines) {
+        System.out.println("[NETWORK] sendGarbagePreview: " + lines.size() + " lines");
+        if (lines == null || lines.isEmpty())
+            return;
+        client.send(new Message(MessageType.GARBAGE_PREVIEW, lines));
     }
 
     // ===============================

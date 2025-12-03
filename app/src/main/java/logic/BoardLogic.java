@@ -104,6 +104,7 @@ public class BoardLogic {
     private ItemManager item;
 
     private final Consumer<Integer> onGameOver;
+    private Consumer<List<boolean[]>> onIncomingLinesChanged;
     private Runnable onFrameUpdate;
 
     private boolean gameOver = false;
@@ -117,6 +118,10 @@ public class BoardLogic {
 
     private final LinkedList<Block> previewQueue = new LinkedList<>();
     private Consumer<List<Block>> onNextQueueUpdate;
+
+    public void setOnIncomingLinesChanged(Consumer<List<boolean[]>> callback) {
+        this.onIncomingLinesChanged = callback;
+    }
 
     // GameSettings에서 난이도를 읽어오는 기본 생성자
     public BoardLogic(Consumer<Integer> onGameOver) {
@@ -167,11 +172,16 @@ public class BoardLogic {
 
     // ★ 큐가 바뀔 때마다 한 번씩 호출해 주면 됨
     private void fireGarbagePreviewChanged() {
+        System.out.println("[DEBUG] fireGarbagePreviewChanged called, queue size: " + incomingGarbageQueue.size());
         if (onGarbagePreviewChanged != null) {
-            onGarbagePreviewChanged.accept(buildGarbagePreviewFromQueue());
+            List<boolean[]> preview = buildGarbagePreviewFromQueue();
+            System.out.println("[DEBUG] Preview list size: " + preview.size());
+            onGarbagePreviewChanged.accept(preview);
+        } else {
+            System.out.println("[DEBUG] onGarbagePreviewChanged is NULL!");
         }
     }
-    
+
     private void refillPreview() {
         while (previewQueue.size() < 4) {
             previewQueue.add(bag.next());
@@ -292,17 +302,33 @@ public class BoardLogic {
             return;
         }
 
-        // 중력 애니메이션 동안 입력 차단
         if (pauseCallback != null) {
             pauseCallback.run();
         }
 
-        updateGarbageFlagsOnClear(clearedRows);
-
-        if (lines >= 2 && onLinesClearedWithMasks != null) {
-            int[] masks = buildAttackMasks(clearedRows);
-            onLinesClearedWithMasks.accept(masks);
+        // ★★★ 공격 계산을 가비지 플래그 업데이트보다 먼저 ★★★
+        java.util.List<Integer> nonGarbageRows = new java.util.ArrayList<>();
+        for (int y : clearedRows) {
+            if (!isGarbageRow[y]) {
+                nonGarbageRows.add(y);
+            } else {
+                System.out.println("[DEBUG] Row " + y + " is garbage, excluding from attack");
+            }
         }
+
+        System.out.println("[ITEM] Total cleared: " + clearedRows.size() +
+                ", Non-garbage: " + nonGarbageRows.size());
+
+        if (nonGarbageRows.size() >= 2 && onLinesClearedWithMasks != null) {
+            int[] masks = buildAttackMasks(nonGarbageRows);
+            onLinesClearedWithMasks.accept(masks);
+            System.out.println("[ITEM] " + nonGarbageRows.size() + "줄 클리어 (가비지 제외) → 공격 전송");
+        } else {
+            System.out.println("[ITEM] No attack sent: " + nonGarbageRows.size() + " non-garbage lines");
+        }
+
+        // 이제 가비지 플래그 업데이트
+        updateGarbageFlagsOnClear(clearedRows);
 
         final int CELL_SIZE = 25;
         for (int row : clearedRows) {
@@ -328,18 +354,40 @@ public class BoardLogic {
                         javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
                 });
 
-        // 애니메이션 중력만 실행
         applySimpleCellGravityAnimated(() -> {
             if (onFrameUpdate != null)
                 javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
         }, () -> {
-            // 중력 완료 후 입력 재개
             if (resumeCallback != null) {
                 resumeCallback.run();
             }
-
             checkChainClearImmediate(afterClear);
         });
+    }
+
+    // ★ updateGarbageFlagsOnClear() - 로그만 개선
+    private void updateGarbageFlagsOnClear(List<Integer> clearedRows) {
+        int clearedGarbageCount = 0;
+
+        for (int y : clearedRows) {
+            if (y < 0 || y >= HEIGHT)
+                continue;
+
+            if (isGarbageRow[y]) {
+                garbageCount--;
+                clearedGarbageCount++;
+                System.out.println("[DEBUG] Garbage row cleared at y=" + y + ", remaining: " + garbageCount);
+            }
+            isGarbageRow[y] = false;
+        }
+
+        System.out.println("[DEBUG] Cleared " + clearedGarbageCount + " garbage rows, " +
+                (clearedRows.size() - clearedGarbageCount) + " normal rows");
+
+        if (onIncomingChanged != null) {
+            onIncomingChanged.accept(incomingGarbageQueue.size());
+        }
+        fireGarbagePreviewChanged();
     }
 
     // 12. 아이템용 라인 체크 & 클리어 메서드
@@ -514,22 +562,31 @@ public class BoardLogic {
             pauseCallback.run();
         }
 
-        updateGarbageFlagsOnClear(clearedRows);
-
-        // 가비지가 아닌 라인만 카운트
-        int nonGarbageLines = 0;
+        // ★★★ 중요: 가비지 플래그 업데이트보다 먼저 공격 계산 ★★★
+        // 1. 먼저 가비지가 아닌 라인만 필터링 (isGarbageRow 상태 사용)
+        java.util.List<Integer> nonGarbageRows = new java.util.ArrayList<>();
         for (int y : clearedRows) {
-            if (!isGarbageRow[y]) {
-                nonGarbageLines++;
+            if (!isGarbageRow[y]) { // 가비지가 아닌 라인만
+                nonGarbageRows.add(y);
+            } else {
+                System.out.println("[DEBUG] Row " + y + " is garbage, excluding from attack");
             }
         }
 
-        // 가비지가 아닌 라인이 2줄 이상일 때만 공격 전송
-        if (nonGarbageLines >= 2 && onLinesClearedWithMasks != null) {
-            int[] masks = buildAttackMasks(clearedRows);
+        System.out.println("[DEBUG] Total cleared: " + clearedRows.size() +
+                ", Non-garbage: " + nonGarbageRows.size());
+
+        // 2. 가비지가 아닌 라인이 2줄 이상일 때만 공격 전송
+        if (nonGarbageRows.size() >= 2 && onLinesClearedWithMasks != null) {
+            int[] masks = buildAttackMasks(nonGarbageRows);
             onLinesClearedWithMasks.accept(masks);
-            System.out.println("[ATTACK] " + nonGarbageLines + "줄 클리어 (가비지 제외) → 공격 전송");
+            System.out.println("[ATTACK] " + nonGarbageRows.size() + "줄 클리어 (가비지 제외) → 공격 전송");
+        } else {
+            System.out.println("[ATTACK] No attack sent: " + nonGarbageRows.size() + " non-garbage lines (need 2+)");
         }
+
+        // 3. 이제 가비지 플래그 업데이트 (공격 계산 후)
+        updateGarbageFlagsOnClear(clearedRows);
 
         final int CELL_SIZE = 25;
         for (int row : clearedRows) {
@@ -559,7 +616,7 @@ public class BoardLogic {
                         javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
                 });
 
-        // 애니메이션 중력만 실행 (즉시 중력 제거)
+        // 애니메이션 중력만 실행
         if (animatedGravityEnabled) {
             System.out.println("[DEBUG] Starting ANIMATED gravity (no instant gravity)");
             applyClusterGravityAnimated(() -> {
@@ -572,7 +629,6 @@ public class BoardLogic {
                 checkChainClearImmediate(afterClear);
             });
         } else {
-            // 애니메이션 끄면 즉시 중력
             applyClusterGravityInstant();
             if (onFrameUpdate != null)
                 javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
@@ -619,9 +675,10 @@ public class BoardLogic {
             int y = clearedRows.get(i);
             int mask = 0;
 
-            // 가비지 라인은 공격으로 변환하지 않음
+            // 이 메서드는 가비지가 아닌 라인만 받아야 함
             if (isGarbageRow[y]) {
-                masks[i] = 0; // 빈 마스크 (공격 없음)
+                System.err.println("[ERROR] Garbage row " + y + " passed to buildAttackMasks! This should not happen!");
+                masks[i] = 0;
                 continue;
             }
 
@@ -631,6 +688,10 @@ public class BoardLogic {
                     mask |= (1 << x);
                 }
             }
+
+            System.out.println("[ATTACK] Row " + y + " mask: " + Integer.toBinaryString(mask) +
+                    " (bits set: " + Integer.bitCount(mask) + ")");
+
             masks[i] = mask;
         }
         return masks;
@@ -1045,7 +1106,7 @@ public class BoardLogic {
         var board = state.getBoard();
         int[][] pid = state.getPieceId();
 
-        int available = MAX_GARBAGE - garbageCount;
+        int available = MAX_GARBAGE - garbageCount; // 가비지 10줄까지
         if (available <= 0) {
             System.out.println("[WARN] Max garbage limit reached, clearing queue");
             incomingGarbageQueue.clear();
@@ -1091,6 +1152,8 @@ public class BoardLogic {
             addedLines++;
             garbageCount++;
         }
+        System.out.println(
+                "[DEBUG] Garbage applied: " + addedLines + " lines, remaining queue: " + incomingGarbageQueue.size());
 
         // ★ while 끝난 뒤, 남은 큐 길이 + 미리보기 한 번에 갱신
         if (onIncomingChanged != null) {
@@ -1099,32 +1162,6 @@ public class BoardLogic {
         fireGarbagePreviewChanged();
 
         System.out.println("[DEBUG] Garbage applied: " + addedLines + " lines, total garbage: " + garbageCount);
-    }
-
-    /**
-     * Simple garbage (no mask info) → convert to random-hole garbage masks
-     * and enqueue them so applyIncomingGarbage() can place them on the board.
-     */
-    private void addGarbageLines(int lines) {
-        if (lines <= 0)
-            return;
-
-        java.util.Random rand = new java.util.Random();
-
-        for (int i = 0; i < lines; i++) {
-            // pick a random hole (empty cell) in this row
-            int holeX = rand.nextInt(WIDTH);
-
-            int mask = 0;
-            for (int x = 0; x < WIDTH; x++) {
-                if (x == holeX)
-                    continue; // hole → 0
-                mask |= (1 << x); // filled → 1
-            }
-
-            // enqueue this garbage row; it’ll be applied in applyIncomingGarbage()
-            incomingGarbageQueue.offer(mask);
-        }
     }
 
     // ============================================
@@ -1138,6 +1175,9 @@ public class BoardLogic {
             incomingGarbageQueue.offer(mask);
         }
 
+        System.out.println(
+                "[DEBUG] Enqueued " + masks.length + " garbage masks, total pending: " + incomingGarbageQueue.size());
+
         if (onIncomingChanged != null) {
             onIncomingChanged.accept(incomingGarbageQueue.size());
         }
@@ -1145,6 +1185,10 @@ public class BoardLogic {
 
         // 진동 효과 트리거 (라인 수에 비례)
         triggerShakeEffect(masks.length);
+
+        // if (onIncomingLinesChanged != null) {
+        // onIncomingLinesChanged.accept(convertMasksToPreview(incomingGarbageQueue));
+        // }
 
         // 사운드 추가
         if (masks.length >= 3) {
@@ -1157,19 +1201,7 @@ public class BoardLogic {
                 "[DEBUG] Enqueued " + masks.length + " garbage masks, total pending: " + incomingGarbageQueue.size());
     }
 
-    private void updateGarbageFlagsOnClear(List<Integer> clearedRows) {
-        for (int y : clearedRows) {
-            if (y < 0 || y >= HEIGHT)
-                continue;
-
-            if (isGarbageRow[y]) {
-                garbageCount--;
-                System.out.println("[DEBUG] Garbage row cleared at y=" + y + ", remaining: " + garbageCount);
-            }
-            isGarbageRow[y] = false;
-        }
-    }
-
+    
     private boolean isRowEmpty(Color[] row) {
         for (Color c : row)
             if (c != null)
@@ -1533,6 +1565,19 @@ public class BoardLogic {
 
     public void setOnVisualEffect(java.util.function.BiConsumer<String, Integer> callback) {
         this.onVisualEffect = callback;
+    }
+
+    // 변환 헬퍼 메서드
+    private List<boolean[]> convertMasksToPreview(List<Integer> masks) {
+        List<boolean[]> preview = new ArrayList<>();
+        for (int mask : masks) {
+            boolean[] line = new boolean[WIDTH];
+            for (int x = 0; x < WIDTH; x++) {
+                line[x] = (mask & (1 << x)) != 0;
+            }
+            preview.add(line);
+        }
+        return preview;
     }
 
     // =====================================
