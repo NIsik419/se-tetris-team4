@@ -659,6 +659,10 @@ public class BoardLogic {
         comboCount = (now - lastClearTime < 3000) ? (comboCount + 1) : 1;
         lastClearTime = now;
 
+        if (onVisualEffect != null) {
+            onVisualEffect.accept("lineClear", lines);
+        }
+
         if (comboCount > 1) {
             int comboBonus = comboCount * 50;
             addScore(comboBonus);
@@ -667,6 +671,11 @@ public class BoardLogic {
             if (boardView != null) {
                 boardView.showCombo(comboBonus);
             }
+
+            if (onVisualEffect != null) {
+                onVisualEffect.accept("combo", comboCount);
+            }
+
             playComboSound(comboBonus);
         }
 
@@ -1514,6 +1523,16 @@ public class BoardLogic {
                 }
             }).start();
         }
+    }
+
+    public void setScore(int score) {
+        this.score = score;
+    }
+
+    private java.util.function.BiConsumer<String, Integer> onVisualEffect;
+
+    public void setOnVisualEffect(java.util.function.BiConsumer<String, Integer> callback) {
+        this.onVisualEffect = callback;
     }
 
     // =====================================
