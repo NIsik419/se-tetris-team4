@@ -74,6 +74,17 @@ public class UIOverlayManager {
         return selectedMode;
     }
 
+    public void setMode(String mode) {
+        this.selectedMode = mode;
+        if (modeSelector != null && !isServer) {
+            SwingUtilities.invokeLater(() -> {
+                modeSelector.setSelectedItem(mode);
+                modeSelector.setEnabled(false); // 클라이언트는 모드 변경 불가
+            });
+        }
+        System.out.println("[UI] Mode set to: " + mode);
+    }
+
     public void createOverlay() {
         overlayPanel = new JPanel();
         overlayPanel.setLayout(new BoxLayout(overlayPanel, BoxLayout.Y_AXIS));

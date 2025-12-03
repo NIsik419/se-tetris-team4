@@ -24,6 +24,7 @@ public class OnlineVersusPanel extends JPanel {
     private boolean opponentGameOver = false;
     private boolean myRestartReady = false;
     private boolean oppRestartReady = false;
+    private boolean isTimeLimitMode = false;
 
     private final JLabel myIncoming = new JLabel("0");
     private final JLabel oppIncoming = new JLabel("0");
@@ -108,6 +109,11 @@ public class OnlineVersusPanel extends JPanel {
                 // syncStart를 사용하여 서버 시간과 동기화
                 timeLimitManager.syncStart(startTime, TIME_LIMIT_SECONDS);
             }
+        });
+
+        networkManager.setOnModeChanged(mode -> {
+            this.selectedMode = mode;
+            System.out.println("[MODE] selectedMode updated to: " + mode);
         });
 
         networkManager.setOnOpponentRestartReady(() -> {
@@ -324,7 +330,7 @@ public class OnlineVersusPanel extends JPanel {
     }
 
     private void onNetworkMessage(Message msg) {
-        networkManager.handleMessage(msg, oppView, oppSidebar, myLogic, myView);
+        networkManager.handleMessage(msg, oppView, oppSidebar, myLogic, myView, oppLogic);
     }
 
     private void onStartGame() {
@@ -335,6 +341,7 @@ public class OnlineVersusPanel extends JPanel {
         }
 
         gameStarted = true;
+        isTimeLimitMode = selectedMode.startsWith("Time Limit");
         if (isServer) {
             networkManager.getClient().send(new Message(MessageType.GAME_START, null));
         }
@@ -347,7 +354,7 @@ public class OnlineVersusPanel extends JPanel {
             applyGameMode(selectedMode);
             overlayManager.hideOverlay();
 
-            if (selectedMode.startsWith("Time Limit")) {
+            if (isTimeLimitMode) {
                 long startTime = System.currentTimeMillis();
                 if (isServer) {
                     networkManager.sendTimeLimitStart(startTime);
@@ -386,6 +393,7 @@ public class OnlineVersusPanel extends JPanel {
         System.out.println("[RESTART] executeRestart called");
 
         gameStarted = false;
+        isTimeLimitMode = false;
         myRestartReady = false;
         oppRestartReady = false;
         System.out.println("[RESTART] gameStarted set to false");
@@ -434,16 +442,37 @@ public class OnlineVersusPanel extends JPanel {
     }
 
     private void onTimeLimitTimeout() {
+        System.out.println("[TIME_LIMIT] Timeout reached!");
         loop.stopLoop();
-        int myScore = myLogic.getScore();
-        int oppScore = oppLogic.getScore();
-        boolean iWon = myScore > oppScore;
 
-        networkManager.sendGameOver();
-        triggerGlassShatterEffect(myView, myLogic, () -> {
-            overlayManager.showTimeLimitGameOverOverlay(iWon, myScore, oppScore,
-                    myTotalLines, TIME_LIMIT_SECONDS);
+        int myScore = myLogic.getScore();
+
+        // 상대방에게 내 점수 전송
+        networkManager.sendMyScore(myScore);
+
+        System.out.println("[TIME_LIMIT] My score: " + myScore + ", waiting for opponent score...");
+
+        // 잠시 대기 후 비교 (상대방 점수 수신 대기)
+        Timer waitTimer = new Timer(500, e -> {
+            int oppScore = oppLogic.getScore();
+            boolean iWon = myScore > oppScore;
+
+            System.out.println(
+                    "[TIME_LIMIT] Final comparison - My: " + myScore + ", Opp: " + oppScore + ", iWon: " + iWon);
+
+            //  진 사람 보드에 glass shatter
+            BoardView targetView = iWon ? oppView : myView;
+            BoardLogic targetLogic = iWon ? oppLogic : myLogic;
+
+            triggerGlassShatterEffect(targetView, targetLogic, () -> {
+                overlayManager.showTimeLimitGameOverOverlay(iWon, myScore, oppScore,
+                        myTotalLines, TIME_LIMIT_SECONDS);
+            });
+
+            ((Timer) e.getSource()).stop();
         });
+        waitTimer.setRepeats(false);
+        waitTimer.start();
     }
 
     private void onConnectionLost() {
@@ -472,6 +501,8 @@ public class OnlineVersusPanel extends JPanel {
 
     private void onGameOver() {
         System.out.println("[GAMEOVER] onGameOver called");
+        System.out.println("[GAMEOVER] isTimeLimitMode=" + isTimeLimitMode);
+        System.out.println("[GAMEOVER] selectedMode=" + selectedMode);
         opponentGameOver = true;
 
         SwingUtilities.invokeLater(() -> {
@@ -483,8 +514,23 @@ public class OnlineVersusPanel extends JPanel {
 
             triggerGlassShatterEffect(oppView, oppLogic, () -> {
                 System.out.println("[GAMEOVER] Showing victory overlay");
-                overlayManager.showGameOverOverlay(false, myLogic.getScore(),
-                        oppLogic.getScore(), myTotalLines, gameStartTime);
+                System.out.println("[GAMEOVER] Final check - isTimeLimitMode=" + isTimeLimitMode);
+
+                // Time Limit 모드면 Time Limit 오버레이 표시
+                if (isTimeLimitMode) {
+                    int myScore = myLogic.getScore();
+                    int oppScore = oppLogic.getScore();
+                    boolean iWon = myScore > oppScore;
+
+                    System.out.println("[GAMEOVER] TIME LIMIT overlay: iWon=" + iWon);
+                    overlayManager.showTimeLimitGameOverOverlay(iWon, myScore, oppScore,
+                            myTotalLines, TIME_LIMIT_SECONDS);
+                } else {
+                    // 일반 모드 승리 오버레이
+                    System.out.println("[GAMEOVER] NORMAL overlay");
+                    overlayManager.showGameOverOverlay(false, myLogic.getScore(),
+                            oppLogic.getScore(), myTotalLines, gameStartTime);
+                }
             });
         });
     }

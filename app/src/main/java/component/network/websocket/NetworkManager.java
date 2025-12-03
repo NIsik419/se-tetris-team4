@@ -28,6 +28,8 @@ public class NetworkManager {
     private boolean oppRestartReady = false;
     private boolean isReconnecting = false;
 
+    private java.util.function.Consumer<String> onModeChanged;
+
     private final GameClient client;
     private BoardSyncAdapter adapter;
     private final boolean isServer;
@@ -44,6 +46,10 @@ public class NetworkManager {
     private final Runnable onConnectionLost;
     private final Runnable onGameOver;
     private Runnable onOpponentRestartReady;
+
+    public void setOnModeChanged(java.util.function.Consumer<String> callback) {
+        this.onModeChanged = callback;
+    }
 
     public void setOnOpponentRestartReady(Runnable callback) {
         this.onOpponentRestartReady = callback;
@@ -261,8 +267,16 @@ public class NetworkManager {
             return;
         }
 
+        if (isReconnecting) {
+            return;
+        }
+
         long now = System.currentTimeMillis();
         long timeSinceLastPong = now - lastPongTime;
+
+        if (timeSinceLastPong > 2000 && timeSinceLastPong < DISCONNECT_THRESHOLD) {
+            System.out.println("[CONNECTION] Warning: " + timeSinceLastPong + "ms since last pong");
+        }
 
         if (timeSinceLastPong > DISCONNECT_THRESHOLD) {
             System.err.println("[CONNECTION] Timeout detected: " + timeSinceLastPong + "ms");
@@ -275,7 +289,7 @@ public class NetworkManager {
     }
 
     public void handleMessage(Message msg, BoardView oppView, HUDSidebar oppSidebar,
-            BoardLogic myLogic, BoardView myView) {
+            BoardLogic myLogic, BoardView myView, BoardLogic oppLogic) {
         switch (msg.type) {
             case PLAYER_READY:
                 oppReady = true;
@@ -289,9 +303,14 @@ public class NetworkManager {
             case MODE_SELECT:
                 lastPongTime = System.currentTimeMillis();
                 String mode = (String) msg.data;
+                mode = mode.replace("\"", "").trim();
                 System.out.println("[MODE] Received mode from opponent: " + mode);
                 if (overlayManager != null) {
                     overlayManager.updateStatus("Mode: " + mode);
+                    overlayManager.setMode(mode);
+                }
+                if (onModeChanged != null) {
+                    onModeChanged.accept(mode);
                 }
                 break;
 
@@ -312,6 +331,25 @@ public class NetworkManager {
                         onTimeLimitStart.accept(startTime);
                     } catch (Exception e) {
                         System.err.println("[TIME_LIMIT] Failed to parse start time: " + e.getMessage());
+                    }
+                }
+                break;
+
+            case TIME_LIMIT_SCORE:
+                lastPongTime = System.currentTimeMillis();
+                // 상대방 점수 업데이트
+                if (msg.data != null && oppSidebar != null) {
+                    try {
+                        int oppScore = Integer.parseInt(msg.data.toString());
+                        System.out.println("[TIME_LIMIT_SCORE] Received opponent score: " + oppScore);
+                        SwingUtilities.invokeLater(() -> {
+                            oppLogic.setScore(oppScore); // 추가!
+                            if (oppSidebar != null) {
+                                oppSidebar.setScore(oppScore);
+                            }
+                        });
+                    } catch (Exception e) {
+                        System.err.println("[TIME_LIMIT_SCORE] Parse error: " + e.getMessage());
                     }
                 }
                 break;
@@ -353,12 +391,11 @@ public class NetworkManager {
                 break;
 
             case RESTART_READY:
-                if (overlayManager != null) {
-                    // OnlineVersusPanel에 알림
-                    SwingUtilities.invokeLater(() -> {
-                        // 콜백으로 oppRestartReady 설정
-                        handleOpponentRestartReady();
-                    });
+                if (overlayManager == null) {
+                    // 테스트 환경
+                    handleOpponentRestartReady();
+                } else {
+                    SwingUtilities.invokeLater(() -> handleOpponentRestartReady());
                 }
                 break;
 
@@ -611,23 +648,72 @@ public class NetworkManager {
     // ===============================
     // TEST SUPPORT
     // ===============================
-    public String test_loadRecentServerIp() { return loadRecentServerIp(); }
-    public void test_saveRecentServerIp(String ip) { saveRecentServerIp(ip); }
+    public String test_loadRecentServerIp() {
+        return loadRecentServerIp();
+    }
 
-    public long test_getLastPingTime() { return lastPingTime; }
-    public void test_setLastPingTime(long t) { lastPingTime = t; }
+    public void test_saveRecentServerIp(String ip) {
+        saveRecentServerIp(ip);
+    }
 
-    public long test_getLastPongTime() { return lastPongTime; }
-    public void test_setLastPongTime(long t) { lastPongTime = t; }
+    public long test_getLastPingTime() {
+        return lastPingTime;
+    }
 
-    public boolean test_isReady() { return isReady; }
-    public void test_setReady(boolean v) { isReady = v; }
+    public void test_setLastPingTime(long t) {
+        lastPingTime = t;
+    }
 
-    public boolean test_isOppReady() { return oppReady; }
-    public void test_setOppReady(boolean v) { oppReady = v; }
+    public long test_getLastPongTime() {
+        return lastPongTime;
+    }
 
-    public void test_handlePong() { handlePong(); }
-    public void test_checkConnection() { checkConnection(); }
+    public void test_setLastPongTime(long t) {
+        lastPongTime = t;
+    }
 
+    public boolean test_isReady() {
+        return isReady;
+    }
+
+    public void test_setReady(boolean v) {
+        isReady = v;
+    }
+
+    public boolean test_isOppReady() {
+        return oppReady;
+    }
+
+    public void test_setOppReady(boolean v) {
+        oppReady = v;
+    }
+
+    public void test_handlePong() {
+        long now = System.currentTimeMillis();
+        lastPongTime = now;
+        long rtt = now - lastPingTime;
+
+        if (rtt < LAG_THRESHOLD) {
+            lagLabel.setText("Ping: " + rtt + "ms");
+        } else {
+            lagLabel.setText("LAG: " + rtt + "ms");
+        }
+    }
+
+    public void test_setOnExecuteRestart(Runnable r) {
+        this.onExecuteRestart = r;
+    }
+
+    public void test_setIsReconnecting(boolean v) {
+        this.isReconnecting = v;
+    }
+
+    public void test_checkConnection() {
+        checkConnection();
+    }
+
+    public void sendMyScore(int score) {
+        client.send(new Message(MessageType.TIME_LIMIT_SCORE, score));
+    }
 
 }

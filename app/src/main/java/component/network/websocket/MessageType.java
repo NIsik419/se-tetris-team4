@@ -27,6 +27,7 @@ public enum MessageType {
     // === 타임 리밋 모드 (NEW!) ===
     TIME_LIMIT_START,      // 타임 리밋 시작 (서버 시간 전송)
     TIME_LIMIT_SYNC,       // 타이머 동기화 확인
+    TIME_LIMIT_SCORE,      // 타임 리밋 모드 점수 전송
     
     // === 네트워크 안정성 ===
     PING,
