@@ -151,8 +151,11 @@ public class NetworkManager {
                 e.printStackTrace();
             }
 
-            overlayManager.updateStatus("Connected! Waiting for opponent...");
-            checkReadyState();
+            // UI 업데이트는 SwingUtilities로
+            SwingUtilities.invokeLater(() -> {
+                overlayManager.updateStatus("Connected! Waiting for opponent...");
+                checkReadyState();
+            });
         });
         client.setOnDisconnected(() -> {
             System.out.println("[DEBUG] onDisconnected callback!");
@@ -304,10 +307,12 @@ public class NetworkManager {
             case PLAYER_READY:
                 oppReady = true;
                 lastPongTime = System.currentTimeMillis();
-                if (overlayManager != null) {
-                    overlayManager.updateStatus("Opponent ready!");
-                    checkReadyState();
-                }
+                SwingUtilities.invokeLater(() -> {
+                    if (overlayManager != null) {
+                        overlayManager.updateStatus("Opponent ready!");
+                        checkReadyState();
+                    }
+                });
                 break;
 
             case MODE_SELECT:
