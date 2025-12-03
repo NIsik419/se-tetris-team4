@@ -55,7 +55,8 @@ import versus.VersusFrame;
 
 public class MenuPanel extends JPanel {
 
-    public record VersusGameInfo(GameConfig p1Config, GameConfig p2Config, String gameRule) {}
+    public record VersusGameInfo(GameConfig p1Config, GameConfig p2Config, String gameRule) {
+    }
 
     public enum MenuItem {
         SETTINGS, SCOREBOARD, EXIT
@@ -421,7 +422,17 @@ public class MenuPanel extends JPanel {
         onlineP2PSub = makeSubPanel();
         onlineP2PSub.setAlignmentX(CENTER_ALIGNMENT);
 
-        onlineP2PSub.add(makeSubButton("NORMAL", () -> togglePanel(onlineNormalRow)));
+        onlineP2PSub.add(makeSubButton("Start", () -> {
+            stopMenuBGM();
+
+            GameConfig config = new GameConfig(
+                    GameConfig.Mode.VERSUS,
+                    GameConfig.Difficulty.EASY,
+                    false);
+
+            // 바로 시작
+            onStart.accept(config);
+        }));
         onlineP2PSub.add(Box.createVerticalStrut(7));
 
         onlineNormalRow = makeOnlineP2PRowFor(GameConfig.Mode.CLASSIC);
@@ -429,20 +440,20 @@ public class MenuPanel extends JPanel {
         onlineP2PSub.add(onlineNormalRow);
         onlineP2PSub.add(Box.createVerticalStrut(7));
 
-        onlineP2PSub.add(makeSubButton("ITEM", () -> togglePanel(onlineItemRow)));
-        onlineP2PSub.add(Box.createVerticalStrut(7));
+        // onlineP2PSub.add(makeSubButton("ITEM", () -> togglePanel(onlineItemRow)));
+        // onlineP2PSub.add(Box.createVerticalStrut(7));
 
-        onlineItemRow = makeOnlineP2PRowFor(GameConfig.Mode.ITEM);
-        onlineItemRow.setVisible(false);
-        onlineP2PSub.add(onlineItemRow);
-        onlineP2PSub.add(Box.createVerticalStrut(7));
+        // onlineItemRow = makeOnlineP2PRowFor(GameConfig.Mode.ITEM);
+        // onlineItemRow.setVisible(false);
+        // onlineP2PSub.add(onlineItemRow);
+        // onlineP2PSub.add(Box.createVerticalStrut(7));
 
-        onlineP2PSub.add(makeSubButton("TIME", () -> togglePanel(onlineTimeRow)));
-        onlineP2PSub.add(Box.createVerticalStrut(7));
+        // onlineP2PSub.add(makeSubButton("TIME", () -> togglePanel(onlineTimeRow)));
+        // onlineP2PSub.add(Box.createVerticalStrut(7));
 
-        onlineTimeRow = makeOnlineP2PRowFor(GameConfig.Mode.TIME_ATTACK);
-        onlineTimeRow.setVisible(false);
-        onlineP2PSub.add(onlineTimeRow);
+        // onlineTimeRow = makeOnlineP2PRowFor(GameConfig.Mode.TIME_ATTACK);
+        // onlineTimeRow.setVisible(false);
+        // onlineP2PSub.add(onlineTimeRow);
 
         onlineP2PSub.setVisible(false);
         multiplayerSub.add(onlineP2PSub);
@@ -541,20 +552,17 @@ public class MenuPanel extends JPanel {
         JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         row.setOpaque(false);
         row.setAlignmentX(LEFT_ALIGNMENT);
-        row.add(makeGlassSmallButton("START", () -> {
-            stopMenuBGM();
-            // GameConfig 생성 (VERSUS 모드)
-            GameConfig config = new GameConfig(
-                    GameConfig.Mode.VERSUS, // P2P 대전 모드
-                    GameConfig.Difficulty.EASY, // 기본 난이도
-                    false // colorBlindMode
-            );
 
-            // GameLauncher의 onGameConfigSelect 콜백 호출
-            onStart.accept(config);
-        }));
+        // stopMenuBGM();
+        // GameConfig config = new GameConfig(
+        //         GameConfig.Mode.VERSUS,
+        //         GameConfig.Difficulty.EASY,
+        //         false);
 
-        return row;
+        // // GameLauncher의 콜백 즉시 실행 → 자동 시작
+        // onStart.accept(config);
+
+        return row; // 버튼 없이 row만 리턴
     }
 
     // E/M/H row for ITEM single-player (explicit per request)
@@ -941,7 +949,7 @@ public class MenuPanel extends JPanel {
                 setBorder(BorderFactory.createEmptyBorder(10, 28, 10, 28));
                 setFocusPainted(false);
                 setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-                setFocusable(false);  
+                setFocusable(false);
                 t.start();
                 // 🔹 마우스 리스너 하나로 통합 + 선택 상태 동기화
                 addMouseListener(new MouseAdapter() {
@@ -1030,7 +1038,7 @@ public class MenuPanel extends JPanel {
                 setBorder(BorderFactory.createEmptyBorder(8, 20, 8, 20));
                 setFocusPainted(false);
                 setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-                setFocusable(false);        
+                setFocusable(false);
                 t.start();
                 addMouseListener(new MouseAdapter() {
                     @Override
@@ -1128,7 +1136,7 @@ public class MenuPanel extends JPanel {
                 setBorder(BorderFactory.createEmptyBorder(5, 14, 5, 14));
                 setFocusPainted(false);
                 setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-                setFocusable(false);    
+                setFocusable(false);
                 t.start();
                 addMouseListener(new MouseAdapter() {
                     @Override
