@@ -502,6 +502,15 @@ public class OnlineVersusPanel extends JPanel {
             lagLabel.setText("DISCONNECTED");
             lagLabel.setForeground(Color.RED);
 
+            if (!gameStarted) {
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Waiting for opponent to connect...\nPlease wait.",
+                        "No Opponent",
+                        JOptionPane.INFORMATION_MESSAGE);
+                return; // 재연결 시도하지 않음
+            }
+
             int choice = JOptionPane.showConfirmDialog(
                     this,
                     "Connection to opponent lost.\nAttempt to reconnect?", // 수정

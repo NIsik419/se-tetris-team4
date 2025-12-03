@@ -66,7 +66,7 @@ public class GameFrame extends JFrame {
 
                 showingDialog = true;
 
-                // ⭐ PausePanel이 열려있으면 닫기
+                //  PausePanel이 열려있으면 닫기
                 if (activePanel instanceof BoardPanel) {
                     BoardPanel bp = (BoardPanel) activePanel;
                     bp.hidePausePanel(); // 이 메서드를 BoardPanel에 추가해야 함
@@ -200,7 +200,7 @@ public class GameFrame extends JFrame {
             @Override
             public void windowIconified(WindowEvent e) {
                 if (!showingDialog) {
-                    pauseGame();
+                    //pauseGame();
                 }
             }
 
