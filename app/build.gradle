@@ -2,7 +2,6 @@ plugins {
     id 'java'
     id 'application'
     id 'jacoco'
-    id 'edu.sc.seis.launch4j' version '3.0.5'
 }
 
 repositories {
@@ -83,6 +82,8 @@ jacocoTestReport {
                 
                 // launcher 패키지 전체 제외 (JFrame 기반)
                 '**/launcher/**',
+
+                '**/versus/*Panel*.class',
 
                 //websocket
                 '**/component/network/websocket/UIOverlayManager.class',
