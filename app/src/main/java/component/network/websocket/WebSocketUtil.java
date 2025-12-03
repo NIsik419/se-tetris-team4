@@ -7,8 +7,10 @@ public class WebSocketUtil {
     private static final Gson gson = new GsonBuilder()
             .registerTypeAdapter(Color.class, new JsonSerializer<Color>() {
                 @Override
-                public JsonElement serialize(Color c, java.lang.reflect.Type typeOfSrc, JsonSerializationContext context) {
-                    if (c == null) return JsonNull.INSTANCE;
+                public JsonElement serialize(Color c, java.lang.reflect.Type typeOfSrc,
+                        JsonSerializationContext context) {
+                    if (c == null)
+                        return JsonNull.INSTANCE;
                     JsonObject obj = new JsonObject();
                     obj.addProperty("r", c.getRed());
                     obj.addProperty("g", c.getGreen());
@@ -19,7 +21,8 @@ public class WebSocketUtil {
             })
             .registerTypeAdapter(Color.class, new JsonDeserializer<Color>() {
                 @Override
-                public Color deserialize(JsonElement json, java.lang.reflect.Type typeOfT, JsonDeserializationContext context)
+                public Color deserialize(JsonElement json, java.lang.reflect.Type typeOfT,
+                        JsonDeserializationContext context)
                         throws JsonParseException {
                     JsonObject obj = json.getAsJsonObject();
                     int r = obj.get("r").getAsInt();
@@ -36,6 +39,15 @@ public class WebSocketUtil {
     }
 
     public static <T> T fromJson(String json, Class<T> clazz) {
+
+        // 문자열 JSON unwrap 처리
+        if (json != null &&
+                json.startsWith("\"") && json.endsWith("\"")) {
+            json = json.substring(1, json.length() - 1)
+                    .replace("\\\"", "\"");
+        }
+
         return gson.fromJson(json, clazz);
     }
+
 }
