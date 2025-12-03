@@ -1,113 +1,147 @@
-// package component.items;
+package component.items;
 
-// import logic.BoardLogic;
-// import org.junit.Before;
-// import org.junit.Test;
+import blocks.Block;
+import logic.BoardLogic;
+import logic.GameState;
+import org.junit.Before;
+import org.junit.Test;
 
-// import java.awt.*;
-// import java.util.concurrent.CountDownLatch;
-// import java.util.concurrent.TimeUnit;
+import java.awt.Color;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-// import static org.junit.Assert.*;
+import static org.junit.Assert.*;
 
-// /**
-//  * 💥 ColorBombItemTest
-//  * ---------------------
-//  * - 같은 색상의 블록을 전부 제거
-//  * - fadeLayer 잔상 남기기
-//  * - 중력 및 점수 반영 확인
-//  */
-// public class ColorBombItemTest {
+class DummyBlock extends Block {
+    public DummyBlock(Color color, int[][] shape) {
+        super(color, shape);
+    }
+}
 
-//     private BoardLogic logic;
 
-//     @Before
-//     public void setup() {
-//         logic = new BoardLogic(score -> {
-//         });
-//         logic.setOnFrameUpdate(() -> {
-//         });
-//         Color[][] board = logic.getBoard();
+public class ColorBombItemTest {
 
-//         // 윗절반 RED, 아래절반 BLUE로 채움
-//         for (int y = 0; y < BoardLogic.HEIGHT / 2; y++)
-//             for (int x = 0; x < BoardLogic.WIDTH; x++)
-//                 board[y][x] = Color.RED;
+    private BoardLogic logic;
+    private ColorBombItem item;
 
-//         for (int y = BoardLogic.HEIGHT / 2; y < BoardLogic.HEIGHT; y++)
-//             for (int x = 0; x < BoardLogic.WIDTH; x++)
-//                 board[y][x] = Color.BLUE;
-//     }
+    @Before
+    public void setUp() {
+        logic = new BoardLogic(score -> {});
+        logic.setItemMode(true);
+        logic.setOnFrameUpdate(() -> {});
 
-//     @Test
-//     public void testActivate_RemovesMatchingColorAndLeavesFade() throws Exception {
-//         BlockStub base = new BlockStub(Color.RED, new int[][] { { 1 } });
-//         ColorBombItem bomb = new ColorBombItem(base);
-//         bomb.setTestMode(true); // ✅ 즉시 적용 모드
-//         logic.setItemMode(true);
+        Block base = new DummyBlock(Color.RED, new int[][]{
+                {1, 1},
+                {1, 1}
+        });
 
-//         int beforeScore = logic.getScore();
-//         CountDownLatch latch = new CountDownLatch(1);
+        item = new ColorBombItem(base);
+        item.setTestMode(true);
+    }
 
-//         bomb.activate(logic, latch::countDown);
-//         boolean finished = latch.await(2, TimeUnit.SECONDS);
-//         assertTrue("ColorBombItem should finish within timeout", finished);
+    // ============================================================
+    // 1) testMode = true (모든 로직 즉시 실행)
+    // ============================================================
+    @Test
+    public void testActivate_Synchronous_TestMode() {
+        Color[][] board = logic.getBoard();
 
-//         // === fadeLayer 잔상 확인 ===
-//         Color[][] fade = logic.getFadeLayer();
-//         boolean hasFade = false;
-//         for (Color[] row : fade) {
-//             for (Color c : row) {
-//                 if (c != null) {
-//                     hasFade = true;
-//                     break;
-//                 }
-//             }
-//             if (hasFade)
-//                 break;
-//         }
-//         assertTrue("Fade layer should contain remnants", hasFade);
+        // RED만 깔기
+        for (int y = GameState.HEIGHT - 5; y < GameState.HEIGHT; y++)
+            for (int x = 0; x < GameState.WIDTH; x++)
+                board[y][x] = Color.RED;
 
-//         // === 점수 상승 확인 ===
-//         assertTrue("Score should increase after activation", logic.getScore() > beforeScore);
+        int before = logic.getScore();
+        item.activate(logic, null);
+        int after = logic.getScore();
 
-//         // === 중력 적용 확인 ===
-//         Color[][] board = logic.getBoard();
-//         boolean gravityApplied = false;
-//         for (int y = BoardLogic.HEIGHT - 2; y < BoardLogic.HEIGHT; y++) {
-//             for (int x = 0; x < BoardLogic.WIDTH; x++) {
-//                 if (board[y][x] == null) {
-//                     gravityApplied = true;
-//                     break;
-//                 }
-//             }
-//         }
-//         //assertTrue("Gravity should have been applied after clearing", gravityApplied);
-//     }
+        assertTrue("Score should increase when blocks are removed", after > before);
 
-//     /** ✅ 빈 보드에서도 문제없이 종료되는지 확인 */
-//     @Test
-//     public void testActivate_EmptyBoard_NoCrash() throws Exception {
-//         // 완전 빈 보드로 설정
-//         Color[][] board = logic.getBoard();
-//         for (int y = 0; y < BoardLogic.HEIGHT; y++)
-//             for (int x = 0; x < BoardLogic.WIDTH; x++)
-//                 board[y][x] = null;
+        for (int y = GameState.HEIGHT - 5; y < GameState.HEIGHT; y++)
+            for (int x = 0; x < GameState.WIDTH; x++)
+                assertNull("All red blocks should be removed", board[y][x]);
+    }
 
-//         BlockStub base = new BlockStub(Color.RED, new int[][] { { 1 } });
-//         ColorBombItem bomb = new ColorBombItem(base);
+    // ============================================================
+    // 2) 비동기 모드 + shake + gravity + clearLines 콜백 기다리기
+    // ============================================================
+    @Test
+    public void testActivate_AsyncMode_Complete() throws Exception {
+        Block base = new DummyBlock(Color.BLUE, new int[][]{
+                {1}
+        });
+        ColorBombItem asyncItem = new ColorBombItem(base);
+        asyncItem.setTestMode(false);
 
-//         CountDownLatch latch = new CountDownLatch(1);
-//         bomb.activate(logic, latch::countDown);
+        Color[][] board = logic.getBoard();
 
-//         boolean finished = latch.await(2, TimeUnit.SECONDS);
-//         assertTrue("Should safely complete on empty board", finished);
-//     }
+        // BLUE로 채우기
+        for (int y = GameState.HEIGHT - 3; y < GameState.HEIGHT; y++)
+            for (int x = 0; x < GameState.WIDTH; x++)
+                board[y][x] = Color.BLUE;
 
-//     // === 테스트 전용 Block Stub ===
-//     private static class BlockStub extends blocks.Block {
-//         BlockStub(Color color, int[][] shape) {
-//             super(color, shape);
-//         }
-//     }
-// }
+        AtomicBoolean done = new AtomicBoolean(false);
+        Thread t = new Thread(() -> asyncItem.activate(logic, () -> done.set(true)));
+        t.start();
+
+        long start = System.currentTimeMillis();
+        while (!done.get() && System.currentTimeMillis() - start < 3000) {
+            Thread.sleep(20);
+        }
+
+        assertTrue("Callback should be called within 3 seconds", done.get());
+        assertTrue("Score should increase", logic.getScore() > 0);
+    }
+
+    // ============================================================
+    // 3) 특정 색만 제거되는지 테스트
+    // ============================================================
+    @Test
+    public void testColorSelectiveRemoval() {
+        Color[][] board = logic.getBoard();
+
+        // RED + BLUE 섞어 놓기
+        board[19][0] = Color.RED;
+        board[19][1] = Color.BLUE;
+        board[19][2] = Color.RED;
+        board[19][3] = Color.BLUE;
+
+        // bombColor = RED
+        Block base = new DummyBlock(Color.RED, new int[][]{{1}});
+        ColorBombItem testItem = new ColorBombItem(base);
+        testItem.setTestMode(true);
+
+        testItem.activate(logic, null);
+
+        assertNull("RED block removed", board[19][0]);
+        assertEquals("BLUE block preserved", Color.BLUE, board[19][1]);
+        assertNull("RED block removed", board[19][2]);
+        assertEquals("BLUE block preserved", Color.BLUE, board[19][3]);
+    }
+
+    // ============================================================
+    // 4) Empty board 안정성 테스트
+    // ============================================================
+    @Test
+    public void testActivate_EmptyBoard_NoError() {
+        Color[][] board = logic.getBoard();
+
+        for (int y = 0; y < GameState.HEIGHT; y++)
+            for (int x = 0; x < GameState.WIDTH; x++)
+                board[y][x] = null;
+
+        AtomicBoolean done = new AtomicBoolean(false);
+        item.activate(logic, () -> done.set(true));
+
+        assertTrue("Should complete safely even if board is empty", done.get());
+    }
+
+    // ============================================================
+    // 5) onComplete가 null이어도 NPE 없이 동작해야 함
+    // ============================================================
+    @Test
+    public void testActivate_NoCallback_NoError() {
+        item.activate(logic, null);
+
+        assertTrue("Execution should not crash even if onComplete is null", true);
+    }
+}

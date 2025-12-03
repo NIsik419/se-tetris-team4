@@ -7,13 +7,13 @@ import logic.BoardLogic;
 
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Collections;
 
 import javax.swing.JComponent;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
-
-import java.awt.*;
-import java.util.List;
 
 import blocks.Block;
 
@@ -27,7 +27,9 @@ import blocks.Block;
  */
 public class VersusGameManager {
 
-    /** 게임 종료 결과를 VersusPanel 에 알려주기 위한 DTO */
+    // 보드 가로 칸 수 (비트마스크 → boolean[] 변환용)
+    private static final int BOARD_COLS = 10;
+
     public static class GameResult {
         public final Player.Id winner;   // 무승부면 null
         public final Player.Id loser;    // 무승부면 null
@@ -51,29 +53,36 @@ public class VersusGameManager {
     private final boolean isAIMode;
 
     // HUD 업데이트 콜백 (각각 "상대에게서 들어올 예정" 줄 수 표시)
-    private final IntConsumer onP1PendingChanged; // P1 라벨 값 갱신
-    private final IntConsumer onP2PendingChanged; // P2 라벨 값 갱신
+    private final IntConsumer onP1PendingChanged;
+    private final IntConsumer onP2PendingChanged;
 
     private final Consumer<List<Block>> onP1Next;
     private final Consumer<List<Block>> onP2Next;
+
+    // 🔹 가비지 프리뷰(미니보드) 업데이트 콜백
+    private final Consumer<List<boolean[]>> onP1GarbagePreview;
+    private final Consumer<List<boolean[]>> onP2GarbagePreview;
 
     private final Runnable backToMenu;
     private final Consumer<GameResult> onGameFinished;
 
     private boolean finished = false;
 
+    // 🔹 “아직 상대 보드에 적용되지 않은” 가비지 미리보기 버퍼
+    private final List<boolean[]> p1GarbagePreviewBuffer = new ArrayList<>();
+    private final List<boolean[]> p2GarbagePreviewBuffer = new ArrayList<>();
+
     public VersusGameManager(
-            // 게임 설정(필요 시 난이도/모드 주입)
             GameConfig p1Config,
             GameConfig p2Config,
-            // 메뉴로 돌아가기 콜백 (두 보드 공용)
             Runnable backToMenu,
-            // HUD 갱신 콜백
             IntConsumer onP1PendingChanged,
             IntConsumer onP2PendingChanged,
             Consumer<List<Block>> onP1Next,
             Consumer<List<Block>> onP2Next,
-            Consumer<GameResult> onGameFinished) {
+            Consumer<GameResult> onGameFinished,
+            Consumer<List<boolean[]>> onP1GarbagePreview,
+            Consumer<List<boolean[]>> onP2GarbagePreview) {
 
         this.onP1PendingChanged = onP1PendingChanged;
         this.onP2PendingChanged = onP2PendingChanged;
@@ -82,6 +91,9 @@ public class VersusGameManager {
         this.backToMenu = backToMenu;
         this.onGameFinished = onGameFinished;
 
+        this.onP1GarbagePreview = onP1GarbagePreview;
+        this.onP2GarbagePreview = onP2GarbagePreview;
+
         // P2가 AI인지 체크
         this.isAIMode = p2Config.mode() == GameConfig.Mode.AI;
 
@@ -89,20 +101,31 @@ public class VersusGameManager {
         p1 = new Player(Player.Id.P1, p1Config, new Player.Events(), backToMenu, false);
         p2 = new Player(Player.Id.P2, p2Config, new Player.Events(), backToMenu, isAIMode);
 
-        // ─── 이벤트 배선 (마스크 기반 공격만 사용) ───
+        // ─── 이벤트 배선 (마스크 기반 공격) ───
         p1.events.onLinesClearedWithMasks = masks -> {
-            if (masks == null || masks.length < 2)
-                return; // 규칙: 2줄 이상만
+            if (masks == null || masks.length < 2) return; // 규칙: 2줄 이상만
+
+            // 상대에게 가비지 마스크 큐 전송
             p2.enqueueGarbageMasks(masks);
             safeHudUpdateP2();
+
+            // ▶ P2 입장 미리보기 버퍼에 이번 공격을 추가
+            p2GarbagePreviewBuffer.addAll(toPreviewList(masks));
+            notifyP2GarbagePreview(new ArrayList<>(p2GarbagePreviewBuffer));
+
             System.out.printf("[P1->P2] send masks %d%n", masks.length);
         };
 
         p2.events.onLinesClearedWithMasks = masks -> {
-            if (masks == null || masks.length < 2)
-                return;
+            if (masks == null || masks.length < 2) return;
+
             p1.enqueueGarbageMasks(masks);
             safeHudUpdateP1();
+
+            // P1 입장 미리보기 버퍼에 이번 공격을 추가
+            p1GarbagePreviewBuffer.addAll(toPreviewList(masks));
+            notifyP1GarbagePreview(new ArrayList<>(p1GarbagePreviewBuffer));
+
             System.out.printf("[P2->P1] send masks %d%n", masks.length);
         };
 
@@ -113,6 +136,33 @@ public class VersusGameManager {
         // 게임 오버 콜백
         p1.events.onGameOver = score -> onPlayerOver(Player.Id.P1);
         p2.events.onGameOver = score -> onPlayerOver(Player.Id.P2);
+
+        // === 각 보드의 BoardLogic과 HUD/미리보기 콜백 연결 ===
+        BoardPanel p1Panel = (BoardPanel) p1.getComponent();
+        BoardLogic p1Logic = p1Panel.getLogic();
+        p1Logic.setOnIncomingChanged(count -> {
+            if (onP1PendingChanged != null) {
+                onP1PendingChanged.accept(count);
+            }
+        });
+        // ▶ P1 보드에 가비지가 “실제로 적용된 뒤”에는 미리보기 리셋
+        p1Logic.setOnGarbageApplied(() -> {
+            p1GarbagePreviewBuffer.clear();
+            notifyP1GarbagePreview(Collections.emptyList());
+        });
+
+        BoardPanel p2Panel = (BoardPanel) p2.getComponent();
+        BoardLogic p2Logic = p2Panel.getLogic();
+        p2Logic.setOnIncomingChanged(count -> {
+            if (onP2PendingChanged != null) {
+                onP2PendingChanged.accept(count);
+            }
+        });
+        // ▶ P2 보드에 가비지가 “실제로 적용된 뒤”에는 미리보기 리셋
+        p2Logic.setOnGarbageApplied(() -> {
+            p2GarbagePreviewBuffer.clear();
+            notifyP2GarbagePreview(Collections.emptyList());
+        });
 
         // AI 초기화
         if (isAIMode) {
@@ -129,11 +179,45 @@ public class VersusGameManager {
         // 초기 HUD 갱신
         safeHudUpdateP1();
         safeHudUpdateP2();
+        notifyP1GarbagePreview(Collections.emptyList());
+        notifyP2GarbagePreview(Collections.emptyList());
     }
 
     /**
-     * AI 초기화 및 타이머 시작
+     * int 비트마스크 배열을 미니보드용 List<boolean[]> 로 변환
+     * - 각 int 하나가 한 줄
+     * - 하위 10비트(0~9)를 보드 가로 10칸으로 사용 (1=블록, 0=빈칸)
      */
+    private static List<boolean[]> toPreviewList(int[] masks) {
+        if (masks == null || masks.length == 0) {
+            return Collections.emptyList();
+        }
+        List<boolean[]> list = new ArrayList<>(masks.length);
+        for (int m : masks) {
+            boolean[] row = new boolean[BOARD_COLS];
+            for (int c = 0; c < BOARD_COLS; c++) {
+                row[c] = ((m >> c) & 1) != 0; // 비트가 1이면 블록 있음
+            }
+            list.add(row);
+        }
+        return list;
+    }
+
+    // ─── 가비지 프리뷰 콜백 래퍼 ───
+    private void notifyP1GarbagePreview(List<boolean[]> lines) {
+        if (onP1GarbagePreview != null) {
+            onP1GarbagePreview.accept(lines);
+        }
+    }
+
+    private void notifyP2GarbagePreview(List<boolean[]> lines) {
+        if (onP2GarbagePreview != null) {
+            onP2GarbagePreview.accept(lines);
+        }
+    }
+
+    // ================== 이하 기존 코드 그대로 ==================
+
     private void initializeAI(GameConfig p2Config) {
         BoardPanel p2Panel = (BoardPanel) p2.getComponent();
         BoardLogic p2Logic = p2Panel.getLogic();
@@ -277,14 +361,8 @@ public class VersusGameManager {
             aiPlayer = null;
         }
 
-        // P1, P2 정리
-        if (p1 != null) {
-            p1.cleanup();
-        }
-
-        if (p2 != null) {
-            p2.cleanup();
-        }
+        p1.cleanup();
+        p2.cleanup();
 
         System.out.println("[VersusGameManager] Cleanup completed");
     }

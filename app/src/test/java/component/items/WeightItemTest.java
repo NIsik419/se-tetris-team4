@@ -1,78 +1,100 @@
 package component.items;
 
 import logic.BoardLogic;
+import logic.GameState;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.awt.*;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
+import java.awt.Color;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.*;
 
-/**
- * 🧱 WeightItemTest
- * ------------------
- * - 착지 시 아래 줄 제거
- * - 중력 및 점수 반영 확인
- */
 public class WeightItemTest {
 
     private BoardLogic logic;
+    private WeightItem item;
 
     @Before
-    public void setup() {
+    public void setUp() {
         logic = new BoardLogic(score -> {});
+        logic.setItemMode(true);
         logic.setOnFrameUpdate(() -> {});
+
+        item = new WeightItem();
+        item.setTestMode(true);
+        
+    }
+
+    // ===========================
+    // Sync Mode Test (즉시 처리)
+    // ===========================
+    @Test
+    public void testActivate_SyncMode() {
         Color[][] board = logic.getBoard();
 
-        // 하단 블록 채워서 테스트 준비
-        for (int y = BoardLogic.HEIGHT - 5; y < BoardLogic.HEIGHT; y++) {
-            for (int x = 0; x < BoardLogic.WIDTH; x++) {
-                board[y][x] = Color.GRAY;
+        // weight 아래 색 채우기
+        for (int dx = 0; dx < item.width(); dx++) {
+            int bx = logic.getX() + dx;
+            for (int y = 0; y < GameState.HEIGHT; y++) {
+                board[y][bx] = Color.YELLOW;
+            }
+        }
+
+        item.activate(logic, null);
+
+        // weight 본체가 바닥에 있는지 확인
+        int h = item.height();
+        int dropY = GameState.HEIGHT - h;
+
+        for (int dy = 0; dy < h; dy++) {
+            for (int dx = 0; dx < item.width(); dx++) {
+                int bx = logic.getX() + dx;
+                assertEquals(item.getColor(), board[dropY + dy][bx]);
             }
         }
     }
+
+    // ===========================
+    // 비동기 모드
+    // ===========================
+    @Test
+    public void testActivate_AsyncMode() throws Exception {
+        WeightItem asyncItem = new WeightItem();
+        asyncItem.setTestMode(false);
+        
+
+        Color[][] board = logic.getBoard();
+
+        for (int y = 0; y < GameState.HEIGHT; y++)
+            for (int x = 0; x < GameState.WIDTH; x++)
+                board[y][x] = Color.CYAN;
+
+        AtomicBoolean done = new AtomicBoolean(false);
+        Thread t = new Thread(() -> asyncItem.activate(logic, () -> done.set(true)));
+        t.start();
+
+        long start = System.currentTimeMillis();
+        while (!done.get() && System.currentTimeMillis() - start < 3000) {
+            Thread.sleep(20);
+        }
+
+        assertTrue(done.get());
+    }
+
+    // ===========================
+    // 빈 보드에서도 안정성
+    // ===========================
+    @Test
+    public void testEmptyBoard_NoError() {
+        Color[][] board = logic.getBoard();
+        for (int y = 0; y < GameState.HEIGHT; y++)
+            for (int x = 0; x < GameState.WIDTH; x++)
+                board[y][x] = null;
+
+        AtomicBoolean done = new AtomicBoolean(false);
+        item.activate(logic, () -> done.set(true));
+
+        assertTrue(done.get());
+    }
 }
-//     @Test
-//     public void testActivate_ClearsBelowAndAppliesGravity() throws Exception {
-//         WeightItem weight = new WeightItem();
-//         weight.setTestMode(true); // 테스트 모드 빠른 실행
-
-//         int prevScore = logic.getScore();
-//         CountDownLatch latch = new CountDownLatch(1);
-
-//         weight.activate(logic, latch::countDown);
-
-//         // 최대 2초간 대기 (비동기 중력 처리 기다림)
-//         boolean finished = latch.await(2, TimeUnit.SECONDS);
-//         //assertTrue("WeightItem should complete within timeout", finished);
-
-//         Color[][] board = logic.getBoard();
-
-//         // 1️⃣ 아래쪽이 비었는지 확인
-//         boolean belowCleared = false;
-//         for (int y = BoardLogic.HEIGHT - 2; y < BoardLogic.HEIGHT; y++) {
-//             for (int x = 0; x < BoardLogic.WIDTH; x++) {
-//                 if (board[y][x] == null) {
-//                     belowCleared = true;
-//                     break;
-//                 }
-//             }
-//         }
-//         assertTrue("Blocks directly below WeightItem should be cleared", belowCleared);
-
-//         // 2️⃣ 중력 적용 여부 확인
-//         boolean gravityApplied = false;
-//         for (int y = BoardLogic.HEIGHT - 5; y < BoardLogic.HEIGHT; y++) {
-//             for (int x = 0; x < BoardLogic.WIDTH; x++) {
-//                 if (board[y][x] == null) {
-//                     gravityApplied = true;
-//                     break;
-//                 }
-//             }
-//         }
-//         assertTrue("Gravity should have been applied after clearing", gravityApplied);
-//         //점수 추가 x
-//     }
-// }

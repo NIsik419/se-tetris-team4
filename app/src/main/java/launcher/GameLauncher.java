@@ -177,24 +177,6 @@ public class GameLauncher {
                     JOptionPane.YES_NO_OPTION);
             isServer = (res == JOptionPane.YES_OPTION);
 
-            // ⭐ 서버만 게임 룰 선택
-            if (isServer) {
-                String[] gameRules = { "Normal", "Item", "Time Limit (3min)" };
-                selectedGameRule = (String) JOptionPane.showInputDialog(
-                        null,
-                        "게임 룰을 선택하세요:",
-                        "게임 룰 선택",
-                        JOptionPane.QUESTION_MESSAGE,
-                        null,
-                        gameRules,
-                        gameRules[0]);
-
-                if (selectedGameRule == null) {
-                    selectedGameRule = "Normal";
-                }
-
-                System.out.println("[LAUNCHER] Selected game rule: " + selectedGameRule);
-            }
         }
 
         startGame(config, p2pMode, isServer, selectedGameRule);

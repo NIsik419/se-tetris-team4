@@ -28,6 +28,8 @@ public class NetworkManager {
     private boolean oppRestartReady = false;
     private boolean isReconnecting = false;
 
+    private java.util.function.Consumer<String> onModeChanged;
+
     private final GameClient client;
     private BoardSyncAdapter adapter;
     private final boolean isServer;
@@ -44,6 +46,10 @@ public class NetworkManager {
     private final Runnable onConnectionLost;
     private final Runnable onGameOver;
     private Runnable onOpponentRestartReady;
+
+    public void setOnModeChanged(java.util.function.Consumer<String> callback) {
+        this.onModeChanged = callback;
+    }
 
     public void setOnOpponentRestartReady(Runnable callback) {
         this.onOpponentRestartReady = callback;
@@ -261,8 +267,16 @@ public class NetworkManager {
             return;
         }
 
+        if (isReconnecting) {
+            return;
+        }
+
         long now = System.currentTimeMillis();
         long timeSinceLastPong = now - lastPongTime;
+
+        if (timeSinceLastPong > 2000 && timeSinceLastPong < DISCONNECT_THRESHOLD) {
+            System.out.println("[CONNECTION] Warning: " + timeSinceLastPong + "ms since last pong");
+        }
 
         if (timeSinceLastPong > DISCONNECT_THRESHOLD) {
             System.err.println("[CONNECTION] Timeout detected: " + timeSinceLastPong + "ms");
@@ -275,7 +289,7 @@ public class NetworkManager {
     }
 
     public void handleMessage(Message msg, BoardView oppView, HUDSidebar oppSidebar,
-            BoardLogic myLogic, BoardView myView) {
+            BoardLogic myLogic, BoardView myView, BoardLogic oppLogic) {
         switch (msg.type) {
             case PLAYER_READY:
                 oppReady = true;
@@ -289,9 +303,14 @@ public class NetworkManager {
             case MODE_SELECT:
                 lastPongTime = System.currentTimeMillis();
                 String mode = (String) msg.data;
+                mode = mode.replace("\"", "").trim();
                 System.out.println("[MODE] Received mode from opponent: " + mode);
                 if (overlayManager != null) {
                     overlayManager.updateStatus("Mode: " + mode);
+                    overlayManager.setMode(mode);
+                }
+                if (onModeChanged != null) {
+                    onModeChanged.accept(mode);
                 }
                 break;
 
@@ -312,6 +331,85 @@ public class NetworkManager {
                         onTimeLimitStart.accept(startTime);
                     } catch (Exception e) {
                         System.err.println("[TIME_LIMIT] Failed to parse start time: " + e.getMessage());
+                    }
+                }
+                break;
+
+            case VISUAL_EFFECT:
+                lastPongTime = System.currentTimeMillis();
+                if (msg.data != null && oppView != null) {
+                    try {
+                        com.google.gson.Gson gson = new com.google.gson.Gson();
+
+                        // 이중 직렬화 문제 해결
+                        String jsonString = msg.data.toString();
+                        if (jsonString.startsWith("\"")) {
+                            jsonString = gson.fromJson(jsonString, String.class);
+                        }
+
+                        VisualEffect effect = gson.fromJson(jsonString, VisualEffect.class);
+
+                        SwingUtilities.invokeLater(() -> {
+                            switch (effect.type) {
+                                case "combo" -> oppView.showCombo(effect.value);
+                                case "lineClear" -> oppView.showLineClear(effect.value);
+                                case "perfectClear" -> oppView.showPerfectClear();
+                                case "backToBack" -> oppView.showBackToBack();
+                                case "speedUp" -> oppView.showSpeedUp(effect.value);
+                            }
+                        });
+                    } catch (Exception e) {
+                        System.err.println("[VISUAL_EFFECT] Error: " + e.getMessage());
+                    }
+                }
+                break;
+
+            // case GARBAGE_PREVIEW:
+            //     System.out.println("[NETWORK] Received GARBAGE_PREVIEW message");
+            //     lastPongTime = System.currentTimeMillis();
+            //     if (msg.data != null && oppSidebar != null) {
+            //         try {
+            //             com.google.gson.Gson gson = new com.google.gson.Gson();
+
+            //             // 이중 직렬화 문제 해결: String으로 한번 파싱 후 다시 파싱
+            //             String jsonString = msg.data.toString();
+            //             if (jsonString.startsWith("\"")) {
+            //                 // 따옴표로 시작하면 이중 직렬화된 것
+            //                 jsonString = gson.fromJson(jsonString, String.class);
+            //             }
+
+            //             boolean[][] preview = gson.fromJson(jsonString, boolean[][].class);
+            //             List<boolean[]> previewList = java.util.Arrays.asList(preview);
+            //             System.out.println("[NETWORK] Parsed preview: " + previewList.size() + " lines");
+
+            //             SwingUtilities.invokeLater(() -> {
+            //                 System.out.println("[NETWORK] Setting garbage on oppSidebar");
+            //                 oppSidebar.setGarbageLines(previewList);
+            //             });
+            //         } catch (Exception e) {
+            //             System.err.println("[GARBAGE_PREVIEW] Error: " + e.getMessage());
+            //             e.printStackTrace();
+            //         }
+            //     } else {
+            //         System.out.println("[NETWORK] GARBAGE_PREVIEW skipped: data=" + (msg.data != null) + ", oppSidebar="
+            //                 + (oppSidebar != null));
+            //     }
+            //     break;
+            case TIME_LIMIT_SCORE:
+                lastPongTime = System.currentTimeMillis();
+                // 상대방 점수 업데이트
+                if (msg.data != null && oppSidebar != null) {
+                    try {
+                        int oppScore = Integer.parseInt(msg.data.toString());
+                        System.out.println("[TIME_LIMIT_SCORE] Received opponent score: " + oppScore);
+                        SwingUtilities.invokeLater(() -> {
+                            oppLogic.setScore(oppScore); // 추가!
+                            if (oppSidebar != null) {
+                                oppSidebar.setScore(oppScore);
+                            }
+                        });
+                    } catch (Exception e) {
+                        System.err.println("[TIME_LIMIT_SCORE] Parse error: " + e.getMessage());
                     }
                 }
                 break;
@@ -346,19 +444,28 @@ public class NetworkManager {
                 break;
 
             case LINE_ATTACK:
+                lastPongTime = System.currentTimeMillis();
                 int[] masks = WebSocketUtil.fromJson(msg.data, int[].class);
+                System.out.println("[ATTACK] Received " + masks.length + " lines");
+
+                // ★ addGarbageMasks를 호출하면 내부에서 자동으로:
+                // 1. incomingGarbageQueue에 추가
+                // 2. fireGarbagePreviewChanged() 호출
+                // 3. onIncomingChanged 콜백 호출
+                // 따라서 추가 작업 불필요!
                 myLogic.addGarbageMasks(masks);
+
+                // 즉시 보드 상태 전송 (상대방이 내 보드를 볼 수 있도록)
                 adapter.sendBoardStateImmediate();
                 myView.repaint();
                 break;
 
             case RESTART_READY:
-                if (overlayManager != null) {
-                    // OnlineVersusPanel에 알림
-                    SwingUtilities.invokeLater(() -> {
-                        // 콜백으로 oppRestartReady 설정
-                        handleOpponentRestartReady();
-                    });
+                if (overlayManager == null) {
+                    // 테스트 환경
+                    handleOpponentRestartReady();
+                } else {
+                    SwingUtilities.invokeLater(() -> handleOpponentRestartReady());
                 }
                 break;
 
@@ -535,6 +642,22 @@ public class NetworkManager {
         }
     }
 
+    public static class VisualEffect {
+        public String type; // "combo", "lineClear", "perfectClear", "backToBack", "speedUp"
+        public int value; // combo 수, 라인 수, 레벨 등
+
+        public VisualEffect(String type, int value) {
+            this.type = type;
+            this.value = value;
+        }
+    }
+
+    public void sendVisualEffect(String type, int value) {
+        VisualEffect effect = new VisualEffect(type, value);
+        client.send(new Message(MessageType.VISUAL_EFFECT,
+                new com.google.gson.Gson().toJson(effect)));
+    }
+
     public void sendBoardState() {
         adapter.sendBoardState();
     }
@@ -608,26 +731,86 @@ public class NetworkManager {
         }
     }
 
+    // public void sendGarbagePreview(List<boolean[]> lines) {
+    //     System.out.println("[NETWORK] sendGarbagePreview: " + lines.size() + " lines");
+    //     if (lines == null || lines.isEmpty())
+    //         return;
+    //     client.send(new Message(MessageType.GARBAGE_PREVIEW, lines));
+    // }
+
     // ===============================
     // TEST SUPPORT
     // ===============================
-    public String test_loadRecentServerIp() { return loadRecentServerIp(); }
-    public void test_saveRecentServerIp(String ip) { saveRecentServerIp(ip); }
+    public String test_loadRecentServerIp() {
+        return loadRecentServerIp();
+    }
 
-    public long test_getLastPingTime() { return lastPingTime; }
-    public void test_setLastPingTime(long t) { lastPingTime = t; }
+    public void test_saveRecentServerIp(String ip) {
+        saveRecentServerIp(ip);
+    }
 
-    public long test_getLastPongTime() { return lastPongTime; }
-    public void test_setLastPongTime(long t) { lastPongTime = t; }
+    public long test_getLastPingTime() {
+        return lastPingTime;
+    }
 
-    public boolean test_isReady() { return isReady; }
-    public void test_setReady(boolean v) { isReady = v; }
+    public void test_setLastPingTime(long t) {
+        lastPingTime = t;
+    }
 
-    public boolean test_isOppReady() { return oppReady; }
-    public void test_setOppReady(boolean v) { oppReady = v; }
+    public long test_getLastPongTime() {
+        return lastPongTime;
+    }
 
-    public void test_handlePong() { handlePong(); }
-    public void test_checkConnection() { checkConnection(); }
+    public void test_setLastPongTime(long t) {
+        lastPongTime = t;
+    }
 
+    public boolean test_isReconnecting() {
+        return isReconnecting;
+    }
+
+    public boolean test_isReady() {
+        return isReady;
+    }
+
+    public void test_setReady(boolean v) {
+        isReady = v;
+    }
+
+    public boolean test_isOppReady() {
+        return oppReady;
+    }
+
+    public void test_setOppReady(boolean v) {
+        oppReady = v;
+    }
+
+    public void test_handlePong() {
+        long now = System.currentTimeMillis();
+        lastPongTime = now;
+        long rtt = now - lastPingTime;
+
+        if (rtt < LAG_THRESHOLD) {
+            lagLabel.setText("Ping: " + rtt + "ms");
+        } else {
+            lagLabel.setText("LAG: " + rtt + "ms");
+        }
+    }
+
+    public void test_setOnExecuteRestart(Runnable r) {
+        this.onExecuteRestart = r;
+    }
+
+    public void test_setIsReconnecting(boolean v) {
+        this.isReconnecting = v;
+    }
+
+    public void test_checkConnection() {
+        checkConnection();
+    }
+
+    public void sendMyScore(int score) {
+        client.send(new Message(MessageType.TIME_LIMIT_SCORE, score));
+    }
 
 }

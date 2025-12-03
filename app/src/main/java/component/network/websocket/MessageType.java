@@ -16,6 +16,8 @@ public enum MessageType {
     // 게임 액션
     LINE_ATTACK,        // 라인 클리어 공격
     SCORE_UPDATE,       // 점수 업데이트
+    VISUAL_EFFECT,    // 시각 효과 트리거
+    GARBAGE_PREVIEW,
     
     // === 델타 전송 ===
     BOARD_DELTA,           // 델타: 변경사항만 전송
@@ -27,7 +29,8 @@ public enum MessageType {
     // === 타임 리밋 모드 (NEW!) ===
     TIME_LIMIT_START,      // 타임 리밋 시작 (서버 시간 전송)
     TIME_LIMIT_SYNC,       // 타이머 동기화 확인
-    
+    TIME_LIMIT_SCORE,      // 타임 리밋 모드 점수 전송
+
     // === 네트워크 안정성 ===
     PING,
     PONG,
