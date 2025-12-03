@@ -69,18 +69,24 @@ jacocoTestReport {
         classDirectories.setFrom(files(classDirectories.files.collect {
             fileTree(dir: it, exclude: [
                 // UI & 프레임 제외
-                '**/component/MenuPanel.class',
-                '**/component/*Frame.class',
-                '**/component/*Panel.class',
-                '**/component/*View.class',
+                '**/component/MenuPanel*.class',
+                '**/component/GameFrame*.class',
+                '**/component/*Panel*.class',
+                '**/component/*View*.class',
                 '**/component/sidebar/*.class',
                 // '**/component/*Renderer.class',
+
+                '**/component/board/*',
+                '**/component/ai/*',
+                '**/component/score/*Panel*.class',
+                '**/component/score/*Overlay*.class',
                 
                 // launcher 패키지 전체 제외 (JFrame 기반)
                 '**/launcher/**',
 
                 //websocket
                 '**/component/network/websocket/UIOverlayManager.class',
+                '**/component/network/websocket/OnlineVersusPanel.class',
 
                 // versus (대전 UI)
                 //'**/versus/**',
