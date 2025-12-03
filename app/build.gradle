@@ -75,6 +75,8 @@ jacocoTestReport {
                 '**/component/*View*.class',
                 '**/component/sidebar/*.class',
                 // '**/component/*Renderer.class',
+
+                '**/component/board/*',
                 
                 // launcher 패키지 전체 제외 (JFrame 기반)
                 '**/launcher/**',

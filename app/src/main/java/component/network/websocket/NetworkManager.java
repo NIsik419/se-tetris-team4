@@ -731,12 +731,12 @@ public class NetworkManager {
         }
     }
 
-    public void sendGarbagePreview(List<boolean[]> lines) {
-        System.out.println("[NETWORK] sendGarbagePreview: " + lines.size() + " lines");
-        if (lines == null || lines.isEmpty())
-            return;
-        client.send(new Message(MessageType.GARBAGE_PREVIEW, lines));
-    }
+    // public void sendGarbagePreview(List<boolean[]> lines) {
+    //     System.out.println("[NETWORK] sendGarbagePreview: " + lines.size() + " lines");
+    //     if (lines == null || lines.isEmpty())
+    //         return;
+    //     client.send(new Message(MessageType.GARBAGE_PREVIEW, lines));
+    // }
 
     // ===============================
     // TEST SUPPORT
@@ -763,6 +763,10 @@ public class NetworkManager {
 
     public void test_setLastPongTime(long t) {
         lastPongTime = t;
+    }
+
+    public boolean test_isReconnecting() {
+        return isReconnecting;
     }
 
     public boolean test_isReady() {

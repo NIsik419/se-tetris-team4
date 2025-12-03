@@ -109,7 +109,7 @@ public class OnlineVersusPanel extends JPanel {
                     System.out.println("[MY_LOGIC] Garbage preview changed: " + lines.size() + " lines");
                     SwingUtilities.invokeLater(() -> {
                         mySidebar.setGarbageLines(lines);
-                        networkManager.sendGarbagePreview(lines);
+                        //networkManager.sendGarbagePreview(lines);
                     });
                 });
 
