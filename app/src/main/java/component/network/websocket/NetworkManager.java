@@ -139,11 +139,21 @@ public class NetworkManager {
             System.out.println("[DEBUG] onConnected callback!");
             isReady = true;
             lastPongTime = System.currentTimeMillis();
-            client.send(new Message(MessageType.PLAYER_READY, "ready"));
+
+            // 짧은 지연 후 메시지 전송
+            try {
+                Thread.sleep(100); // WebSocket 완전 초기화 대기
+                System.out.println("[DEBUG] Sending PLAYER_READY...");
+                client.send(new Message(MessageType.PLAYER_READY, "ready"));
+                System.out.println("[DEBUG] PLAYER_READY sent!");
+            } catch (Exception e) {
+                System.err.println("[DEBUG] Error sending PLAYER_READY: " + e.getMessage());
+                e.printStackTrace();
+            }
+
             overlayManager.updateStatus("Connected! Waiting for opponent...");
             checkReadyState();
         });
-
         client.setOnDisconnected(() -> {
             System.out.println("[DEBUG] onDisconnected callback!");
             if (onConnectionLost != null) {
@@ -365,36 +375,38 @@ public class NetworkManager {
                 break;
 
             // case GARBAGE_PREVIEW:
-            //     System.out.println("[NETWORK] Received GARBAGE_PREVIEW message");
-            //     lastPongTime = System.currentTimeMillis();
-            //     if (msg.data != null && oppSidebar != null) {
-            //         try {
-            //             com.google.gson.Gson gson = new com.google.gson.Gson();
+            // System.out.println("[NETWORK] Received GARBAGE_PREVIEW message");
+            // lastPongTime = System.currentTimeMillis();
+            // if (msg.data != null && oppSidebar != null) {
+            // try {
+            // com.google.gson.Gson gson = new com.google.gson.Gson();
 
-            //             // 이중 직렬화 문제 해결: String으로 한번 파싱 후 다시 파싱
-            //             String jsonString = msg.data.toString();
-            //             if (jsonString.startsWith("\"")) {
-            //                 // 따옴표로 시작하면 이중 직렬화된 것
-            //                 jsonString = gson.fromJson(jsonString, String.class);
-            //             }
+            // // 이중 직렬화 문제 해결: String으로 한번 파싱 후 다시 파싱
+            // String jsonString = msg.data.toString();
+            // if (jsonString.startsWith("\"")) {
+            // // 따옴표로 시작하면 이중 직렬화된 것
+            // jsonString = gson.fromJson(jsonString, String.class);
+            // }
 
-            //             boolean[][] preview = gson.fromJson(jsonString, boolean[][].class);
-            //             List<boolean[]> previewList = java.util.Arrays.asList(preview);
-            //             System.out.println("[NETWORK] Parsed preview: " + previewList.size() + " lines");
+            // boolean[][] preview = gson.fromJson(jsonString, boolean[][].class);
+            // List<boolean[]> previewList = java.util.Arrays.asList(preview);
+            // System.out.println("[NETWORK] Parsed preview: " + previewList.size() + "
+            // lines");
 
-            //             SwingUtilities.invokeLater(() -> {
-            //                 System.out.println("[NETWORK] Setting garbage on oppSidebar");
-            //                 oppSidebar.setGarbageLines(previewList);
-            //             });
-            //         } catch (Exception e) {
-            //             System.err.println("[GARBAGE_PREVIEW] Error: " + e.getMessage());
-            //             e.printStackTrace();
-            //         }
-            //     } else {
-            //         System.out.println("[NETWORK] GARBAGE_PREVIEW skipped: data=" + (msg.data != null) + ", oppSidebar="
-            //                 + (oppSidebar != null));
-            //     }
-            //     break;
+            // SwingUtilities.invokeLater(() -> {
+            // System.out.println("[NETWORK] Setting garbage on oppSidebar");
+            // oppSidebar.setGarbageLines(previewList);
+            // });
+            // } catch (Exception e) {
+            // System.err.println("[GARBAGE_PREVIEW] Error: " + e.getMessage());
+            // e.printStackTrace();
+            // }
+            // } else {
+            // System.out.println("[NETWORK] GARBAGE_PREVIEW skipped: data=" + (msg.data !=
+            // null) + ", oppSidebar="
+            // + (oppSidebar != null));
+            // }
+            // break;
             case TIME_LIMIT_SCORE:
                 lastPongTime = System.currentTimeMillis();
                 // 상대방 점수 업데이트
@@ -732,10 +744,11 @@ public class NetworkManager {
     }
 
     // public void sendGarbagePreview(List<boolean[]> lines) {
-    //     System.out.println("[NETWORK] sendGarbagePreview: " + lines.size() + " lines");
-    //     if (lines == null || lines.isEmpty())
-    //         return;
-    //     client.send(new Message(MessageType.GARBAGE_PREVIEW, lines));
+    // System.out.println("[NETWORK] sendGarbagePreview: " + lines.size() + "
+    // lines");
+    // if (lines == null || lines.isEmpty())
+    // return;
+    // client.send(new Message(MessageType.GARBAGE_PREVIEW, lines));
     // }
 
     // ===============================

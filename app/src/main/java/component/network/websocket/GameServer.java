@@ -21,11 +21,18 @@ public class GameServer {
 
     @OnMessage
     public void onMessage(String msg, Session sender) {
+        try {
+            System.out.println("[Server] Received message from " + sender.getId());
 
-        for (Session s : sessions) {
-            if (!s.equals(sender) && s.isOpen()) {
-                s.getAsyncRemote().sendText(msg);
+            for (Session s : sessions) {
+                if (!s.equals(sender) && s.isOpen()) {
+                    s.getBasicRemote().sendText(msg); // ⭐ getAsyncRemote → getBasicRemote
+                }
             }
+            System.out.println("[Server] Message forwarded");
+        } catch (Exception e) {
+            System.err.println("[Server] Error handling message: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 

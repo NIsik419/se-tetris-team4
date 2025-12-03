@@ -149,13 +149,19 @@ public class GameClient {
     }
 
     public void send(Message msg) {
-        if (session != null && session.isOpen()) {
-            String json = WebSocketUtil.toJson(msg);
-            // System.out.println("[Client] Sending: " + json.substring(0, Math.min(100,
-            // json.length())));
-            session.getAsyncRemote().sendText(json);
-        } else {
+        if (session == null || !session.isOpen()) {
             System.err.println("[Client] Cannot send - session is null or closed!");
+            return;
+        }
+
+        try {
+            String json = WebSocketUtil.toJson(msg);
+            System.out.println("[Client] Sending: " + msg.type);
+            session.getBasicRemote().sendText(json); // ⭐ getAsyncRemote → getBasicRemote
+            System.out.println("[Client] ✓ Sent successfully");
+        } catch (Exception e) {
+            System.err.println("[Client] ✗ Send failed: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
