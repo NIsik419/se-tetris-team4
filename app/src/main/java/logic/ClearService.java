@@ -377,7 +377,7 @@ public class ClearService {
         timer.start();
     }
 
-    private List<List<Point>> findConnectedClusters(Color[][] board) {
+    public List<List<Point>> findConnectedClusters(Color[][] board) {
         int h = GameState.HEIGHT;
         int w = GameState.WIDTH;
 
@@ -431,7 +431,7 @@ public class ClearService {
         return clusters;
     }
 
-    private boolean canClusterFallOneStep(List<Point> cluster, Color[][] board) {
+    public boolean canClusterFallOneStep(List<Point> cluster, Color[][] board) {
         int h = GameState.HEIGHT;
         Set<Point> set = new HashSet<>(cluster);
 
@@ -458,7 +458,7 @@ public class ClearService {
         return true;
     }
 
-    private void moveClusterDownOneStep(List<Point> cluster, Color[][] board) {
+    public void moveClusterDownOneStep(List<Point> cluster, Color[][] board) {
         cluster.sort((a, b) -> Integer.compare(b.y, a.y));
 
         int[][] pid = state.getPieceId();

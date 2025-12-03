@@ -8,6 +8,7 @@ import org.junit.Test;
 import java.awt.Color;
 import java.awt.Point;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 
 import static org.junit.Assert.*;
 
@@ -308,6 +309,58 @@ public class BoardLogicTest {
         List<List<Point>> clusters = logic.findConnectedClusters(b, pid);
 
         assertEquals(2, clusters.size());
+    }
+
+    @Test
+    public void testClearLinesAfterItem_FullCoverage() throws Exception {
+        logic.setTestMode(false);
+        logic.setOnFrameUpdate(() -> {
+        });
+
+        Color[][] board = logic.getBoard();
+
+        // 1) 두 줄을 채워 아이템 전용 클리어 경로 강제
+        for (int y = GameState.HEIGHT - 2; y < GameState.HEIGHT; y++) {
+            for (int x = 0; x < GameState.WIDTH; x++) {
+                board[y][x] = Color.YELLOW;
+            }
+        }
+
+        CountDownLatch latch = new CountDownLatch(1);
+
+        logic.clearLinesAfterItem(() -> latch.countDown());
+
+        // Timer 애니메이션이 있기 때문에 최소 800~1200ms 대기
+        assertTrue("clearLinesAfterItem should complete",
+                latch.await(1500, java.util.concurrent.TimeUnit.MILLISECONDS));
+    }
+
+    @Test
+    public void testApplySimpleCellGravityAnimated_LambdaCoverage() throws Exception {
+        logic.setTestMode(false);
+        logic.setOnFrameUpdate(() -> {
+        });
+
+        Color[][] board = logic.getBoard();
+        int[][] pid = logic.getState().getPieceId();
+
+        // === 반드시 중력이 여러 번 발생하도록 3칸 짜리 클러스터 만들기 ===
+        // y=8,9,10 블록 → y=11 비어있음
+        for (int y = 8; y <= 10; y++) {
+            board[y][5] = Color.RED;
+            pid[y][5] = 1;
+        }
+
+        // 아래는 null
+        board[11][5] = null;
+
+        CountDownLatch latch = new CountDownLatch(1);
+
+        logic.applySimpleCellGravityAnimated(() -> {
+        }, latch::countDown);
+
+        assertTrue("applySimpleCellGravityAnimated should complete",
+                latch.await(2000, java.util.concurrent.TimeUnit.MILLISECONDS));
     }
 
 }

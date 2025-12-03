@@ -489,7 +489,7 @@ public class BoardLogic {
         System.out.println("[DEBUG] Simple cell gravity (item) applied after " + iterations + " iterations");
     }
 
-    private void applySimpleCellGravityAnimated(Runnable onFrameUpdate, Runnable onComplete) {
+    public void applySimpleCellGravityAnimated(Runnable onFrameUpdate, Runnable onComplete) {
         System.out.println("[DEBUG] Starting animated simple gravity with effects");
         if (testMode) {
             if (onFrameUpdate != null)
