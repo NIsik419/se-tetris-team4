@@ -335,6 +335,28 @@ public class NetworkManager {
                 }
                 break;
 
+            case VISUAL_EFFECT:
+                lastPongTime = System.currentTimeMillis();
+                if (msg.data != null && oppView != null) {
+                    try {
+                        com.google.gson.Gson gson = new com.google.gson.Gson();
+                        VisualEffect effect = gson.fromJson(msg.data.toString(), VisualEffect.class);
+
+                        SwingUtilities.invokeLater(() -> {
+                            switch (effect.type) {
+                                case "combo" -> oppView.showCombo(effect.value);
+                                case "lineClear" -> oppView.showLineClear(effect.value);
+                                case "perfectClear" -> oppView.showPerfectClear();
+                                case "backToBack" -> oppView.showBackToBack();
+                                case "speedUp" -> oppView.showSpeedUp(effect.value);
+                            }
+                        });
+                    } catch (Exception e) {
+                        System.err.println("[VISUAL_EFFECT] Error: " + e.getMessage());
+                    }
+                }
+                break;
+
             case TIME_LIMIT_SCORE:
                 lastPongTime = System.currentTimeMillis();
                 // 상대방 점수 업데이트
@@ -570,6 +592,22 @@ public class NetworkManager {
         } finally {
             isReconnecting = false;
         }
+    }
+
+    public static class VisualEffect {
+        public String type; // "combo", "lineClear", "perfectClear", "backToBack", "speedUp"
+        public int value; // combo 수, 라인 수, 레벨 등
+
+        public VisualEffect(String type, int value) {
+            this.type = type;
+            this.value = value;
+        }
+    }
+
+    public void sendVisualEffect(String type, int value) {
+        VisualEffect effect = new VisualEffect(type, value);
+        client.send(new Message(MessageType.VISUAL_EFFECT,
+                new com.google.gson.Gson().toJson(effect)));
     }
 
     public void sendBoardState() {

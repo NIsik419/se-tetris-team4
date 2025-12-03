@@ -136,6 +136,22 @@ public class OnlineVersusPanel extends JPanel {
             }
         });
 
+        myLogic.setOnVisualEffect((type, value) -> {
+            // 내 보드에 표시
+            SwingUtilities.invokeLater(() -> {
+                switch (type) {
+                    case "combo" -> myView.showCombo(value);
+                    case "lineClear" -> myView.showLineClear(value);
+                    case "perfectClear" -> myView.showPerfectClear();
+                    case "backToBack" -> myView.showBackToBack();
+                    case "speedUp" -> myView.showSpeedUp(value);
+                }
+            });
+
+            // 상대방에게 전송
+            networkManager.sendVisualEffect(type, value);
+        });
+
         timeLimitManager = new TimeLimitManager(timerLabel, networkManager.getClient(), isServer);
 
         /* 키 입력 */
@@ -231,6 +247,7 @@ public class OnlineVersusPanel extends JPanel {
 
         mySidebar = new HUDSidebar();
         mySidebar.setPreferredSize(new Dimension(160, 0));
+        mySidebar.showTime(false);
         centerContainer.add(mySidebar, BorderLayout.WEST);
 
         JPanel boardsContainer = new JPanel(new GridBagLayout());
@@ -255,6 +272,7 @@ public class OnlineVersusPanel extends JPanel {
 
         oppSidebar = new HUDSidebar();
         oppSidebar.setPreferredSize(new Dimension(160, 0));
+        oppSidebar.showTime(false);
         centerContainer.add(oppSidebar, BorderLayout.EAST);
 
         return centerContainer;
@@ -460,7 +478,7 @@ public class OnlineVersusPanel extends JPanel {
             System.out.println(
                     "[TIME_LIMIT] Final comparison - My: " + myScore + ", Opp: " + oppScore + ", iWon: " + iWon);
 
-            //  진 사람 보드에 glass shatter
+            // 진 사람 보드에 glass shatter
             BoardView targetView = iWon ? oppView : myView;
             BoardLogic targetLogic = iWon ? oppLogic : myLogic;
 
