@@ -79,6 +79,7 @@ public class OnlineVersusPanel extends JPanel {
         });
         oppLogic.getState().setCurr(null);
 
+        // 기존의 myLogic.setOnIncomingLinesChanged 부분을 찾아서 추가
         myLogic.setOnIncomingChanged(
                 count -> SwingUtilities.invokeLater(() -> myIncoming.setText(String.valueOf(count))));
         oppLogic.setOnIncomingChanged(
@@ -103,6 +104,35 @@ public class OnlineVersusPanel extends JPanel {
                 lagLabel,
                 this::onConnectionLost,
                 this::onGameOver);
+        myLogic.setOnGarbagePreviewChanged(
+                lines -> {
+                    System.out.println("[MY_LOGIC] Garbage preview changed: " + lines.size() + " lines");
+                    SwingUtilities.invokeLater(() -> {
+                        mySidebar.setGarbageLines(lines);
+                        //networkManager.sendGarbagePreview(lines);
+                    });
+                });
+
+        oppLogic.setOnGarbagePreviewChanged(
+                lines -> {
+                    System.out.println("[OPP_LOGIC] Garbage preview changed: " + lines.size() + " lines");
+                    SwingUtilities.invokeLater(() -> {
+                        oppSidebar.setGarbageLines(lines);
+                    });
+                });
+
+        // 공격 콜백도 여기에
+        myLogic.setOnLinesClearedWithMasks(masks -> {
+            if (masks != null && masks.length > 0) {
+                System.out.println("[ATTACK] Sending " + masks.length + " lines attack");
+                myTotalLines += masks.length;
+                networkManager.sendLineAttack(masks);
+
+                List<boolean[]> preview = convertMasksToPreview(masks);
+                System.out.println("[ATTACK] Showing on oppSidebar: " + preview.size() + " lines");
+                SwingUtilities.invokeLater(() -> oppSidebar.setGarbageLines(preview));
+            }
+        });
 
         networkManager.setOnTimeLimitStart(startTime -> {
             if (timeLimitManager != null) {
@@ -131,8 +161,12 @@ public class OnlineVersusPanel extends JPanel {
 
         myLogic.setOnLinesClearedWithMasks(masks -> {
             if (masks != null && masks.length > 0) {
-                myTotalLines += masks.length; // masks 개수가 라인 수
+                myTotalLines += masks.length;
                 networkManager.sendLineAttack(masks);
+
+                // // 상대방에게 프리뷰도 전송
+                // List<boolean[]> preview = convertMasksToPreview(masks);
+                // networkManager.sendGarbagePreview(preview);
             }
         });
 
@@ -858,4 +892,17 @@ public class OnlineVersusPanel extends JPanel {
         int totalHeight = boardHeight + 180;
         return new Dimension(totalWidth, totalHeight);
     }
+
+    private List<boolean[]> convertMasksToPreview(int[] masks) {
+        List<boolean[]> preview = new ArrayList<>();
+        for (int mask : masks) {
+            boolean[] row = new boolean[BoardLogic.WIDTH];
+            for (int x = 0; x < BoardLogic.WIDTH; x++) {
+                row[x] = ((mask >> x) & 1) != 0;
+            }
+            preview.add(row);
+        }
+        return preview;
+    }
+
 }

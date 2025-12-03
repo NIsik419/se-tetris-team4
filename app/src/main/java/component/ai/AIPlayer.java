@@ -9,6 +9,9 @@ public class AIPlayer {
     
     private final TetrisAI ai;
     private final BoardLogic logic;
+
+    private long lastActionTime = 0;
+    private int actionDelay = 100; // 액션 간격 (ms)
     
     /**
      * 생성자
@@ -25,13 +28,33 @@ public class AIPlayer {
      */
     public void setDifficulty(String difficulty) {
         ai.setDifficulty(difficulty);
+
+        switch (difficulty.toLowerCase()) {
+            case "easy":
+                actionDelay = 200;
+                break;
+            case "normal":
+                actionDelay = 120;
+                break;
+            case "hard":
+                actionDelay = 80;
+                break;
+        }
     }
     
     /**
      * 다음 행동 가져오기
      * @return "LEFT", "RIGHT", "ROTATE", "DROP", "DOWN" 또는 null
      */
-    public String getNextAction() {
+     public String getNextAction() {
+        long currentTime = System.currentTimeMillis();
+        
+        // 액션 간격 체크
+        if (currentTime - lastActionTime < actionDelay) {
+            return null; // 아직 대기 중
+        }
+        
+        lastActionTime = currentTime;
         return ai.getNextAction();
     }
     

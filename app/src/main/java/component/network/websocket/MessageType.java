@@ -17,6 +17,7 @@ public enum MessageType {
     LINE_ATTACK,        // 라인 클리어 공격
     SCORE_UPDATE,       // 점수 업데이트
     VISUAL_EFFECT,    // 시각 효과 트리거
+    GARBAGE_PREVIEW,
     
     // === 델타 전송 ===
     BOARD_DELTA,           // 델타: 변경사항만 전송

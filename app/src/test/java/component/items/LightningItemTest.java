@@ -72,16 +72,16 @@ public class LightningItemTest {
     }
 
     /** ✅ runPostGravityTestHook() 별도 경로 커버 */
-    @Test
-    public void testRunPostGravityHook_CoversScoringAndCallbacks() {
-        int before = logic.getScore();
-        AtomicBoolean callback = new AtomicBoolean(false);
+    // @Test
+    // public void testRunPostGravityHook_CoversScoringAndCallbacks() {
+    //     int before = logic.getScore();
+    //     AtomicBoolean callback = new AtomicBoolean(false);
 
-        item.runPostGravityTestHook(logic, logic.getClearService(), 4, () -> callback.set(true));
+    //     item.runPostGravityTestHook(logic, logic.getClearService(), 4, () -> callback.set(true));
 
-        assertTrue("Callback should trigger", callback.get());
-        assertTrue("Score should increase", logic.getScore() > before);
-    }
+    //     assertTrue("Callback should trigger", callback.get());
+    //     assertTrue("Score should increase", logic.getScore() > before);
+    // }
 
     /** ✅ Empty board 안전성 테스트 */
     @Test

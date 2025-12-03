@@ -104,6 +104,7 @@ public class BoardLogic {
     private ItemManager item;
 
     private final Consumer<Integer> onGameOver;
+    private Consumer<List<boolean[]>> onIncomingLinesChanged;
     private Runnable onFrameUpdate;
 
     private boolean gameOver = false;
@@ -117,6 +118,16 @@ public class BoardLogic {
 
     private final LinkedList<Block> previewQueue = new LinkedList<>();
     private Consumer<List<Block>> onNextQueueUpdate;
+    private boolean testMode = false;
+    private Runnable onComplete;
+
+    public void setTestMode(boolean testMode) {
+        this.testMode = testMode;
+    }
+
+    public void setOnIncomingLinesChanged(Consumer<List<boolean[]>> callback) {
+        this.onIncomingLinesChanged = callback;
+    }
 
     // GameSettings에서 난이도를 읽어오는 기본 생성자
     public BoardLogic(Consumer<Integer> onGameOver) {
@@ -167,11 +178,16 @@ public class BoardLogic {
 
     // ★ 큐가 바뀔 때마다 한 번씩 호출해 주면 됨
     private void fireGarbagePreviewChanged() {
+        System.out.println("[DEBUG] fireGarbagePreviewChanged called, queue size: " + incomingGarbageQueue.size());
         if (onGarbagePreviewChanged != null) {
-            onGarbagePreviewChanged.accept(buildGarbagePreviewFromQueue());
+            List<boolean[]> preview = buildGarbagePreviewFromQueue();
+            System.out.println("[DEBUG] Preview list size: " + preview.size());
+            onGarbagePreviewChanged.accept(preview);
+        } else {
+            System.out.println("[DEBUG] onGarbagePreviewChanged is NULL!");
         }
     }
-    
+
     private void refillPreview() {
         while (previewQueue.size() < 4) {
             previewQueue.add(bag.next());
@@ -267,9 +283,18 @@ public class BoardLogic {
     // ============================================
     // clearLinesAfterItem - 아이템 전용 (타이머 제거)
     // ============================================
-    private void clearLinesAfterItem(Runnable afterClear) {
+    public void clearLinesAfterItem(Runnable afterClear) {
         var board = state.getBoard();
         var pid = state.getPieceId();
+
+        if (testMode) {
+            // 파티클 애니메이션 skip
+            if (onFrameUpdate != null)
+                onFrameUpdate.run();
+            if (afterClear != null)
+                afterClear.run();
+            return;
+        }
 
         java.util.List<Integer> clearedRows = new java.util.ArrayList<>();
         for (int y = 0; y < HEIGHT; y++) {
@@ -292,20 +317,38 @@ public class BoardLogic {
             return;
         }
 
-        // 중력 애니메이션 동안 입력 차단
         if (pauseCallback != null) {
             pauseCallback.run();
         }
 
-        updateGarbageFlagsOnClear(clearedRows);
-
-        if (lines >= 2 && onLinesClearedWithMasks != null) {
-            int[] masks = buildAttackMasks(clearedRows);
-            onLinesClearedWithMasks.accept(masks);
+        // ★★★ 공격 계산을 가비지 플래그 업데이트보다 먼저 ★★★
+        java.util.List<Integer> nonGarbageRows = new java.util.ArrayList<>();
+        for (int y : clearedRows) {
+            if (!isGarbageRow[y]) {
+                nonGarbageRows.add(y);
+            } else {
+                System.out.println("[DEBUG] Row " + y + " is garbage, excluding from attack");
+            }
         }
+
+        System.out.println("[ITEM] Total cleared: " + clearedRows.size() +
+                ", Non-garbage: " + nonGarbageRows.size());
+
+        if (nonGarbageRows.size() >= 2 && onLinesClearedWithMasks != null) {
+            int[] masks = buildAttackMasks(nonGarbageRows);
+            onLinesClearedWithMasks.accept(masks);
+            System.out.println("[ITEM] " + nonGarbageRows.size() + "줄 클리어 (가비지 제외) → 공격 전송");
+        } else {
+            System.out.println("[ITEM] No attack sent: " + nonGarbageRows.size() + " non-garbage lines");
+        }
+
+        // 이제 가비지 플래그 업데이트
+        updateGarbageFlagsOnClear(clearedRows);
 
         final int CELL_SIZE = 25;
         for (int row : clearedRows) {
+            if (testMode)
+                return;
             clear.getParticleSystem().createLineParticles(row, board, CELL_SIZE, WIDTH);
         }
 
@@ -319,27 +362,62 @@ public class BoardLogic {
         recentPlacedInitialize();
         processScoreAndCombo(lines);
 
-        if (onFrameUpdate != null)
-            javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
+        if (onFrameUpdate != null) {
+            if (testMode)
+                onFrameUpdate.run();
+            else
+                SwingUtilities.invokeLater(onFrameUpdate);
+        }
 
         clear.animateParticlesAsync(
                 () -> {
-                    if (onFrameUpdate != null)
-                        javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
+                    if (onFrameUpdate != null) {
+                        if (testMode)
+                            onFrameUpdate.run();
+                        else
+                            SwingUtilities.invokeLater(onFrameUpdate);
+                    }
+
                 });
 
-        // 애니메이션 중력만 실행
         applySimpleCellGravityAnimated(() -> {
-            if (onFrameUpdate != null)
-                javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
+            if (onFrameUpdate != null) {
+                if (testMode)
+                    onFrameUpdate.run();
+                else
+                    javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
+            }
         }, () -> {
-            // 중력 완료 후 입력 재개
             if (resumeCallback != null) {
                 resumeCallback.run();
             }
-
             checkChainClearImmediate(afterClear);
         });
+    }
+
+    // ★ updateGarbageFlagsOnClear() - 로그만 개선
+    private void updateGarbageFlagsOnClear(List<Integer> clearedRows) {
+        int clearedGarbageCount = 0;
+
+        for (int y : clearedRows) {
+            if (y < 0 || y >= HEIGHT)
+                continue;
+
+            if (isGarbageRow[y]) {
+                garbageCount--;
+                clearedGarbageCount++;
+                System.out.println("[DEBUG] Garbage row cleared at y=" + y + ", remaining: " + garbageCount);
+            }
+            isGarbageRow[y] = false;
+        }
+
+        System.out.println("[DEBUG] Cleared " + clearedGarbageCount + " garbage rows, " +
+                (clearedRows.size() - clearedGarbageCount) + " normal rows");
+
+        if (onIncomingChanged != null) {
+            onIncomingChanged.accept(incomingGarbageQueue.size());
+        }
+        fireGarbagePreviewChanged();
     }
 
     // 12. 아이템용 라인 체크 & 클리어 메서드
@@ -411,8 +489,15 @@ public class BoardLogic {
         System.out.println("[DEBUG] Simple cell gravity (item) applied after " + iterations + " iterations");
     }
 
-    private void applySimpleCellGravityAnimated(Runnable onFrameUpdate, Runnable onComplete) {
+    public void applySimpleCellGravityAnimated(Runnable onFrameUpdate, Runnable onComplete) {
         System.out.println("[DEBUG] Starting animated simple gravity with effects");
+        if (testMode) {
+            if (onFrameUpdate != null)
+                onFrameUpdate.run();
+            if (onComplete != null)
+                onComplete.run();
+            return;
+        }
 
         Timer gravityTimer = new Timer(80, null);
 
@@ -455,6 +540,8 @@ public class BoardLogic {
 
             // 착지 충격파
             if (!landedBlocks.isEmpty()) {
+                if (testMode)
+                    return;
                 clear.getParticleSystem().createClusterLandingImpact(
                         landedBlocks, board, currentCellSize);
             }
@@ -485,9 +572,18 @@ public class BoardLogic {
     // ============================================
     // clearLinesAndThen - 일반 라인 클리어 (타이머 제거)
     // ============================================
-    private void clearLinesAndThen(Runnable afterClear) {
+    public void clearLinesAndThen(Runnable afterClear) {
         var board = state.getBoard();
         var pid = state.getPieceId();
+
+        if (testMode) {
+            // 파티클 애니메이션 skip
+            if (onFrameUpdate != null)
+                onFrameUpdate.run();
+            if (afterClear != null)
+                afterClear.run();
+            return;
+        }
 
         java.util.List<Integer> clearedRows = new java.util.ArrayList<>();
         for (int y = 0; y < HEIGHT; y++) {
@@ -514,25 +610,36 @@ public class BoardLogic {
             pauseCallback.run();
         }
 
-        updateGarbageFlagsOnClear(clearedRows);
-
-        // 가비지가 아닌 라인만 카운트
-        int nonGarbageLines = 0;
+        // ★★★ 중요: 가비지 플래그 업데이트보다 먼저 공격 계산 ★★★
+        // 1. 먼저 가비지가 아닌 라인만 필터링 (isGarbageRow 상태 사용)
+        java.util.List<Integer> nonGarbageRows = new java.util.ArrayList<>();
         for (int y : clearedRows) {
-            if (!isGarbageRow[y]) {
-                nonGarbageLines++;
+            if (!isGarbageRow[y]) { // 가비지가 아닌 라인만
+                nonGarbageRows.add(y);
+            } else {
+                System.out.println("[DEBUG] Row " + y + " is garbage, excluding from attack");
             }
         }
 
-        // 가비지가 아닌 라인이 2줄 이상일 때만 공격 전송
-        if (nonGarbageLines >= 2 && onLinesClearedWithMasks != null) {
-            int[] masks = buildAttackMasks(clearedRows);
+        System.out.println("[DEBUG] Total cleared: " + clearedRows.size() +
+                ", Non-garbage: " + nonGarbageRows.size());
+
+        // 2. 가비지가 아닌 라인이 2줄 이상일 때만 공격 전송
+        if (nonGarbageRows.size() >= 2 && onLinesClearedWithMasks != null) {
+            int[] masks = buildAttackMasks(nonGarbageRows);
             onLinesClearedWithMasks.accept(masks);
-            System.out.println("[ATTACK] " + nonGarbageLines + "줄 클리어 (가비지 제외) → 공격 전송");
+            System.out.println("[ATTACK] " + nonGarbageRows.size() + "줄 클리어 (가비지 제외) → 공격 전송");
+        } else {
+            System.out.println("[ATTACK] No attack sent: " + nonGarbageRows.size() + " non-garbage lines (need 2+)");
         }
+
+        // 3. 이제 가비지 플래그 업데이트 (공격 계산 후)
+        updateGarbageFlagsOnClear(clearedRows);
 
         final int CELL_SIZE = 25;
         for (int row : clearedRows) {
+            if (testMode)
+                return;
             clear.getParticleSystem().createLineParticles(row, board, CELL_SIZE, WIDTH);
         }
 
@@ -550,21 +657,34 @@ public class BoardLogic {
         recentPlacedInitialize();
         processScoreAndCombo(lines);
 
-        if (onFrameUpdate != null)
-            javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
+        if (onFrameUpdate != null) {
+            if (testMode)
+                onFrameUpdate.run();
+            else
+                javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
+        }
 
         clear.animateParticlesAsync(
                 () -> {
-                    if (onFrameUpdate != null)
-                        javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
+                    if (onFrameUpdate != null) {
+                        if (testMode)
+                            onFrameUpdate.run();
+                        else
+                            javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
+                    }
                 });
 
-        // 애니메이션 중력만 실행 (즉시 중력 제거)
+        // 애니메이션 중력만 실행
         if (animatedGravityEnabled) {
             System.out.println("[DEBUG] Starting ANIMATED gravity (no instant gravity)");
             applyClusterGravityAnimated(() -> {
-                if (onFrameUpdate != null)
-                    javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
+                if (onFrameUpdate != null) {
+                    if (testMode)
+                        onFrameUpdate.run();
+                    else
+                        SwingUtilities.invokeLater(onFrameUpdate);
+                }
+
             }, () -> {
                 if (resumeCallback != null) {
                     resumeCallback.run();
@@ -572,10 +692,14 @@ public class BoardLogic {
                 checkChainClearImmediate(afterClear);
             });
         } else {
-            // 애니메이션 끄면 즉시 중력
             applyClusterGravityInstant();
-            if (onFrameUpdate != null)
-                javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
+            if (onFrameUpdate != null) {
+                if (testMode)
+                    onFrameUpdate.run();
+                else
+                    SwingUtilities.invokeLater(onFrameUpdate);
+            }
+
             checkChainClearImmediate(afterClear);
         }
     }
@@ -619,9 +743,10 @@ public class BoardLogic {
             int y = clearedRows.get(i);
             int mask = 0;
 
-            // 가비지 라인은 공격으로 변환하지 않음
+            // 이 메서드는 가비지가 아닌 라인만 받아야 함
             if (isGarbageRow[y]) {
-                masks[i] = 0; // 빈 마스크 (공격 없음)
+                System.err.println("[ERROR] Garbage row " + y + " passed to buildAttackMasks! This should not happen!");
+                masks[i] = 0;
                 continue;
             }
 
@@ -631,6 +756,10 @@ public class BoardLogic {
                     mask |= (1 << x);
                 }
             }
+
+            System.out.println("[ATTACK] Row " + y + " mask: " + Integer.toBinaryString(mask) +
+                    " (bits set: " + Integer.bitCount(mask) + ")");
+
             masks[i] = mask;
         }
         return masks;
@@ -639,7 +768,7 @@ public class BoardLogic {
     // ============================================
     // 점수/콤보 처리 공통 로직
     // ============================================
-    private void processScoreAndCombo(int lines) {
+    public void processScoreAndCombo(int lines) {
         clearedLines += lines;
         // 이전 누적 줄 수 기억
         int prevDeleted = deletedLinesTotal;
@@ -734,13 +863,20 @@ public class BoardLogic {
         }
     }
 
-    private void applyClusterGravityInstant() {
+    public void applyClusterGravityInstant() {
         Color[][] board = state.getBoard();
         int[][] pid = state.getPieceId();
 
         boolean moved = true;
         int iterations = 0;
         final int MAX_ITERATIONS = 100;
+
+        if (testMode) {
+            // animation path만 밟기 위해 내부 로직을 1회 실행
+            onFrameUpdate.run();
+            onComplete.run();
+            return;
+        }
 
         while (moved && iterations < MAX_ITERATIONS) {
             moved = false;
@@ -765,7 +901,7 @@ public class BoardLogic {
     }
 
     // 2. 클러스터 찾기 (같은 pieceId끼리 연결된 블록들)
-    private List<List<Point>> findConnectedClusters(Color[][] board, int[][] pid) {
+    public List<List<Point>> findConnectedClusters(Color[][] board, int[][] pid) {
         int h = HEIGHT;
         int w = WIDTH;
 
@@ -925,8 +1061,15 @@ public class BoardLogic {
         }
     }
 
-    private void applyClusterGravityAnimated(Runnable onFrameUpdate, Runnable onComplete) {
+    public void applyClusterGravityAnimated(Runnable onFrameUpdate, Runnable onComplete) {
         System.out.println("[DEBUG] Starting animated cluster gravity with trail effects");
+        if (testMode) {
+            if (onFrameUpdate != null)
+                onFrameUpdate.run();
+            if (onComplete != null)
+                onComplete.run();
+            return;
+        }
 
         Timer gravityTimer = new Timer(80, null);
 
@@ -955,6 +1098,8 @@ public class BoardLogic {
                 // 2. 먼지 파티클
                 for (Point p : cluster) {
                     if (board[p.y][p.x] != null) {
+                        if (testMode)
+                            return;
                         clear.getParticleSystem().createGravityDustParticle(
                                 p.x, p.y, board[p.y][p.x], currentCellSize);
                     }
@@ -1045,7 +1190,7 @@ public class BoardLogic {
         var board = state.getBoard();
         int[][] pid = state.getPieceId();
 
-        int available = MAX_GARBAGE - garbageCount;
+        int available = MAX_GARBAGE - garbageCount; // 가비지 10줄까지
         if (available <= 0) {
             System.out.println("[WARN] Max garbage limit reached, clearing queue");
             incomingGarbageQueue.clear();
@@ -1091,6 +1236,8 @@ public class BoardLogic {
             addedLines++;
             garbageCount++;
         }
+        System.out.println(
+                "[DEBUG] Garbage applied: " + addedLines + " lines, remaining queue: " + incomingGarbageQueue.size());
 
         // ★ while 끝난 뒤, 남은 큐 길이 + 미리보기 한 번에 갱신
         if (onIncomingChanged != null) {
@@ -1099,32 +1246,6 @@ public class BoardLogic {
         fireGarbagePreviewChanged();
 
         System.out.println("[DEBUG] Garbage applied: " + addedLines + " lines, total garbage: " + garbageCount);
-    }
-
-    /**
-     * Simple garbage (no mask info) → convert to random-hole garbage masks
-     * and enqueue them so applyIncomingGarbage() can place them on the board.
-     */
-    private void addGarbageLines(int lines) {
-        if (lines <= 0)
-            return;
-
-        java.util.Random rand = new java.util.Random();
-
-        for (int i = 0; i < lines; i++) {
-            // pick a random hole (empty cell) in this row
-            int holeX = rand.nextInt(WIDTH);
-
-            int mask = 0;
-            for (int x = 0; x < WIDTH; x++) {
-                if (x == holeX)
-                    continue; // hole → 0
-                mask |= (1 << x); // filled → 1
-            }
-
-            // enqueue this garbage row; it’ll be applied in applyIncomingGarbage()
-            incomingGarbageQueue.offer(mask);
-        }
     }
 
     // ============================================
@@ -1138,6 +1259,9 @@ public class BoardLogic {
             incomingGarbageQueue.offer(mask);
         }
 
+        System.out.println(
+                "[DEBUG] Enqueued " + masks.length + " garbage masks, total pending: " + incomingGarbageQueue.size());
+
         if (onIncomingChanged != null) {
             onIncomingChanged.accept(incomingGarbageQueue.size());
         }
@@ -1146,28 +1270,23 @@ public class BoardLogic {
         // 진동 효과 트리거 (라인 수에 비례)
         triggerShakeEffect(masks.length);
 
+        // if (onIncomingLinesChanged != null) {
+        // onIncomingLinesChanged.accept(convertMasksToPreview(incomingGarbageQueue));
+        // }
+
         // 사운드 추가
         if (masks.length >= 3) {
+            if (testMode)
+                return;
             sound.play(SoundManager.Sound.GAME_OVER, 0.2f); // 큰 공격용 임시 사운드
         } else {
+            if (testMode)
+                return;
             sound.play(SoundManager.Sound.ROTATE, 0.3f); // 작은 공격용 임시 사운드
         }
 
         System.out.println(
                 "[DEBUG] Enqueued " + masks.length + " garbage masks, total pending: " + incomingGarbageQueue.size());
-    }
-
-    private void updateGarbageFlagsOnClear(List<Integer> clearedRows) {
-        for (int y : clearedRows) {
-            if (y < 0 || y >= HEIGHT)
-                continue;
-
-            if (isGarbageRow[y]) {
-                garbageCount--;
-                System.out.println("[DEBUG] Garbage row cleared at y=" + y + ", remaining: " + garbageCount);
-            }
-            isGarbageRow[y] = false;
-        }
     }
 
     private boolean isRowEmpty(Color[] row) {
@@ -1183,6 +1302,8 @@ public class BoardLogic {
             return;
         if (move.canMove(state.getCurr(), state.getX() - 1, state.getY()))
             move.moveLeft();
+        if (testMode)
+            return;
         sound.play(SoundManager.Sound.MOVE, 0.2f);
     }
 
@@ -1191,6 +1312,8 @@ public class BoardLogic {
             return;
         if (move.canMove(state.getCurr(), state.getX() + 1, state.getY()))
             move.moveRight();
+        if (testMode)
+            return;
         sound.play(SoundManager.Sound.MOVE, 0.2f);
     }
 
@@ -1201,8 +1324,9 @@ public class BoardLogic {
         state.getCurr().rotate();
         if (!move.canMove(state.getCurr(), state.getX(), state.getY()))
             state.setCurr(backup);
-        else
-            sound.play(SoundManager.Sound.ROTATE, 0.3f);
+        else if (testMode)
+            return;
+        sound.play(SoundManager.Sound.ROTATE, 0.3f);
     }
 
     public void hardDrop() {
@@ -1240,17 +1364,22 @@ public class BoardLogic {
         if (minX <= maxX) {
             int beamStartX = state.getX() + minX;
             int beamWidth = (maxX - minX + 1);
-
-            clear.getParticleSystem().createHardDropBeamWide(
-                    beamStartX,
-                    beamWidth,
-                    startY,
-                    endY,
-                    curr.getColor(),
-                    cellSize);
+            if (testMode)
+                return;
+            if (!testMode) {
+                clear.getParticleSystem().createHardDropBeamWide(
+                        beamStartX,
+                        beamWidth,
+                        startY,
+                        endY,
+                        curr.getColor(),
+                        cellSize);
+            }
         }
 
-        sound.play(SoundManager.Sound.HARD_DROP, 0.2f);
+        if (!testMode) {
+            sound.play(SoundManager.Sound.HARD_DROP, 0.2f);
+        }
         moveDown();
     }
 
@@ -1364,6 +1493,8 @@ public class BoardLogic {
 
     public void onOpponentGameOver() {
         System.out.println("[INFO] Opponent Game Over - YOU WIN!");
+        if (testMode)
+            return;
         sound.play(SoundManager.Sound.VICTORY);
         if (pauseCallback != null)
             pauseCallback.run();
@@ -1378,6 +1509,8 @@ public class BoardLogic {
             return;
         }
         this.gameOver = true;
+        if (testMode)
+            return;
         sound.play(SoundManager.Sound.GAME_OVER, 0.4f); // 추가
         System.out.println("[GAME OVER] Your Score: " + score);
 
@@ -1471,16 +1604,24 @@ public class BoardLogic {
     private void playLineClearSound(int lines) {
         switch (lines) {
             case 1:
+                if (testMode)
+                    return;
                 sound.play(SoundManager.Sound.LINE_CLEAR_1, 0.3f);
                 break;
             case 2:
+                if (testMode)
+                    return;
                 sound.play(SoundManager.Sound.LINE_CLEAR_2, 0.35f);
                 break;
             case 3:
+                if (testMode)
+                    return;
                 sound.play(SoundManager.Sound.LINE_CLEAR_3, 0.4f);
                 break;
             case 4:
             default:
+                if (testMode)
+                    return;
                 sound.play(SoundManager.Sound.LINE_CLEAR_4, 0.4f);
                 break;
         }
@@ -1491,10 +1632,16 @@ public class BoardLogic {
     // ============================================
     private void playComboSound(int combo) {
         if (combo >= 5) {
+            if (testMode)
+                return;
             sound.play(SoundManager.Sound.COMBO_5, 0.4f);
         } else if (combo >= 3) {
+            if (testMode)
+                return;
             sound.play(SoundManager.Sound.COMBO_3, 0.4f);
         } else if (combo >= 2) {
+            if (testMode)
+                return;
             sound.play(SoundManager.Sound.COMBO_2, 0.4f);
         }
     }
@@ -1503,6 +1650,8 @@ public class BoardLogic {
     // 가비지 수신 시 화면 진동 트리거
     // ============================================
     private void triggerShakeEffect(int intensity) {
+        if (testMode)
+            return;
         if (onFrameUpdate != null) {
             // 진동 강도에 따라 흔들림 설정
             int shakeIntensity = Math.min(intensity * 2, 10); // 최대 10픽셀
@@ -1535,6 +1684,19 @@ public class BoardLogic {
         this.onVisualEffect = callback;
     }
 
+    // 변환 헬퍼 메서드
+    private List<boolean[]> convertMasksToPreview(List<Integer> masks) {
+        List<boolean[]> preview = new ArrayList<>();
+        for (int mask : masks) {
+            boolean[] line = new boolean[WIDTH];
+            for (int x = 0; x < WIDTH; x++) {
+                line[x] = (mask & (1 << x)) != 0;
+            }
+            preview.add(line);
+        }
+        return preview;
+    }
+
     // =====================================
     // ======= TESTING HELPERS =============
     // =====================================
@@ -1552,6 +1714,11 @@ public class BoardLogic {
     /** recentPlaced 배열 접근용 (공격 마스크 테스트에 필요) */
     public boolean[][] getRecentPlacedForTest() {
         return recentPlaced;
+    }
+
+    public void setLevel(int level) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'setLevel'");
     }
 
 }
