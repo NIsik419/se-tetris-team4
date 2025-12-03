@@ -38,22 +38,22 @@ public class GameFrame extends JFrame {
         add(activePanel, BorderLayout.CENTER);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            System.out.println("\n========== SHUTDOWN HOOK ==========");
-            System.out.println("Active threads:");
+            //System.out.println("\n========== SHUTDOWN HOOK ==========");
+            //System.out.println("Active threads:");
 
             Thread.getAllStackTraces().forEach((thread, stackTrace) -> {
                 if (thread.isAlive() && !thread.isDaemon()) {
-                    System.out.println("\n⚠️  " + thread.getName() +
-                            " (state: " + thread.getState() + ")");
+                    //System.out.println("\n⚠️  " + thread.getName() +
+                           // " (state: " + thread.getState() + ")");
 
-                    System.out.println("    Stack trace:");
+                    //System.out.println("    Stack trace:");
                     for (int i = 0; i < Math.min(stackTrace.length, 10); i++) {
                         System.out.println("      " + stackTrace[i]);
                     }
                 }
             });
 
-            System.out.println("===================================\n");
+            //System.out.println("===================================\n");
         }));
 
         addWindowListener(new WindowAdapter() {
@@ -153,24 +153,24 @@ public class GameFrame extends JFrame {
 
             @Override
             public void windowClosed(WindowEvent e) {
-                System.out.println("[WINDOW] Closed");
-                System.out.println("[DEBUG] userRequestedClose: " + userRequestedClose);
-                System.out.println("[DEBUG] returningToMenu: " + returningToMenu);
-                System.out.println("[DEBUG] restartRequested: " + restartRequested);
+                //System.out.println("[WINDOW] Closed");
+                //System.out.println("[DEBUG] userRequestedClose: " + userRequestedClose);
+                //System.out.println("[DEBUG] returningToMenu: " + returningToMenu);
+                //System.out.println("[DEBUG] restartRequested: " + restartRequested);
 
-                // ⭐ 사용자가 명시적으로 닫기를 요청하지 않았다면 무시
+                //  사용자가 명시적으로 닫기를 요청하지 않았다면 무시
                 if (!userRequestedClose) {
-                    System.out.println("[WARNING] windowClosed called without user request - ignoring");
+                    //System.out.println("[WARNING] windowClosed called without user request - ignoring");
                     return;
                 }
 
                 if (restartRequested) {
-                    System.out.println("[INFO] Restart requested, skip global exit");
+                    //System.out.println("[INFO] Restart requested, skip global exit");
                     return;
                 }
 
                 if (returningToMenu) {
-                    System.out.println("[INFO] Returning to menu, not exiting...");
+                    //System.out.println("[INFO] Returning to menu, not exiting...");
                     return;
                 }
 
@@ -185,7 +185,7 @@ public class GameFrame extends JFrame {
                 }
 
                 if (allClosed) {
-                    System.out.println("[EXIT] All windows closed, terminating AWT...");
+                    //System.out.println("[EXIT] All windows closed, terminating AWT...");
                     SwingUtilities.invokeLater(() -> {
                         try {
                             Thread.sleep(200);
@@ -236,15 +236,15 @@ public class GameFrame extends JFrame {
     }
 
     private void logActiveThreads() {
-        System.out.println("Active threads:");
+        //System.out.println("Active threads:");
         Set<Thread> threadSet = Thread.getAllStackTraces().keySet();
 
         for (Thread t : threadSet) {
             if (t.getName().contains("AWT") ||
                     t.getName().contains("Timer") ||
                     t.getName().contains("Swing")) {
-                System.out.println("  ⚠️  " + t.getName() +
-                        " [" + t.getState() + "]");
+                //System.out.println("  ⚠️  " + t.getName() +
+                       // " [" + t.getState() + "]");
             }
         }
     }
@@ -260,7 +260,7 @@ public class GameFrame extends JFrame {
     // GameFrame.java의 returnToMenu() 메서드 수정
     private void returnToMenu() {
         System.out.println("\n========== RETURN TO MENU CALLED ==========");
-        System.out.println("Stack trace:");
+        //System.out.println("Stack trace:");
         for (StackTraceElement element : Thread.currentThread().getStackTrace()) {
             System.out.println("  " + element);
         }

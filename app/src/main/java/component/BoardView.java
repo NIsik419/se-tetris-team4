@@ -253,7 +253,7 @@ public class BoardView extends JPanel {
         List<ParticleSystem.TrailParticle> trails = particleSystem.getTrailParticles();
 
         if (!trails.isEmpty()) {
-            System.out.println("[RENDER] Trail particles: " + trails.size());
+            //System.out.println("[RENDER] Trail particles: " + trails.size());
         }
 
         if (trails == null || trails.isEmpty()) {

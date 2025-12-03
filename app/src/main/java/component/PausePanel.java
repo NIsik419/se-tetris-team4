@@ -74,7 +74,7 @@ public class PausePanel extends JPanel {
             @Override
             public void componentResized(java.awt.event.ComponentEvent e) {
                 setBounds(0, 0, frame.getWidth(), frame.getHeight());
-                System.out.println("[DEBUG] PausePanel 크기 갱신됨 → " + frame.getWidth() + "x" + frame.getHeight());
+                //System.out.println("[DEBUG] PausePanel 크기 갱신됨 → " + frame.getWidth() + "x" + frame.getHeight());
             }
         });
     }
