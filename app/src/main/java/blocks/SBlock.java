@@ -2,13 +2,13 @@ package blocks;
 
 import java.awt.Color;
 
-public class SBlock extends Block {
+import component.ColorBlindPalette;
 
-	public SBlock() {
-		shape = new int[][] { 
-			{0, 1, 1},
-			{1, 1, 0}
-		};
-		color = Color.GREEN;
-	}
+public class SBlock extends Block {
+    public SBlock() {
+        super(ColorBlindPalette.S, new int[][] {
+            {0, 1, 1},
+            {1, 1, 0}
+        });
+    }
 }

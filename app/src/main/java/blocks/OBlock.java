@@ -2,13 +2,13 @@ package blocks;
 
 import java.awt.Color;
 
-public class OBlock extends Block {
+import component.ColorBlindPalette;
 
-	public OBlock() {
-		shape = new int[][] { 
-			{1, 1}, 
-			{1, 1}
-		};
-		color = Color.YELLOW;
-	}
+public class OBlock extends Block {
+    public OBlock() {
+        super(ColorBlindPalette.O, new int[][] {
+            {1, 1},
+            {1, 1}
+        });
+    }
 }
