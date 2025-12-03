@@ -8,20 +8,21 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class NetworkTestHelper {
 
-    public static NetworkManager createNetworkManager(
-            MockGameClient client,
-            JLabel lagLabel,
-            Runnable disconnectHandler
-    ) {
-        return new NetworkManager(
-                false,
-                m -> {},
-                new BoardLogic(score -> {}, Difficulty.NORMAL),
-                new BoardLogic(score -> {}, Difficulty.NORMAL),
-                lagLabel,
-                disconnectHandler,
-                () -> {},
-                client
-        );
-    }
-}
+    // NetworkTestHelper.java에 이렇게 구현되어 있어야 함
+public static NetworkManager createNetworkManager(
+    MockGameClient client, 
+    JLabel label, 
+    Runnable onConnectionLost,
+    Runnable onGameOver) {
+    
+    return new NetworkManager(
+        false, 
+        msg -> {}, 
+        new MockBoardLogic(), 
+        new MockBoardLogic(), 
+        label, 
+        onConnectionLost,
+        onGameOver,
+        client
+    );
+}}

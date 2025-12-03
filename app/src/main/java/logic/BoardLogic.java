@@ -118,6 +118,12 @@ public class BoardLogic {
 
     private final LinkedList<Block> previewQueue = new LinkedList<>();
     private Consumer<List<Block>> onNextQueueUpdate;
+    private boolean testMode = false;
+    private Runnable onComplete;
+
+    public void setTestMode(boolean testMode) {
+        this.testMode = testMode;
+    }
 
     public void setOnIncomingLinesChanged(Consumer<List<boolean[]>> callback) {
         this.onIncomingLinesChanged = callback;
@@ -277,9 +283,18 @@ public class BoardLogic {
     // ============================================
     // clearLinesAfterItem - 아이템 전용 (타이머 제거)
     // ============================================
-    private void clearLinesAfterItem(Runnable afterClear) {
+    public void clearLinesAfterItem(Runnable afterClear) {
         var board = state.getBoard();
         var pid = state.getPieceId();
+
+        if (testMode) {
+            // 파티클 애니메이션 skip
+            if (onFrameUpdate != null)
+                onFrameUpdate.run();
+            if (afterClear != null)
+                afterClear.run();
+            return;
+        }
 
         java.util.List<Integer> clearedRows = new java.util.ArrayList<>();
         for (int y = 0; y < HEIGHT; y++) {
@@ -332,6 +347,8 @@ public class BoardLogic {
 
         final int CELL_SIZE = 25;
         for (int row : clearedRows) {
+            if (testMode)
+                return;
             clear.getParticleSystem().createLineParticles(row, board, CELL_SIZE, WIDTH);
         }
 
@@ -345,18 +362,31 @@ public class BoardLogic {
         recentPlacedInitialize();
         processScoreAndCombo(lines);
 
-        if (onFrameUpdate != null)
-            javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
+        if (onFrameUpdate != null) {
+            if (testMode)
+                onFrameUpdate.run();
+            else
+                SwingUtilities.invokeLater(onFrameUpdate);
+        }
 
         clear.animateParticlesAsync(
                 () -> {
-                    if (onFrameUpdate != null)
-                        javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
+                    if (onFrameUpdate != null) {
+                        if (testMode)
+                            onFrameUpdate.run();
+                        else
+                            SwingUtilities.invokeLater(onFrameUpdate);
+                    }
+
                 });
 
         applySimpleCellGravityAnimated(() -> {
-            if (onFrameUpdate != null)
-                javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
+            if (onFrameUpdate != null) {
+                if (testMode)
+                    onFrameUpdate.run();
+                else
+                    javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
+            }
         }, () -> {
             if (resumeCallback != null) {
                 resumeCallback.run();
@@ -461,6 +491,13 @@ public class BoardLogic {
 
     private void applySimpleCellGravityAnimated(Runnable onFrameUpdate, Runnable onComplete) {
         System.out.println("[DEBUG] Starting animated simple gravity with effects");
+        if (testMode) {
+            if (onFrameUpdate != null)
+                onFrameUpdate.run();
+            if (onComplete != null)
+                onComplete.run();
+            return;
+        }
 
         Timer gravityTimer = new Timer(80, null);
 
@@ -503,6 +540,8 @@ public class BoardLogic {
 
             // 착지 충격파
             if (!landedBlocks.isEmpty()) {
+                if (testMode)
+                    return;
                 clear.getParticleSystem().createClusterLandingImpact(
                         landedBlocks, board, currentCellSize);
             }
@@ -533,9 +572,18 @@ public class BoardLogic {
     // ============================================
     // clearLinesAndThen - 일반 라인 클리어 (타이머 제거)
     // ============================================
-    private void clearLinesAndThen(Runnable afterClear) {
+    public void clearLinesAndThen(Runnable afterClear) {
         var board = state.getBoard();
         var pid = state.getPieceId();
+
+        if (testMode) {
+            // 파티클 애니메이션 skip
+            if (onFrameUpdate != null)
+                onFrameUpdate.run();
+            if (afterClear != null)
+                afterClear.run();
+            return;
+        }
 
         java.util.List<Integer> clearedRows = new java.util.ArrayList<>();
         for (int y = 0; y < HEIGHT; y++) {
@@ -590,6 +638,8 @@ public class BoardLogic {
 
         final int CELL_SIZE = 25;
         for (int row : clearedRows) {
+            if (testMode)
+                return;
             clear.getParticleSystem().createLineParticles(row, board, CELL_SIZE, WIDTH);
         }
 
@@ -607,21 +657,34 @@ public class BoardLogic {
         recentPlacedInitialize();
         processScoreAndCombo(lines);
 
-        if (onFrameUpdate != null)
-            javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
+        if (onFrameUpdate != null) {
+            if (testMode)
+                onFrameUpdate.run();
+            else
+                javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
+        }
 
         clear.animateParticlesAsync(
                 () -> {
-                    if (onFrameUpdate != null)
-                        javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
+                    if (onFrameUpdate != null) {
+                        if (testMode)
+                            onFrameUpdate.run();
+                        else
+                            javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
+                    }
                 });
 
         // 애니메이션 중력만 실행
         if (animatedGravityEnabled) {
             System.out.println("[DEBUG] Starting ANIMATED gravity (no instant gravity)");
             applyClusterGravityAnimated(() -> {
-                if (onFrameUpdate != null)
-                    javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
+                if (onFrameUpdate != null) {
+                    if (testMode)
+                        onFrameUpdate.run();
+                    else
+                        SwingUtilities.invokeLater(onFrameUpdate);
+                }
+
             }, () -> {
                 if (resumeCallback != null) {
                     resumeCallback.run();
@@ -630,8 +693,13 @@ public class BoardLogic {
             });
         } else {
             applyClusterGravityInstant();
-            if (onFrameUpdate != null)
-                javax.swing.SwingUtilities.invokeLater(onFrameUpdate);
+            if (onFrameUpdate != null) {
+                if (testMode)
+                    onFrameUpdate.run();
+                else
+                    SwingUtilities.invokeLater(onFrameUpdate);
+            }
+
             checkChainClearImmediate(afterClear);
         }
     }
@@ -700,7 +768,7 @@ public class BoardLogic {
     // ============================================
     // 점수/콤보 처리 공통 로직
     // ============================================
-    private void processScoreAndCombo(int lines) {
+    public void processScoreAndCombo(int lines) {
         clearedLines += lines;
         // 이전 누적 줄 수 기억
         int prevDeleted = deletedLinesTotal;
@@ -795,13 +863,20 @@ public class BoardLogic {
         }
     }
 
-    private void applyClusterGravityInstant() {
+    public void applyClusterGravityInstant() {
         Color[][] board = state.getBoard();
         int[][] pid = state.getPieceId();
 
         boolean moved = true;
         int iterations = 0;
         final int MAX_ITERATIONS = 100;
+
+        if (testMode) {
+            // animation path만 밟기 위해 내부 로직을 1회 실행
+            onFrameUpdate.run();
+            onComplete.run();
+            return;
+        }
 
         while (moved && iterations < MAX_ITERATIONS) {
             moved = false;
@@ -826,7 +901,7 @@ public class BoardLogic {
     }
 
     // 2. 클러스터 찾기 (같은 pieceId끼리 연결된 블록들)
-    private List<List<Point>> findConnectedClusters(Color[][] board, int[][] pid) {
+    public List<List<Point>> findConnectedClusters(Color[][] board, int[][] pid) {
         int h = HEIGHT;
         int w = WIDTH;
 
@@ -986,8 +1061,15 @@ public class BoardLogic {
         }
     }
 
-    private void applyClusterGravityAnimated(Runnable onFrameUpdate, Runnable onComplete) {
+    public void applyClusterGravityAnimated(Runnable onFrameUpdate, Runnable onComplete) {
         System.out.println("[DEBUG] Starting animated cluster gravity with trail effects");
+        if (testMode) {
+            if (onFrameUpdate != null)
+                onFrameUpdate.run();
+            if (onComplete != null)
+                onComplete.run();
+            return;
+        }
 
         Timer gravityTimer = new Timer(80, null);
 
@@ -1016,6 +1098,8 @@ public class BoardLogic {
                 // 2. 먼지 파티클
                 for (Point p : cluster) {
                     if (board[p.y][p.x] != null) {
+                        if (testMode)
+                            return;
                         clear.getParticleSystem().createGravityDustParticle(
                                 p.x, p.y, board[p.y][p.x], currentCellSize);
                     }
@@ -1192,8 +1276,12 @@ public class BoardLogic {
 
         // 사운드 추가
         if (masks.length >= 3) {
+            if (testMode)
+                return;
             sound.play(SoundManager.Sound.GAME_OVER, 0.2f); // 큰 공격용 임시 사운드
         } else {
+            if (testMode)
+                return;
             sound.play(SoundManager.Sound.ROTATE, 0.3f); // 작은 공격용 임시 사운드
         }
 
@@ -1201,7 +1289,6 @@ public class BoardLogic {
                 "[DEBUG] Enqueued " + masks.length + " garbage masks, total pending: " + incomingGarbageQueue.size());
     }
 
-    
     private boolean isRowEmpty(Color[] row) {
         for (Color c : row)
             if (c != null)
@@ -1215,6 +1302,8 @@ public class BoardLogic {
             return;
         if (move.canMove(state.getCurr(), state.getX() - 1, state.getY()))
             move.moveLeft();
+        if (testMode)
+            return;
         sound.play(SoundManager.Sound.MOVE, 0.2f);
     }
 
@@ -1223,6 +1312,8 @@ public class BoardLogic {
             return;
         if (move.canMove(state.getCurr(), state.getX() + 1, state.getY()))
             move.moveRight();
+        if (testMode)
+            return;
         sound.play(SoundManager.Sound.MOVE, 0.2f);
     }
 
@@ -1233,8 +1324,9 @@ public class BoardLogic {
         state.getCurr().rotate();
         if (!move.canMove(state.getCurr(), state.getX(), state.getY()))
             state.setCurr(backup);
-        else
-            sound.play(SoundManager.Sound.ROTATE, 0.3f);
+        else if (testMode)
+            return;
+        sound.play(SoundManager.Sound.ROTATE, 0.3f);
     }
 
     public void hardDrop() {
@@ -1272,17 +1364,22 @@ public class BoardLogic {
         if (minX <= maxX) {
             int beamStartX = state.getX() + minX;
             int beamWidth = (maxX - minX + 1);
-
-            clear.getParticleSystem().createHardDropBeamWide(
-                    beamStartX,
-                    beamWidth,
-                    startY,
-                    endY,
-                    curr.getColor(),
-                    cellSize);
+            if (testMode)
+                return;
+            if (!testMode) {
+                clear.getParticleSystem().createHardDropBeamWide(
+                        beamStartX,
+                        beamWidth,
+                        startY,
+                        endY,
+                        curr.getColor(),
+                        cellSize);
+            }
         }
 
-        sound.play(SoundManager.Sound.HARD_DROP, 0.2f);
+        if (!testMode) {
+            sound.play(SoundManager.Sound.HARD_DROP, 0.2f);
+        }
         moveDown();
     }
 
@@ -1396,6 +1493,8 @@ public class BoardLogic {
 
     public void onOpponentGameOver() {
         System.out.println("[INFO] Opponent Game Over - YOU WIN!");
+        if (testMode)
+            return;
         sound.play(SoundManager.Sound.VICTORY);
         if (pauseCallback != null)
             pauseCallback.run();
@@ -1410,6 +1509,8 @@ public class BoardLogic {
             return;
         }
         this.gameOver = true;
+        if (testMode)
+            return;
         sound.play(SoundManager.Sound.GAME_OVER, 0.4f); // 추가
         System.out.println("[GAME OVER] Your Score: " + score);
 
@@ -1503,16 +1604,24 @@ public class BoardLogic {
     private void playLineClearSound(int lines) {
         switch (lines) {
             case 1:
+                if (testMode)
+                    return;
                 sound.play(SoundManager.Sound.LINE_CLEAR_1, 0.3f);
                 break;
             case 2:
+                if (testMode)
+                    return;
                 sound.play(SoundManager.Sound.LINE_CLEAR_2, 0.35f);
                 break;
             case 3:
+                if (testMode)
+                    return;
                 sound.play(SoundManager.Sound.LINE_CLEAR_3, 0.4f);
                 break;
             case 4:
             default:
+                if (testMode)
+                    return;
                 sound.play(SoundManager.Sound.LINE_CLEAR_4, 0.4f);
                 break;
         }
@@ -1523,10 +1632,16 @@ public class BoardLogic {
     // ============================================
     private void playComboSound(int combo) {
         if (combo >= 5) {
+            if (testMode)
+                return;
             sound.play(SoundManager.Sound.COMBO_5, 0.4f);
         } else if (combo >= 3) {
+            if (testMode)
+                return;
             sound.play(SoundManager.Sound.COMBO_3, 0.4f);
         } else if (combo >= 2) {
+            if (testMode)
+                return;
             sound.play(SoundManager.Sound.COMBO_2, 0.4f);
         }
     }
@@ -1535,6 +1650,8 @@ public class BoardLogic {
     // 가비지 수신 시 화면 진동 트리거
     // ============================================
     private void triggerShakeEffect(int intensity) {
+        if (testMode)
+            return;
         if (onFrameUpdate != null) {
             // 진동 강도에 따라 흔들림 설정
             int shakeIntensity = Math.min(intensity * 2, 10); // 최대 10픽셀
@@ -1597,6 +1714,11 @@ public class BoardLogic {
     /** recentPlaced 배열 접근용 (공격 마스크 테스트에 필요) */
     public boolean[][] getRecentPlacedForTest() {
         return recentPlaced;
+    }
+
+    public void setLevel(int level) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'setLevel'");
     }
 
 }

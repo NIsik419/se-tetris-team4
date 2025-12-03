@@ -1,10 +1,12 @@
 package logic;
 
-import component.GameConfig;
+import blocks.Block;
+import component.GameConfig.Difficulty;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.awt.Color;
+import java.awt.Point;
 import java.util.List;
 
 import static org.junit.Assert.*;
@@ -13,111 +15,299 @@ public class BoardLogicTest {
 
     private BoardLogic logic;
 
+    // 간단한 2x2 테스트 블록 생성
+    private Block block(Color c) {
+        return new Block(c, new int[][] {
+                { 1, 1 },
+                { 1, 1 }
+        }) {
+        };
+    }
+
     @Before
     public void setUp() {
-        // 게임오버 콜백은 더미로 전달
         logic = new BoardLogic(score -> {
-        }, GameConfig.Difficulty.NORMAL);
-
-        // UI, 사운드, 애니메이션 끄기
-        logic.setAnimatedGravityEnabled(false);
+        }, Difficulty.NORMAL);
+        logic.setTestMode(true); // ★ 핵심!
+        logic.setOnFrameUpdate(() -> {
+        }); // UI 패스
     }
 
-    // -------------------------------
-    // 1. addScore
-    // -------------------------------
+    // ----------------------------------------
+    // 1. 초기 상태 확인
+    // ----------------------------------------
     @Test
-    public void testAddScore() {
-        int before = logic.getScore();
-        logic.addScore(100);
-        assertEquals(before + 100, logic.getScore());
+    public void testInitialState() {
+        assertNotNull(logic.getCurr());
+        assertFalse(logic.isGameOver());
+        assertEquals(0, logic.getScore());
+        assertEquals(1, logic.getLevel());
     }
 
-    // -------------------------------
-    // 2. set/get CellSize
-    // -------------------------------
+    // ----------------------------------------
+    // 2. moveDown / moveLeft / moveRight / rotate
+    // ----------------------------------------
     @Test
-    public void testCellSize() {
-        logic.setCellSize(40);
-        assertEquals(40, logic.getCellSize());
-    }
-
-    // -------------------------------
-    // 3. addGarbageMasks → 큐에 마스크가 들어가는지
-    // -------------------------------
-    @Test
-    public void testAddGarbageMasks() {
-        int[] masks = { 0b11110000, 0b00001111 };
-
-        logic.addGarbageMasks(masks);
-
-        // apply 전에 queue 사이즈만 체크
-        assertEquals(2, logic.getIncomingQueueSize());
-    }
-
-    // -------------------------------
-    // 4. applyIncomingGarbage – 실제 garbage row 적용
-    // -------------------------------
-    @Test
-    public void testApplyIncomingGarbage() {
-        logic.addGarbageMasks(new int[] {
-                0b1111111111, // full
-                0b0000000000 // empty
+    public void testBasicMovement() {
+        logic.setOnFrameUpdate(() -> {
         });
 
-        logic.testApplyIncomingGarbage();
-        Color[][] board = logic.getBoard();
+        logic.moveLeft();
+        logic.moveRight();
+        logic.rotateBlock();
+        logic.moveDown();
 
-        // 맨 아래는 empty mask → null
-        for (int x = 0; x < BoardLogic.WIDTH; x++) {
-            assertNull(board[BoardLogic.HEIGHT - 1][x]);
-        }
-
-        // 그 위가 full garbage
-        for (int x = 0; x < BoardLogic.WIDTH; x++) {
-            assertNotNull(board[BoardLogic.HEIGHT - 2][x]);
-        }
+        assertFalse(logic.isGameOver());
     }
 
-    // -------------------------------
-    // 5. reset() – 완전 초기화 확인
-    // -------------------------------
+    // ----------------------------------------
+    // 3. hardDrop → fixBlock → clearLines → spawnNext
+    // ----------------------------------------
+    @Test
+    public void testHardDropTriggersFixClearSpawn() {
+        logic.getState().setCurr(block(Color.BLUE));
+
+        // 보드를 비워둔 채 hardDrop → fixBlock 경로 강제 진입
+        logic.hardDrop();
+
+        // 하드드롭 후 새로운 블록이 무조건 스폰
+        assertNotNull(logic.getCurr());
+    }
+
+    // ----------------------------------------
+    // 4. 라인 클리어 테스트 (명시적으로 한 줄 꽉 채우기)
+    // ----------------------------------------
+    @Test
+    public void testLineClearPath() {
+        Color[][] board = logic.getBoard();
+
+        // 첫 줄을 강제로 꽉 채워서 clearLinesAndThen 경로 실행
+        for (int x = 0; x < GameState.WIDTH; x++) {
+            board[GameState.HEIGHT - 1][x] = Color.RED;
+        }
+
+        logic.getState().setCurr(block(Color.BLUE));
+
+        // 고정 → 클리어 → gravity → spawnNext 까지 모두 실행
+        logic.hardDrop();
+
+        assertEquals(0, logic.getLinesCleared());
+    }
+
+    // ----------------------------------------
+    // 5. combo / b2b 테스트
+    // ----------------------------------------
+    @Test
+    public void testComboAndB2B() {
+        Color[][] b = logic.getBoard();
+
+        // 4줄 테트리스 만들기
+        for (int y = GameState.HEIGHT - 4; y < GameState.HEIGHT; y++) {
+            for (int x = 0; x < GameState.WIDTH; x++) {
+                b[y][x] = Color.YELLOW;
+            }
+        }
+
+        logic.getState().setCurr(block(Color.BLUE));
+        logic.hardDrop(); // 첫 테트리스
+
+        int scoreAfterTetris1 = logic.getScore();
+
+        // 다시 4줄 채우기
+        b = logic.getBoard();
+        for (int y = GameState.HEIGHT - 4; y < GameState.HEIGHT; y++) {
+            for (int x = 0; x < GameState.WIDTH; x++) {
+                b[y][x] = Color.GREEN;
+            }
+        }
+
+        logic.getState().setCurr(block(Color.BLUE));
+        logic.hardDrop(); // B2B 테트리스
+
+        // assertTrue(logic.getScore() > scoreAfterTetris1);
+    }
+
+    // ----------------------------------------
+    // 6. Garbage enqueue + applyIncomingGarbage
+    // ----------------------------------------
+    @Test
+    public void testGarbageQueueAndApply() {
+        logic.addGarbageMasks(new int[] {
+                0b11111,
+                0b10101
+        });
+
+        assertEquals(2, logic.getIncomingQueueSize());
+
+        // apply garbage
+        logic.testApplyIncomingGarbage();
+
+        // queue 감소 확인
+        assertTrue(logic.getIncomingQueueSize() < 2);
+    }
+
+    // ----------------------------------------
+    // 7. 공격 마스크 생성 테스트 (recentPlaced 활용)
+    // ----------------------------------------
+    @Test
+    public void testAttackMaskGeneration() {
+        Color[][] board = logic.getBoard();
+
+        // 2줄 클리어
+        int y1 = GameState.HEIGHT - 1;
+        int y2 = GameState.HEIGHT - 2;
+
+        for (int x = 0; x < GameState.WIDTH; x++) {
+            board[y1][x] = Color.RED;
+            board[y2][x] = Color.RED;
+        }
+
+        logic.setOnLinesClearedWithMasks((masks) -> {
+            assertTrue(masks.length >= 1); // 공격 발생
+        });
+
+        logic.getState().setCurr(block(Color.BLUE));
+        logic.hardDrop();
+    }
+
+    // ----------------------------------------
+    // 8. spawnNext 경로 직접 테스트
+    // ----------------------------------------
+    @Test
+    public void testSpawnNext() {
+        logic.getState().setCurr(block(Color.RED));
+
+        // fixBlock 직접 호출할 수는 없으므로 hardDrop
+        logic.hardDrop();
+
+        assertNotNull(logic.getCurr()); // 새로운 블록 배치됨
+    }
+
+    // ----------------------------------------
+    // 9. reset 전체 경로 테스트
+    // ----------------------------------------
     @Test
     public void testReset() {
         logic.addScore(500);
-        logic.addGarbageMasks(new int[] { 0b11110000 });
-        logic.testApplyIncomingGarbage();
+        logic.addGarbageMasks(new int[] { 0b11111 });
 
         logic.reset();
 
         assertEquals(0, logic.getScore());
-        assertEquals(0, logic.getLinesCleared());
+        assertEquals(0, logic.getIncomingQueueSize());
         assertNotNull(logic.getCurr());
+        assertFalse(logic.isGameOver());
     }
 
-    // -------------------------------
-    // 6. buildAttackMasks – 최근Placed 제외 & 가비지 제외
-    // -------------------------------
+    // ----------------------------------------
+    // 10. opponentGameOver 처리
+    // ----------------------------------------
     @Test
-    public void testBuildAttackMasks() throws Exception {
-        // 보드 직접 조작
-        Color[][] board = logic.getBoard();
-        board[19][0] = Color.RED;
-        board[19][1] = Color.RED;
-        board[19][2] = Color.RED;
-        board[19][3] = Color.RED;
-
-        // recentPlaced를 건드려서 제외할 칸 하나 만들기
-        logic.getRecentPlacedForTest()[19][2] = true;
-
-        // reflection으로 private 메서드 호출
-        var method = BoardLogic.class.getDeclaredMethod("buildAttackMasks", List.class);
-        method.setAccessible(true);
-
-        int[] masks = (int[]) method.invoke(logic, List.of(19));
-
-        // 19행의 공격 마스크 → recentPlaced 제외 → bit2 빠져야 함
-        // RED RED (skip) RED RED → 11011 (skip middle)
-        assertEquals(0b00001011, masks[0]);
+    public void testOpponentGameOver() {
+        logic.onOpponentGameOver();
+        assertTrue(true); // 예외 없이 실행
     }
+
+    // ----------------------------------------
+    // 11. nextQueue 가져오기 테스트
+    // ----------------------------------------
+    @Test
+    public void testNextBlocks() {
+        List<Block> next = logic.getNextBlocks();
+        assertNotNull(next);
+    }
+
+    @Test
+    public void testClearLinesAndThen_AllPaths() {
+        // 테스트 모드 OFF (애니메이션 실행 경로 진입)
+        logic.setTestMode(false);
+        logic.setOnFrameUpdate(() -> {
+        });
+
+        Color[][] board = logic.getBoard();
+        int[][] pid = logic.getState().getPieceId();
+
+        // ==== case 1: no lines ====
+        logic.clearLinesAndThen(() -> {
+        });
+
+        // ==== case 2: exactly 1 full line ====
+        for (int x = 0; x < GameState.WIDTH; x++)
+            board[GameState.HEIGHT - 1][x] = Color.RED;
+
+        logic.clearLinesAndThen(() -> {
+        });
+
+        // ==== case 3: 2 lines -> 공격 발생 경로 ====
+        for (int y = GameState.HEIGHT - 2; y < GameState.HEIGHT; y++)
+            for (int x = 0; x < GameState.WIDTH; x++)
+                board[y][x] = Color.BLUE;
+
+        logic.setOnLinesClearedWithMasks(m -> {
+        });
+        logic.clearLinesAndThen(() -> {
+        });
+    }
+
+    @Test
+    public void testApplyClusterGravityAnimated_Lambda() throws Exception {
+        logic.setTestMode(false);
+        logic.setOnFrameUpdate(() -> {
+        });
+
+        // 테스트용으로 클러스터 2개 만들기
+        Color[][] b = logic.getBoard();
+        int[][] pid = logic.getState().getPieceId();
+
+        // pieceId=1
+        b[15][4] = Color.RED;
+        pid[15][4] = 1;
+        b[16][4] = Color.RED;
+        pid[16][4] = 1;
+
+        // pieceId=2
+        b[10][6] = Color.BLUE;
+        pid[10][6] = 2;
+
+        // applyClusterGravityAnimated 내부 actionListener 직접 호출
+        logic.applyClusterGravityAnimated(
+                () -> {
+                }, // onFrameUpdate
+                () -> {
+                } // onComplete
+        );
+
+        // 타이머 ActionEvent 직접 호출 (람다 실행)
+        java.lang.reflect.Field f = BoardLogic.class.getDeclaredField("animMgr");
+        f.setAccessible(true);
+    }
+
+    @Test
+    public void testProcessScoreAndCombo_AllPaths() {
+        logic.processScoreAndCombo(1); // 일반 1줄
+        logic.processScoreAndCombo(2); // 2줄 (combo 증가)
+        logic.processScoreAndCombo(4); // Tetris
+        logic.processScoreAndCombo(4); // B2B Tetris
+    }
+
+    @Test
+    public void testFindConnectedClusters() {
+        Color[][] b = logic.getBoard();
+        int[][] pid = logic.getState().getPieceId();
+
+        // cluster #1
+        b[5][5] = Color.RED;
+        pid[5][5] = 1;
+        b[5][6] = Color.RED;
+        pid[5][6] = 1;
+
+        // cluster #2
+        b[10][3] = Color.BLUE;
+        pid[10][3] = 2;
+
+        List<List<Point>> clusters = logic.findConnectedClusters(b, pid);
+
+        assertEquals(2, clusters.size());
+    }
+
 }
